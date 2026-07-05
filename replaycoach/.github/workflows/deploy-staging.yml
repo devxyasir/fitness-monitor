@@ -1,0 +1,29 @@
+name: Deploy Staging
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # TODO (infra phase): Replace this placeholder with real deployment steps:
+      # 1. Build Docker images (api, web)
+      # 2. Push to Amazon ECR
+      # 3. Update ECS service with new image digest
+      # 4. Run DB migrations
+      # 5. Smoke test staging health endpoint
+      - name: Placeholder — deploy not yet implemented
+        run: echo "Staging deploy not yet implemented. Wire up in infra phase."

@@ -1,0 +1,68 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# Turborepo cache
+.turbo/
+
+# Environment files — NEVER commit real secrets
+.env
+.env.local
+.env.*.local
+.env.development
+.env.staging
+.env.production
+# Exception: .env.example files are committed (they contain no secrets)
+!**/.env.example
+
+# AWS / cloud credentials
+.aws/
+*.pem
+*.key
+credentials
+
+# Editor
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Testing
+coverage/
+
+# Terraform
+infra/terraform/.terraform/
+infra/terraform/*.tfstate
+infra/terraform/*.tfstate.*
+infra/terraform/*.tfvars
+!infra/terraform/*.tfvars.example
+infra/terraform/.terraform.lock.hcl
+
+# Docker
+.dockerignore
+
+# Python virtual environments & cache
+venv/
+.venv/
+env/
+.env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+

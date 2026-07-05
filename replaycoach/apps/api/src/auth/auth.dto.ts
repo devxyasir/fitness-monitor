@@ -1,0 +1,63 @@
+import {
+  IsEmail,
+  IsEnum,
+  IsString,
+  Matches,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
+import type { UserRole } from '@replaycoach/types';
+
+/**
+ * Password rule: min 8 chars, at least one uppercase, one lowercase, one digit.
+ * (see 16_Security_Guidelines.md §1)
+ */
+const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+
+export class RegisterDto {
+  @IsEmail()
+  email!: string;
+
+  @IsString()
+  @MinLength(8)
+  @MaxLength(128)
+  @Matches(PASSWORD_REGEX, {
+    message: 'Password must be at least 8 chars with uppercase, lowercase, and a digit',
+  })
+  password!: string;
+
+  @IsString()
+  @MinLength(2)
+  @MaxLength(255)
+  displayName!: string;
+
+  @IsEnum(['coach', 'student'])
+  role!: Extract<UserRole, 'coach' | 'student'>;
+}
+
+export class LoginDto {
+  @IsEmail()
+  email!: string;
+
+  @IsString()
+  @MinLength(1)
+  password!: string;
+}
+
+export class ForgotPasswordDto {
+  @IsEmail()
+  email!: string;
+}
+
+export class ResetPasswordDto {
+  @IsString()
+  token!: string;
+
+  @IsString()
+  @MinLength(8)
+  @MaxLength(128)
+  @Matches(PASSWORD_REGEX, {
+    message: 'Password must be at least 8 chars with uppercase, lowercase, and a digit',
+  })
+  newPassword!: string;
+}

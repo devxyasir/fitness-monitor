@@ -1,0 +1,116 @@
+import {
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
+import type { Request, Response } from 'express';
+
+import type { JwtPayload, TokenResponse } from '@replaycoach/types';
+
+import { JwtAuthGuard } from './jwt-auth.guard';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { AuthService } from './auth.service';
+import {
+  ForgotPasswordDto,
+  LoginDto,
+  RegisterDto,
+  ResetPasswordDto,
+} from './auth.dto';
+import {
+  clearRefreshCookie,
+  getRefreshTokenFromCookie,
+  setRefreshCookie,
+} from './cookie.helper';
+import { ConfigService } from '@nestjs/config';
+
+@Controller('auth')
+export class AuthController {
+  constructor(
+    private readonly authService: AuthService,
+    private readonly configService: ConfigService,
+  ) {}
+
+  /** POST /auth/register */
+  @Post('register')
+  @HttpCode(HttpStatus.CREATED)
+  async register(
+    @Body() dto: RegisterDto,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<TokenResponse> {
+    const { tokenResponse, refreshToken } = await this.authService.register(dto);
+    setRefreshCookie(res, refreshToken, this.configService);
+    return tokenResponse;
+  }
+
+  /**
+   * POST /auth/login
+   * Rate limited: 5/min per IP (12_Backend_API_Design.md §7).
+   */
+  @Post('login')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  async login(
+    @Body() dto: LoginDto,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<TokenResponse> {
+    const { tokenResponse, refreshToken } = await this.authService.login(dto);
+    setRefreshCookie(res, refreshToken, this.configService);
+    return tokenResponse;
+  }
+
+  /** POST /auth/refresh — reads httpOnly cookie, issues new token pair. */
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  async refresh(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<TokenResponse> {
+    const rawToken = getRefreshTokenFromCookie(req as { cookies?: Record<string, string> });
+    const { tokenResponse, refreshToken } = await this.authService.refresh(rawToken ?? '');
+    setRefreshCookie(res, refreshToken, this.configService);
+    return tokenResponse;
+  }
+
+  /** POST /auth/logout — requires a valid access token. */
+  @Post('logout')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(JwtAuthGuard)
+  async logout(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+    @CurrentUser() _payload: JwtPayload,
+  ): Promise<void> {
+    const rawToken = getRefreshTokenFromCookie(req as { cookies?: Record<string, string> });
+    await this.authService.logout(rawToken);
+    clearRefreshCookie(res);
+  }
+
+  /**
+   * POST /auth/password/forgot
+   * Rate limited: 3/hour per IP (12_Backend_API_Design.md §7).
+   * Always returns 200 — never reveals whether an email exists.
+   */
+  @Post('password/forgot')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 3, ttl: 3600000 } })
+  async forgotPassword(
+    @Body() dto: ForgotPasswordDto,
+  ): Promise<{ message: string }> {
+    await this.authService.forgotPassword(dto.email);
+    return { message: 'If that account exists, a reset link has been sent.' };
+  }
+
+  /** POST /auth/password/reset — stub until email infra exists. */
+  @Post('password/reset')
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(@Body() dto: ResetPasswordDto): Promise<{ message: string }> {
+    await this.authService.resetPassword(dto.token, dto.newPassword);
+    return { message: 'Password updated.' };
+  }
+}

@@ -1,0 +1,91 @@
+/**
+ * api-client — typed REST client using shared DTOs from @replaycoach/types.
+ * All API calls go through this module — never call fetch directly in components.
+ * Implementation: Phase 1.
+ */
+
+import { authClient } from './auth-client';
+import { useAuthStore } from '../stores/auth-store';
+
+const API_BASE_URL = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001';
+
+function formatPath(path: string): string {
+  // If path doesn't start with /api/v1 or /api or /uploads, prefix it with /api/v1
+  if (!path.startsWith('/api') && !path.startsWith('/uploads')) {
+    return `/api/v1${path.startsWith('/') ? path : '/' + path}`;
+  }
+  return path;
+}
+
+function getHeaders(): Record<string, string> {
+  const token = useAuthStore.getState().accessToken;
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+async function fetchWithAuth(path: string, options: RequestInit): Promise<Response> {
+  const formattedPath = formatPath(path);
+  const url = `${API_BASE_URL}${formattedPath}`;
+  
+  // Make the first attempt
+  let res = await fetch(url, {
+    ...options,
+    headers: {
+      ...options.headers,
+      ...getHeaders(),
+    },
+  });
+
+  // If unauthorized (e.g. token expired), attempt dynamic token refresh and retry
+  if (res.status === 401) {
+    try {
+      await authClient.refresh();
+      res = await fetch(url, {
+        ...options,
+        headers: {
+          ...options.headers,
+          ...getHeaders(),
+        },
+      });
+    } catch (refreshErr) {
+      console.error('API request failed with 401 and refresh attempt failed:', refreshErr);
+    }
+  }
+
+  return res;
+}
+
+async function get<T>(path: string): Promise<T> {
+  const formattedPath = formatPath(path);
+  const res = await fetchWithAuth(formattedPath, {
+    method: 'GET',
+  });
+  if (!res.ok) throw new Error(`API error ${res.status}: ${formattedPath}`);
+  return res.json() as Promise<T>;
+}
+
+async function post<TBody, TResponse>(path: string, body: TBody): Promise<TResponse> {
+  const formattedPath = formatPath(path);
+  const res = await fetchWithAuth(formattedPath, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`API error ${res.status}: ${formattedPath}`);
+  return res.json() as Promise<TResponse>;
+}
+
+async function patch<TBody, TResponse>(path: string, body: TBody): Promise<TResponse> {
+  const formattedPath = formatPath(path);
+  const res = await fetchWithAuth(formattedPath, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`API error ${res.status}: ${formattedPath}`);
+  return res.json() as Promise<TResponse>;
+}
+
+export const apiClient = { get, post, patch };
+
