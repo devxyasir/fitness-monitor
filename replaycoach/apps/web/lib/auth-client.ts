@@ -91,11 +91,28 @@ async function register(payload: RegisterRequest): Promise<UserDto> {
   return user;
 }
 
+// Module-level: holds the in-flight refresh so concurrent callers share it.
+let refreshInFlight: Promise<UserDto> | null = null;
+
+/**
+ * Refresh the session. Single-flight: if a refresh is already running,
+ * return the same promise instead of starting a second one. This prevents
+ * two concurrent /auth/refresh calls from rotating the refresh token twice,
+ * which the server would flag as token reuse and force a logout.
+ */
+async function refresh(): Promise<UserDto> {
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = doRefresh().finally(() => {
+    refreshInFlight = null;
+  });
+  return refreshInFlight;
+}
+
 /**
  * Refresh: POST to refresh endpoint (httpOnly cookies passed automatically).
  * Returns the new user details and updates the store with the new access token.
  */
-async function refresh(): Promise<UserDto> {
+async function doRefresh(): Promise<UserDto> {
   const res = await fetchWithTimeout(`${API_BASE_URL}/api/v1/auth/refresh`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -104,14 +121,29 @@ async function refresh(): Promise<UserDto> {
   });
 
   if (!res.ok) {
+    // Genuine "no valid session" — clear and bubble up.
     useAuthStore.getState().clearAuth();
     throw new Error('Session expired');
   }
 
   const { accessToken } = (await res.json()) as TokenResponse;
-  const user = await fetchUserProfile(accessToken);
-  useAuthStore.getState().setAuth(accessToken, user);
-  return user;
+
+  // Fetch profile. IMPORTANT: a failure HERE must NOT clear auth — the refresh
+  // itself succeeded and the access token is valid. Set the token first so the
+  // session survives even if /users/me is briefly unavailable.
+  try {
+    const user = await fetchUserProfile(accessToken);
+    useAuthStore.getState().setAuth(accessToken, user);
+    return user;
+  } catch (profileErr) {
+    // Keep the session alive with the token we have; surface a soft error.
+    const existingUser = useAuthStore.getState().user;
+    if (existingUser) {
+      useAuthStore.getState().setAuth(accessToken, existingUser);
+      return existingUser;
+    }
+    throw profileErr;
+  }
 }
 
 /**

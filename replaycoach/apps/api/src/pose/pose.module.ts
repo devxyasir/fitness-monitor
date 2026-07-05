@@ -8,6 +8,7 @@ import { SessionParticipant } from '../sessions/session-participant.entity';
 import { PoseService } from './pose.service';
 import { PoseController } from './pose.controller';
 import { PoseRelayService } from './pose-relay.service';
+import { PoseServiceClient } from './pose-service.client';
 import { RealtimeModule } from '../realtime/realtime.module';
 
 @Module({
@@ -16,7 +17,7 @@ import { RealtimeModule } from '../realtime/realtime.module';
     RealtimeModule,
   ],
   controllers: [PoseController],
-  providers: [PoseService, PoseRelayService],
-  exports: [PoseService],
+  providers: [PoseService, PoseRelayService, PoseServiceClient],
+  exports: [PoseService, PoseServiceClient],
 })
 export class PoseModule {}

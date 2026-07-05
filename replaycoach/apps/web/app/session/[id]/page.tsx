@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { LiveKitRoom, RoomAudioRenderer, useLocalParticipant, useTracks, TrackReference } from '@livekit/components-react';
-import { Track } from 'livekit-client';
+import { DisconnectReason, Track } from 'livekit-client';
 import { useLiveKitRoom } from './hooks/useLiveKitRoom';
 import { VideoGrid, ParticipantVideoTile } from './components/VideoGrid';
 import { useAuthStore } from '../../../stores/auth-store';
@@ -10,11 +10,14 @@ import { useReplayStore } from '../../../stores/replay-store';
 import { usePoseOverlay } from './hooks/usePoseOverlay';
 import { ReplayPanel } from './components/ReplayPanel';
 import { apiClient } from '../../../lib/api-client';
-import { socket } from '../../../lib/socket-client';
+import { socket, connectSocket } from '../../../lib/socket-client';
+import { authClient } from '../../../lib/auth-client';
 import Link from 'next/link';
 import { useReplaySocket } from './hooks/useReplaySocket';
 import { ReplayTargetPicker } from './components/ReplayTargetPicker';
 import { RecordingStatusIndicator } from './components/RecordingStatusIndicator';
+import { TrackBufferManager } from './components/TrackBufferManager';
+import { Roster } from './components/Roster';
 
 export default function SessionRoomPage({ params }: { params: { id: string } }) {
   const sessionId = params.id;
@@ -26,12 +29,32 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
   const [session, setSession] = useState<{ startedAt: string | null } | null>(null);
   const [lobbyRequests, setLobbyRequests] = useState<{ userId: string; user: { email: string } }[]>([]);
   const [showExitModal, setShowExitModal] = useState(false);
+  const [sessionEnded, setSessionEnded] = useState(false);
 
   const isCoach = user?.role === 'coach';
 
   // Real-time hooks registration
   usePoseOverlay(sessionId);
   useReplaySocket(sessionId);
+
+  // If the socket is dropped for an auth reason, refresh the token and reconnect
+  // rather than leaving the session stuck on a dead connection.
+  useEffect(() => {
+    const onConnectError = async (err: Error) => {
+      if (/unauthor/i.test(err.message)) {
+        try {
+          await authClient.refresh();
+          connectSocket(useAuthStore.getState().accessToken);
+        } catch {
+          // refresh failed → AuthInitializer will route to /login
+        }
+      }
+    };
+    socket.on('connect_error', onConnectError);
+    return () => {
+      socket.off('connect_error', onConnectError);
+    };
+  }, []);
 
   const { mode, reset: resetReplay } = useReplayStore();
 
@@ -87,11 +110,12 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
     };
   }, []);
 
-  // Listen to session termination events to kick current participants
+  // Listen to session termination events (fast path — the guaranteed teardown is
+  // LiveKit's deleteRoom on the server, which the onDisconnected handler below
+  // catches even if this socket event never arrives).
   useEffect(() => {
     const handleSessionTerminated = () => {
-      alert('The coach has ended this coaching session.');
-      window.location.href = '/dashboard';
+      setSessionEnded(true);
     };
 
     socket.on('session:terminated', handleSessionTerminated);
@@ -163,6 +187,36 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
     }
   };
 
+  // Best-effort — the LiveKit participant_left webhook is the authoritative
+  // signal (see FIX_09); this just makes the roster/leftAt update feel instant
+  // instead of waiting on the webhook round-trip.
+  const leaveAndExit = async () => {
+    try {
+      await apiClient.post(`/sessions/${sessionId}/leave`, {});
+    } catch {
+      // ignore — webhook backstop will still record the leave
+    }
+    window.location.href = '/dashboard';
+  };
+
+  // Tab close / navigation away: navigator.sendBeacon can't carry an
+  // Authorization header, so use a keepalive fetch instead. Still just an
+  // optimization — the webhook remains the source of truth.
+  useEffect(() => {
+    const onHide = () => {
+      const token = useAuthStore.getState().accessToken;
+      if (!token) return;
+      const base = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001';
+      fetch(`${base}/api/v1/sessions/${sessionId}/leave`, {
+        method: 'POST',
+        keepalive: true,
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => {});
+    };
+    window.addEventListener('pagehide', onHide);
+    return () => window.removeEventListener('pagehide', onHide);
+  }, [sessionId]);
+
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-slate-200 p-6">
@@ -196,6 +250,28 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
     );
   }
 
+  if (sessionEnded) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-slate-200 p-6">
+        <div className="max-w-md w-full bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-xl text-center">
+          <div className="w-16 h-16 bg-slate-800 border border-slate-700 rounded-full flex items-center justify-center mx-auto mb-6 text-slate-400 text-3xl">
+            🏁
+          </div>
+          <h2 className="text-xl font-bold text-white mb-2">This session has ended</h2>
+          <p className="text-slate-400 mb-6 text-sm">
+            The coach has ended this coaching session for everyone.
+          </p>
+          <Link
+            href="/dashboard"
+            className="inline-flex justify-center items-center w-full px-5 py-2.5 rounded-xl bg-slate-805 hover:bg-slate-800 border border-slate-700 text-white font-medium transition"
+          >
+            Back to Dashboard
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="relative flex flex-col h-screen bg-slate-950 text-slate-100 overflow-hidden font-sans">
       {/* Session Title Header */}
@@ -221,7 +297,7 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
               if (isCoach) {
                 setShowExitModal(true);
               } else {
-                window.location.href = '/dashboard';
+                leaveAndExit();
               }
             }}
             className="px-4 py-1.5 rounded-lg bg-red-650 hover:bg-red-700 text-white text-xs font-semibold tracking-wide transition shadow-sm"
@@ -239,6 +315,18 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
         audio={true}
         video={true}
         className="flex-1 flex flex-col min-h-0 relative"
+        onDisconnected={(reason) => {
+          // Only the reasons that mean "the meeting is actually over" should show
+          // the ended screen. Other reasons (client-initiated, transient
+          // join/state issues, etc.) are normal connect/reconnect churn and must
+          // not be treated as the coach ending the session.
+          if (
+            reason === DisconnectReason.ROOM_DELETED ||
+            reason === DisconnectReason.PARTICIPANT_REMOVED
+          ) {
+            setSessionEnded(true);
+          }
+        }}
       >
         {mode === 'playing' ? (
           /* ACTIVE REPLAY LAYOUT VIEWFLOW */
@@ -305,6 +393,8 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
         )}
 
         <RoomAudioRenderer />
+        <TrackBufferManager />
+        <Roster />
       </LiveKitRoom>
 
       {isCoach && lobbyRequests.length > 0 && (
@@ -375,9 +465,7 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
                 End Meeting for Everyone
               </button>
               <button
-                onClick={() => {
-                  window.location.href = '/dashboard';
-                }}
+                onClick={leaveAndExit}
                 className="w-full py-2 bg-slate-850 hover:bg-slate-800 border border-slate-750 text-slate-200 text-xs font-semibold rounded-lg shadow transition"
               >
                 Just Leave Meeting

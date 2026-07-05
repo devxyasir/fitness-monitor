@@ -4,6 +4,7 @@ import { EgressClient, SegmentedFileOutput, SegmentedFileProtocol, S3Upload } fr
 import { v4 as uuidv4 } from 'uuid';
 
 import { RecordingsService } from '../recordings/recordings.service';
+import { liveKitRoomName } from './livekit.service';
 
 export interface EgressStartResult {
   egressId: string;
@@ -41,7 +42,7 @@ export class EgressService {
   }
 
   async startRoomComposite(sessionId: string): Promise<EgressStartResult> {
-    const roomName = `session_${sessionId}`;
+    const roomName = liveKitRoomName(sessionId);
     const s3KeyPrefix = `sessions/${sessionId}/composite/segments/`;
 
     this.logger.log(`Starting Room Composite Egress for session ${sessionId} / Room: ${roomName}`);
@@ -114,7 +115,7 @@ export class EgressService {
     audioTrackId: string | undefined,
     videoTrackId: string,
   ): Promise<EgressStartResult> {
-    const roomName = `session_${sessionId}`;
+    const roomName = liveKitRoomName(sessionId);
     const s3KeyPrefix = `sessions/${sessionId}/participants/${participantId}/segments/`;
 
     this.logger.log(`Starting Track Egress and Composite for participant ${participantId} in session ${sessionId}`);
@@ -208,7 +209,7 @@ export class EgressService {
   }
 
   async stopSessionEgress(sessionId: string): Promise<void> {
-    const roomName = `session_${sessionId}`;
+    const roomName = liveKitRoomName(sessionId);
     this.logger.log(`Stopping egress for session ${sessionId} / Room: ${roomName}`);
 
     // Set recordings status to finalizing

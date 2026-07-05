@@ -20,6 +20,7 @@ import {
   ClipShare,
   Subscription,
   AuditLog,
+  ReferenceVideo,
 } from './database/entities/others.entities';
 
 import { AuthModule } from './auth/auth.module';
@@ -34,6 +35,7 @@ import { AnnotationsModule } from './annotations/annotations.module';
 import { PoseModule } from './pose/pose.module';
 import { ClipsModule } from './clips/clips.module';
 import { RecordingsModule } from './recordings/recordings.module';
+import { ReferenceModule } from './reference/reference.module';
 
 @Module({
   imports: [
@@ -53,6 +55,10 @@ import { RecordingsModule } from './recordings/recordings.module';
         url: configService.getOrThrow<string>('database.url'),
         synchronize: false,
         logging: process.env['NODE_ENV'] === 'development',
+        extra: {
+          max: 20,
+          idleTimeoutMillis: 30000,
+        },
         entities: [
           Organization,
           OrgInvite,
@@ -68,6 +74,7 @@ import { RecordingsModule } from './recordings/recordings.module';
           ClipShare,
           Subscription,
           AuditLog,
+          ReferenceVideo,
         ],
         migrations: [],
       }),
@@ -86,6 +93,7 @@ import { RecordingsModule } from './recordings/recordings.module';
     PoseModule,
     ClipsModule,
     RecordingsModule,
+    ReferenceModule,
   ],
 })
 export class AppModule {}

@@ -88,7 +88,7 @@ export class AuthController {
   ): Promise<void> {
     const rawToken = getRefreshTokenFromCookie(req as { cookies?: Record<string, string> });
     await this.authService.logout(rawToken);
-    clearRefreshCookie(res);
+    clearRefreshCookie(res, this.configService);
   }
 
   /**

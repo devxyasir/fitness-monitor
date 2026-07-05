@@ -234,7 +234,59 @@ export class Subscription {
   currentPeriodEnd!: Date;
 }
 
-// 8. AuditLog Entity
+// 9. ReferenceVideo Entity — coach-loaded external analysis clip (not a session participant track)
+@Entity('reference_videos')
+@Index('IDX_reference_videos_session', ['sessionId'])
+export class ReferenceVideo {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Column({ name: 'session_id', type: 'uuid' })
+  sessionId!: string;
+
+  @Column({ name: 'uploaded_by_user_id', type: 'uuid' })
+  uploadedByUserId!: string;
+
+  @Column({ name: 'video_key', type: 'varchar', length: 1024 })
+  videoKey!: string;
+
+  @Column({ name: 'keypoints_key', type: 'varchar', length: 1024, nullable: true })
+  keypointsKey!: string | null;
+
+  @Column({ type: 'double precision', nullable: true })
+  fps!: number | null;
+
+  @Column({ name: 'frame_count', type: 'int', nullable: true })
+  frameCount!: number | null;
+
+  @Column({ type: 'int', nullable: true })
+  width!: number | null;
+
+  @Column({ type: 'int', nullable: true })
+  height!: number | null;
+
+  @Column({ name: 'duration_ms', type: 'int', nullable: true })
+  durationMs!: number | null;
+
+  @Column({ type: 'varchar', length: 20, default: 'uploading' })
+  status!: 'uploading' | 'processing' | 'ready' | 'failed';
+
+  @Column({ name: 'failure_reason', type: 'text', nullable: true })
+  failureReason!: string | null;
+
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt!: Date;
+
+  @ManyToOne(() => Session, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'session_id' })
+  session!: Session;
+
+  @ManyToOne(() => User, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'uploaded_by_user_id' })
+  uploadedBy!: User;
+}
+
+// 10. AuditLog Entity
 @Entity('audit_logs')
 @Index('IDX_audit_logs_actor_time', ['actorUserId', 'createdAt'])
 @Index('IDX_audit_logs_resource', ['resourceType', 'resourceId'])

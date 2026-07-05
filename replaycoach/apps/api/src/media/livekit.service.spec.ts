@@ -1,7 +1,9 @@
 import { Test } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
-import { LiveKitService } from './livekit.service';
-import { AccessToken } from 'livekit-server-sdk';
+import { LiveKitService, liveKitRoomName } from './livekit.service';
+import { AccessToken, RoomServiceClient } from 'livekit-server-sdk';
+
+const mockDeleteRoom = jest.fn();
 
 jest.mock('livekit-server-sdk', () => {
   return {
@@ -11,6 +13,9 @@ jest.mock('livekit-server-sdk', () => {
         toJwt: jest.fn().mockResolvedValue('signed-jwt-token'),
       };
     }),
+    RoomServiceClient: jest.fn().mockImplementation(() => ({
+      deleteRoom: mockDeleteRoom,
+    })),
     TrackSource: {
       CAMERA: 'camera',
       MICROPHONE: 'microphone',
@@ -84,5 +89,41 @@ describe('LiveKitService', () => {
       'student',
     );
     expect(token).toContain('mock_token_for_user_abc_room_session_123_role_student');
+  });
+
+  describe('liveKitRoomName', () => {
+    it('derives the canonical room name from a session id', () => {
+      expect(liveKitRoomName('abc-123')).toBe('session_abc-123');
+    });
+  });
+
+  describe('deleteRoom', () => {
+    it('deletes the canonical room via RoomServiceClient when credentials are present', async () => {
+      mockDeleteRoom.mockResolvedValue(undefined);
+
+      await service.deleteRoom('sess-1');
+
+      expect(RoomServiceClient).toHaveBeenCalledWith('http://test-livekit:7880', 'test-api-key', 'test-api-secret');
+      expect(mockDeleteRoom).toHaveBeenCalledWith('session_sess-1');
+    });
+
+    it('is a non-fatal no-op when RoomServiceClient throws (room already gone)', async () => {
+      mockDeleteRoom.mockRejectedValue(new Error('room not found'));
+
+      await expect(service.deleteRoom('sess-1')).resolves.toBeUndefined();
+    });
+
+    it('skips deletion without throwing when LiveKit credentials are missing', async () => {
+      mockConfigService.get.mockImplementation((key: string, defaultValue?: any) => {
+        if (key === 'livekit.apiKey') return undefined;
+        if (key === 'livekit.apiSecret') return undefined;
+        if (key === 'livekit.url') return 'ws://localhost:7880';
+        return defaultValue;
+      });
+      const serviceNoCreds = new LiveKitService(mockConfigService);
+
+      await expect(serviceNoCreds.deleteRoom('sess-1')).resolves.toBeUndefined();
+      expect(mockDeleteRoom).not.toHaveBeenCalled();
+    });
   });
 });

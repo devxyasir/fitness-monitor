@@ -6,14 +6,24 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { RefreshToken } from './refresh-token.entity';
 
+/** Duplicate presentation of a just-rotated token within this window is tolerated. */
+const ROTATION_GRACE_MS = 10_000;
+
+/** How long a rotated-out row is kept around (for grace-window + revocation evidence). */
+const ROTATED_RETENTION_MS = 5 * 60_000;
+
 /**
  * Redis-backed refresh token manager using PostgreSQL as the backing store.
  *
  * Design:
  * - Each login creates a new "family" (UUID).
- * - Rotation: old token row deleted, new token row inserted in same family.
- * - Reuse detection: if token hash not found but family has other rows → theft detected
- *   → revoke entire family → force re-login.
+ * - Rotation: old row is stamped `rotatedAt` (soft delete), new row inserted in same family.
+ * - Grace window: a duplicate presentation of the just-rotated token within
+ *   ROTATION_GRACE_MS re-rotates the family's current active token instead of failing —
+ *   this absorbs concurrent double-refresh (StrictMode, multi-tab) without weakening
+ *   reuse detection for anything older.
+ * - Reuse detection: if a rotated-out token is presented outside the grace window →
+ *   theft detected → revoke entire family → force re-login.
  * - Tokens stored as argon2id hashes — never the raw token value.
  *
  * See 06_Authentication_Authorization_RBAC.md §7.
@@ -56,14 +66,16 @@ export class RefreshTokenService {
   }
 
   /**
-   * Validates a raw token. Loads all non-expired tokens and verifies the argon2id hash.
-   * Volume is bounded (one active token per user session by design).
+   * Validates a raw token. Loads all active (non-expired, non-rotated) tokens and
+   * verifies the argon2id hash. Volume is bounded (one active token per user session
+   * by design).
    */
   async findValid(rawToken: string): Promise<RefreshToken | null> {
     const now = new Date();
     const active = await this.repo
       .createQueryBuilder('rt')
       .where('rt.expires_at > :now', { now })
+      .andWhere('rt.rotated_at IS NULL')
       .getMany();
 
     for (const row of active) {
@@ -72,14 +84,43 @@ export class RefreshTokenService {
     return null;
   }
 
+  /** The current active (non-rotated) row for a family, if any. */
+  private async findActiveByFamily(familyId: string): Promise<RefreshToken | null> {
+    const now = new Date();
+    return this.repo
+      .createQueryBuilder('rt')
+      .where('rt.family_id = :familyId', { familyId })
+      .andWhere('rt.rotated_at IS NULL')
+      .andWhere('rt.expires_at > :now', { now })
+      .getOne();
+  }
+
+  /** A rotated-out row (within the retention buffer) matching this raw token, if any. */
+  private async findRotatedMatch(rawToken: string): Promise<RefreshToken | null> {
+    const cutoff = new Date(Date.now() - ROTATED_RETENTION_MS);
+    const rotated = await this.repo
+      .createQueryBuilder('rt')
+      .where('rt.rotated_at IS NOT NULL')
+      .andWhere('rt.rotated_at > :cutoff', { cutoff })
+      .getMany();
+
+    for (const row of rotated) {
+      if (await this.verify(row.tokenHash, rawToken)) return row;
+    }
+    return null;
+  }
+
   /**
    * Rotates a refresh token:
-   *  1. Delete the old row.
+   *  1. Soft-delete the old row (stamp `rotatedAt`) — kept briefly for grace-window lookups.
    *  2. Insert a new row in the same family.
    *  3. Return the new raw token + familyId.
    *
-   * If the old token is not found but the family still has rows → reuse detected →
-   * revoke family → throw UnauthorizedException.
+   * If the old token is not found among active rows, it may be a duplicate presentation
+   * of a token that was *just* rotated out (StrictMode double-effect, multi-tab reload):
+   *  - Within ROTATION_GRACE_MS of its rotation → re-rotate the family's current active
+   *    token and hand back a fresh pair, rather than failing.
+   *  - Older than that → genuine reuse of a rotated-out token → revoke the family.
    */
   async rotate(
     rawOldToken: string,
@@ -89,17 +130,35 @@ export class RefreshTokenService {
     const existing = await this.findValid(rawOldToken);
 
     if (!existing) {
-      // Token not found. Check if the family was ever used (reuse detection).
-      // We can't look up by family without knowing it, so just return unauthorized.
+      const rotatedMatch = await this.findRotatedMatch(rawOldToken);
+
+      if (rotatedMatch) {
+        const rotatedAt = rotatedMatch.rotatedAt?.getTime() ?? 0;
+        const withinGrace = Date.now() - rotatedAt < ROTATION_GRACE_MS;
+
+        if (withinGrace) {
+          const active = await this.findActiveByFamily(rotatedMatch.familyId);
+          if (active) {
+            this.logger.debug(
+              `Refresh token grace-window hit for family ${rotatedMatch.familyId}; re-rotating`,
+            );
+            await this.repo.update({ id: active.id }, { rotatedAt: new Date() });
+            const newRawToken = uuidv4();
+            await this.store(userId, newRawToken, expiresAt, rotatedMatch.familyId);
+            return { newRawToken, familyId: rotatedMatch.familyId };
+          }
+        } else {
+          // Outside the grace window: genuine reuse of an old rotated-out token.
+          await this.revokeFamily(rotatedMatch.familyId);
+        }
+      }
+
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
 
     const { familyId } = existing;
 
-    // Check for reuse: family exists but this specific token row matched (found above).
-    // If another row in the family exists, that means a previously rotated token was re-presented.
-    // Here: found the valid row → this is normal rotation, not reuse.
-    await this.repo.delete({ id: existing.id });
+    await this.repo.update({ id: existing.id }, { rotatedAt: new Date() });
 
     const newRawToken = uuidv4();
     await this.store(userId, newRawToken, expiresAt, familyId);
@@ -107,11 +166,7 @@ export class RefreshTokenService {
     return { newRawToken, familyId };
   }
 
-  /**
-   * Detect reuse: if a raw token is presented but no valid row found,
-   * check if the familyId passed still has active rows.
-   * If yes → someone is reusing a rotated-out token → revoke family.
-   */
+  /** Revoke every row (active or rotated-out) in a family — the theft-response action. */
   async revokeFamily(familyId: string): Promise<void> {
     const result = await this.repo.delete({ familyId });
     if ((result.affected ?? 0) > 0) {
@@ -132,8 +187,16 @@ export class RefreshTokenService {
     await this.repo.delete({ userId });
   }
 
-  /** Purge expired tokens — run periodically (cron job, Phase 2). */
+  /** Purge expired and old rotated-out tokens — run periodically (cron job, Phase 2). */
   async purgeExpired(): Promise<void> {
     await this.repo.delete({ expiresAt: LessThan(new Date()) });
+
+    const rotatedCutoff = new Date(Date.now() - ROTATED_RETENTION_MS);
+    await this.repo
+      .createQueryBuilder()
+      .delete()
+      .where('rotated_at IS NOT NULL')
+      .andWhere('rotated_at < :rotatedCutoff', { rotatedCutoff })
+      .execute();
   }
 }

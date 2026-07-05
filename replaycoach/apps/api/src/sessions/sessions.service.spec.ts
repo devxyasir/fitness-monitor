@@ -9,6 +9,9 @@ import { Session } from './session.entity';
 import { SessionParticipant } from './session-participant.entity';
 import { User } from '../users/user.entity';
 import { EgressService } from '../media/egress.service';
+import { LiveKitService } from '../media/livekit.service';
+import { RealtimeGateway } from '../realtime/realtime.gateway';
+import { PoseServiceClient } from '../pose/pose-service.client';
 
 describe('SessionsService', () => {
   let service: SessionsService;
@@ -27,6 +30,7 @@ describe('SessionsService', () => {
   const mockParticipantRepo = {
     save: jest.fn(),
     findOne: jest.fn(),
+    find: jest.fn(),
     count: jest.fn(),
   };
 
@@ -39,6 +43,20 @@ describe('SessionsService', () => {
     startTrackComposite: jest.fn(),
     stopEgress: jest.fn(),
     stopSessionEgress: jest.fn(),
+  };
+
+  const mockRealtimeGateway = {
+    emitRecordingActive: jest.fn(),
+    emitRecordingDegraded: jest.fn(),
+  };
+
+  const mockPoseServiceClient = {
+    startWorker: jest.fn(),
+    stopWorker: jest.fn(),
+  };
+
+  const mockLiveKitService = {
+    deleteRoom: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -61,6 +79,18 @@ describe('SessionsService', () => {
           provide: EgressService,
           useValue: mockEgressService,
         },
+        {
+          provide: LiveKitService,
+          useValue: mockLiveKitService,
+        },
+        {
+          provide: RealtimeGateway,
+          useValue: mockRealtimeGateway,
+        },
+        {
+          provide: PoseServiceClient,
+          useValue: mockPoseServiceClient,
+        },
       ],
     }).compile();
 
@@ -71,6 +101,13 @@ describe('SessionsService', () => {
     egressService = module.get(EgressService);
 
     jest.clearAllMocks();
+
+    // Safe defaults so tests unrelated to recording/pose don't need to stub them.
+    mockEgressService.startRoomComposite.mockResolvedValue({ status: 'recording' });
+    mockParticipantRepo.find.mockResolvedValue([]);
+    mockPoseServiceClient.startWorker.mockResolvedValue(undefined);
+    mockPoseServiceClient.stopWorker.mockResolvedValue(undefined);
+    mockLiveKitService.deleteRoom.mockResolvedValue(undefined);
   });
 
   describe('create', () => {
@@ -90,6 +127,8 @@ describe('SessionsService', () => {
       };
 
       sessionRepo.save.mockResolvedValue(mockSavedSession as any);
+      // create() calls join() internally, which looks the session back up.
+      sessionRepo.findOne.mockResolvedValue({ id: 'session-789', status: 'scheduled' } as any);
       userRepo.count.mockResolvedValue(1); // User exists
       participantRepo.save.mockResolvedValue({} as any);
 
@@ -115,6 +154,8 @@ describe('SessionsService', () => {
         ...s,
         id: 'session-789',
       }));
+      // create() calls join() internally, which looks the session back up.
+      sessionRepo.findOne.mockResolvedValue({ id: 'session-789', status: 'live' } as any);
       userRepo.count.mockResolvedValue(1);
       participantRepo.save.mockResolvedValue({} as any);
 
@@ -213,6 +254,50 @@ describe('SessionsService', () => {
       expect(result.endedAt).toBeDefined();
     });
 
+    it('should start a pose worker for each active approved participant when going live', async () => {
+      const session = mockSession('scheduled');
+      sessionRepo.findOne.mockResolvedValue(session);
+      sessionRepo.save.mockImplementation(async (s: any) => s);
+      mockParticipantRepo.find.mockResolvedValue([
+        { userId: 'user-1' },
+        { userId: 'user-2' },
+      ] as any);
+
+      await service.updateStatus('sess-id', 'live');
+
+      expect(mockParticipantRepo.find).toHaveBeenCalledWith({
+        where: { sessionId: 'sess-id', status: 'approved', leftAt: IsNull() },
+      });
+      expect(mockPoseServiceClient.startWorker).toHaveBeenCalledWith('sess-id', 'user-1');
+      expect(mockPoseServiceClient.startWorker).toHaveBeenCalledWith('sess-id', 'user-2');
+    });
+
+    it('should stop pose workers for remaining active participants when ending', async () => {
+      const session = mockSession('live');
+      sessionRepo.findOne.mockResolvedValue(session);
+      sessionRepo.save.mockImplementation(async (s: any) => s);
+      mockParticipantRepo.find.mockResolvedValue([{ userId: 'user-1' }] as any);
+
+      await service.updateStatus('sess-id', 'ended');
+
+      expect(mockPoseServiceClient.stopWorker).toHaveBeenCalledWith('sess-id', 'user-1');
+    });
+
+    it('should delete the LiveKit room (authoritative teardown) when ending', async () => {
+      const session = mockSession('live');
+      sessionRepo.findOne.mockResolvedValue(session);
+      sessionRepo.save.mockImplementation(async (s: any) => s);
+
+      await service.updateStatus('sess-id', 'ended');
+
+      expect(mockEgressService.stopSessionEgress).toHaveBeenCalledWith('sess-id');
+      expect(mockLiveKitService.deleteRoom).toHaveBeenCalledWith('sess-id');
+      // Egress must stop (recording finalizes) before the room is torn down.
+      const stopOrder = mockEgressService.stopSessionEgress.mock.invocationCallOrder[0]!;
+      const deleteOrder = mockLiveKitService.deleteRoom.mock.invocationCallOrder[0]!;
+      expect(stopOrder).toBeLessThan(deleteOrder);
+    });
+
     it('should throw BadRequestException on forbidden states (e.g. ended to live)', async () => {
       const session = mockSession('ended');
       sessionRepo.findOne.mockResolvedValue(session);
@@ -271,9 +356,76 @@ describe('SessionsService', () => {
       expect(result.leftAt).toBeDefined();
     });
 
+    it('should stop the pose worker for the leaving participant', async () => {
+      const active = new SessionParticipant();
+      active.sessionId = 'sess-1';
+      active.userId = 'user-1';
+      active.leftAt = null;
+
+      participantRepo.findOne.mockResolvedValue(active);
+      participantRepo.save.mockImplementation(async (p: any) => p);
+
+      await service.leave('sess-1', 'user-1');
+      expect(mockPoseServiceClient.stopWorker).toHaveBeenCalledWith('sess-1', 'user-1');
+    });
+
     it('should error when leave called on non-participant', async () => {
       participantRepo.findOne.mockResolvedValue(null);
       await expect(service.leave('sess-1', 'user-1')).rejects.toThrow(NotFoundException);
+    });
+
+    it('should be idempotent: leave on an already-left participant is a no-op, not an error', async () => {
+      const alreadyLeft = new SessionParticipant();
+      alreadyLeft.sessionId = 'sess-1';
+      alreadyLeft.userId = 'user-1';
+      alreadyLeft.leftAt = new Date('2026-01-01T00:00:00Z');
+
+      participantRepo.findOne.mockResolvedValue(alreadyLeft);
+
+      const result = await service.leave('sess-1', 'user-1');
+
+      expect(result.leftAt).toEqual(alreadyLeft.leftAt);
+      expect(participantRepo.save).not.toHaveBeenCalled();
+      expect(mockPoseServiceClient.stopWorker).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('countActiveParticipants / endIfLive', () => {
+    it('counts only approved, still-present participants', async () => {
+      mockParticipantRepo.count.mockResolvedValue(2);
+
+      const count = await service.countActiveParticipants('sess-1');
+
+      expect(count).toBe(2);
+      expect(mockParticipantRepo.count).toHaveBeenCalledWith({
+        where: { sessionId: 'sess-1', status: 'approved', leftAt: IsNull() },
+      });
+    });
+
+    it('ends a live session', async () => {
+      sessionRepo.findOne.mockResolvedValue({ id: 'sess-1', status: 'live' } as any);
+      sessionRepo.save.mockImplementation(async (s: any) => s);
+
+      await service.endIfLive('sess-1');
+
+      expect(mockEgressService.stopSessionEgress).toHaveBeenCalledWith('sess-1');
+      expect(mockLiveKitService.deleteRoom).toHaveBeenCalledWith('sess-1');
+    });
+
+    it('does nothing if the session is not live (already ended, or never started)', async () => {
+      sessionRepo.findOne.mockResolvedValue({ id: 'sess-1', status: 'ended' } as any);
+
+      await service.endIfLive('sess-1');
+
+      expect(sessionRepo.save).not.toHaveBeenCalled();
+      expect(mockLiveKitService.deleteRoom).not.toHaveBeenCalled();
+    });
+
+    it('does nothing if the session does not exist', async () => {
+      sessionRepo.findOne.mockResolvedValue(null);
+
+      await expect(service.endIfLive('missing-sess')).resolves.toBeUndefined();
+      expect(mockLiveKitService.deleteRoom).not.toHaveBeenCalled();
     });
   });
 });

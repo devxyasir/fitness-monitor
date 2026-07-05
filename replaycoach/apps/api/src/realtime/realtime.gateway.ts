@@ -19,7 +19,12 @@ import { AnnotationsService } from '../annotations/annotations.service';
 
 @WebSocketGateway({
   cors: {
-    origin: '*',
+    origin: (process.env['CORS_ORIGIN']?.split(',')) ?? [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://localhost:3002',
+    ],
+    credentials: true,
   },
 })
 export class RealtimeGateway implements OnGatewayConnection {

@@ -14,6 +14,10 @@ export const configSchema = Joi.object({
   JWT_EXPIRY: Joi.string().default('15m'),
   JWT_REFRESH_EXPIRY: Joi.string().default('7d'),
 
+  // Refresh-cookie strategy — only relevant when web + API are on different domains
+  AUTH_COOKIE_SAMESITE: Joi.string().valid('strict', 'lax', 'none').default('strict'),
+  AUTH_COOKIE_DOMAIN: Joi.string().allow('').optional(),
+
   // Redis — required
   REDIS_URL: Joi.string().default('redis://localhost:6379'),
 

@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
@@ -9,10 +9,14 @@ import { SessionParticipant } from './session-participant.entity';
 import { CreateSessionDto, UpdateSessionDto } from './session.dto';
 import { User } from '../users/user.entity';
 import { EgressService } from '../media/egress.service';
+import { LiveKitService, liveKitRoomName } from '../media/livekit.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
+import { PoseServiceClient } from '../pose/pose-service.client';
 
 @Injectable()
 export class SessionsService {
+  private readonly logger = new Logger(SessionsService.name);
+
   constructor(
     @InjectRepository(Session)
     private readonly sessionRepository: Repository<Session>,
@@ -21,15 +25,21 @@ export class SessionsService {
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     private readonly egressService: EgressService,
+    private readonly liveKitService: LiveKitService,
     private readonly realtimeGateway: RealtimeGateway,
+    private readonly poseServiceClient: PoseServiceClient,
   ) {}
 
   async create(coachId: string, orgId: string | null, dto: CreateSessionDto): Promise<Session> {
-    const livekitRoomName = `room-${uuidv4()}`;
+    // Generate the id ourselves (rather than let the DB default it) so the
+    // canonical LiveKit room name can be derived and stored at creation time —
+    // it must match `session_${id}` everywhere (token, egress, pose worker).
+    const sessionId = uuidv4();
     const session = new Session();
+    session.id = sessionId;
     session.coachId = coachId;
     session.orgId = orgId;
-    session.livekitRoomName = livekitRoomName;
+    session.livekitRoomName = liveKitRoomName(sessionId);
     session.scheduledAt = new Date(dto.scheduledAt);
     session.retentionDays = dto.retentionDays ?? 90;
     session.accessType = dto.accessType ?? 'public';
@@ -49,6 +59,7 @@ export class SessionsService {
 
     if (dto.isInstant) {
       await this.startCompositeRecording(savedSession.id);
+      await this.startPoseWorkersForActiveParticipants(savedSession.id);
     }
 
     return savedSession;
@@ -195,8 +206,13 @@ export class SessionsService {
 
     if (newStatus === 'live') {
       await this.startCompositeRecording(savedSession.id);
+      await this.startPoseWorkersForActiveParticipants(savedSession.id);
     } else if (newStatus === 'ended') {
       await this.egressService.stopSessionEgress(savedSession.id);
+      await this.stopPoseWorkersForActiveParticipants(savedSession.id);
+      // Authoritative teardown: force-disconnect everyone at the media server,
+      // independent of whether each client's socket is even connected.
+      await this.liveKitService.deleteRoom(savedSession.id);
     }
 
     return savedSession;
@@ -244,17 +260,50 @@ export class SessionsService {
     return this.participantRepository.save(participant);
   }
 
+  /**
+   * Idempotent: safe to call twice for the same participant (e.g. the client's
+   * "Leave Room" button and the LiveKit `participant_left` webhook can both fire
+   * for the same departure). A participant who already left is returned as-is
+   * rather than erroring; a userId that was never a participant in this session
+   * is still a genuine error.
+   */
   async leave(sessionId: string, userId: string): Promise<SessionParticipant> {
     const participant = await this.participantRepository.findOne({
-      where: { sessionId, userId, leftAt: IsNull() },
+      where: { sessionId, userId },
     });
 
     if (!participant) {
       throw new NotFoundException(`Active session participant with user ID ${userId} not found in session ${sessionId}`);
     }
 
+    if (participant.leftAt) {
+      return participant;
+    }
+
     participant.leftAt = new Date();
-    return this.participantRepository.save(participant);
+    const saved = await this.participantRepository.save(participant);
+    await this.poseServiceClient.stopWorker(sessionId, userId);
+    return saved;
+  }
+
+  /** Count of approved participants still in the session (haven't left). */
+  async countActiveParticipants(sessionId: string): Promise<number> {
+    return this.participantRepository.count({
+      where: { sessionId, status: 'approved', leftAt: IsNull() },
+    });
+  }
+
+  /**
+   * Transition a still-`live` session to `ended` (stops egress, tears down the
+   * LiveKit room) if it isn't already. Used to auto-end an abandoned session —
+   * driven by the LiveKit webhook (room emptied / room_finished), not the client.
+   * No-op if the session is already ended (or was never live).
+   */
+  async endIfLive(sessionId: string): Promise<void> {
+    const session = await this.sessionRepository.findOne({ where: { id: sessionId } });
+    if (!session || session.status !== 'live') return;
+    this.logger.log(`Session ${sessionId} has no active participants — auto-ending.`);
+    await this.updateStatus(sessionId, 'ended');
   }
 
   private validateTransition(from: SessionStatus, to: SessionStatus): boolean {
@@ -279,6 +328,30 @@ export class SessionsService {
     this.realtimeGateway.emitRecordingDegraded(
       sessionId,
       result.degradedReason ?? 'LiveKit egress did not start',
+    );
+  }
+
+  /**
+   * Interim pose-pipeline trigger (pending the LiveKit webhook in FIX_09, which
+   * will also cover late joiners). Starts a worker per currently-approved,
+   * still-in-session participant. Non-fatal — pose is a subscriber, never a
+   * requirement for the session itself.
+   */
+  private async startPoseWorkersForActiveParticipants(sessionId: string): Promise<void> {
+    const participants = await this.participantRepository.find({
+      where: { sessionId, status: 'approved', leftAt: IsNull() },
+    });
+    await Promise.all(
+      participants.map((p) => this.poseServiceClient.startWorker(sessionId, p.userId)),
+    );
+  }
+
+  private async stopPoseWorkersForActiveParticipants(sessionId: string): Promise<void> {
+    const participants = await this.participantRepository.find({
+      where: { sessionId, status: 'approved', leftAt: IsNull() },
+    });
+    await Promise.all(
+      participants.map((p) => this.poseServiceClient.stopWorker(sessionId, p.userId)),
     );
   }
 }

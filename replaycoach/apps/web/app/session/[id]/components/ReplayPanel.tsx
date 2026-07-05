@@ -115,7 +115,7 @@ export function ReplayPanel({
     const handleReplaySeek = (payload: { timestampMs: number }) => {
       const video = videoRef.current;
       if (video) {
-        video.currentTime = payload.timestampMs / 1005; // Use 1000 for precision ms conversions
+        video.currentTime = payload.timestampMs / 1000;
       }
     };
 

@@ -77,7 +77,15 @@ class RTMPoseAdapter(PoseModelAdapter):
 
     Loads the model once and runs inference per-frame. Outputs COCO-17
     keypoints with coordinates normalized to [0, 1].
+
+    RTMPose uses SimCC (coordinate classification): the model emits two 1-D
+    probability-distribution tensors (simcc_x, simcc_y) rather than direct
+    (x, y, score) triplets, and expects ImageNet mean/std-normalized RGB input.
     """
+
+    MEAN = np.array([123.675, 116.28, 103.53], dtype=np.float32)
+    STD = np.array([58.395, 57.12, 57.375], dtype=np.float32)
+    SIMCC_SPLIT_RATIO = 2.0
 
     def __init__(self, model_path: str | None = None):
         self._model_path = model_path or settings.onnx_model_path
@@ -108,52 +116,42 @@ class RTMPoseAdapter(PoseModelAdapter):
         )
 
     def _preprocess(self, frame: np.ndarray) -> np.ndarray:
-        """Resize, normalize, and transpose frame for ONNX input."""
-        h, w = self._input_size
+        """Resize, ImageNet-normalize, and transpose frame for ONNX input (RGB, CHW)."""
+        h, w = self._input_size  # (256, 192) = (H, W)
         resized = cv2.resize(frame, (w, h), interpolation=cv2.INTER_LINEAR)
+        rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB).astype(np.float32)
+        rgb = (rgb - self.MEAN) / self.STD
+        blob = rgb.transpose(2, 0, 1)[None]  # (1, 3, H, W)
+        return np.ascontiguousarray(blob, dtype=np.float32)
 
-        # Normalize to [0, 1] and convert BGR → RGB
-        blob = cv2.dnn.blobFromImage(
-            resized,
-            scalefactor=1.0 / 255.0,
-            size=(w, h),
-            swapRB=True,
-            crop=False,
-        )
-        return blob
+    def _decode_simcc(self, simcc_x: np.ndarray, simcc_y: np.ndarray) -> PoseResult:
+        """Decode SimCC coordinate-classification outputs into normalized keypoints."""
+        # shapes: simcc_x (1, K, W*split), simcc_y (1, K, H*split)
+        N, K, _ = simcc_x.shape
+        x = simcc_x.reshape(N * K, -1)
+        y = simcc_y.reshape(N * K, -1)
+        x_locs = np.argmax(x, axis=1).astype(np.float32)
+        y_locs = np.argmax(y, axis=1).astype(np.float32)
+        max_x = np.amax(x, axis=1)
+        max_y = np.amax(y, axis=1)
+        scores = np.minimum(max_x, max_y)
 
-    def _postprocess(
-        self, output: np.ndarray, orig_h: int, orig_w: int
-    ) -> PoseResult:
-        """Convert raw model output to normalized COCO-17 keypoints."""
-        # Output shape varies by model version; commonly (1, 17, 3) for [x, y, score]
-        if output.ndim == 3:
-            kps = output[0]  # (17, 3)
-        elif output.ndim == 2:
-            kps = output  # (17, 3)
-        else:
-            logger.warning("Unexpected output shape: %s", output.shape)
-            return PoseResult()
+        # argmax bin -> input-pixel coords
+        x_locs /= self.SIMCC_SPLIT_RATIO
+        y_locs /= self.SIMCC_SPLIT_RATIO
 
+        in_h, in_w = self._input_size  # (256, 192)
         keypoints: list[KeypointResult] = []
-        scores: list[float] = []
-
+        kept: list[float] = []
         for i, name in enumerate(COCO_KEYPOINT_NAMES):
-            if i >= len(kps):
-                break
-
-            raw_x, raw_y, score = float(kps[i][0]), float(kps[i][1]), float(kps[i][2])
-
-            # Normalize coordinates to [0, 1]
-            norm_x = max(0.0, min(1.0, raw_x / self._input_size[1]))
-            norm_y = max(0.0, min(1.0, raw_y / self._input_size[0]))
-
+            score = float(scores[i])
+            # normalize to [0,1] in the model input frame
+            nx = float(min(max(x_locs[i] / in_w, 0.0), 1.0))
+            ny = float(min(max(y_locs[i] / in_h, 0.0), 1.0))
             if score >= settings.min_confidence:
-                keypoints.append(KeypointResult(name=name, x=norm_x, y=norm_y, score=score))
-                scores.append(score)
-
-        confidence_avg = float(np.mean(scores)) if scores else 0.0
-        return PoseResult(keypoints=keypoints, confidence_avg=confidence_avg)
+                keypoints.append(KeypointResult(name=name, x=nx, y=ny, score=score))
+                kept.append(score)
+        return PoseResult(keypoints=keypoints, confidence_avg=float(np.mean(kept)) if kept else 0.0)
 
     def infer(self, frame: np.ndarray) -> PoseResult:
         """Run single-frame inference."""
@@ -161,13 +159,22 @@ class RTMPoseAdapter(PoseModelAdapter):
             # Stub mode — return empty result when model is not loaded
             return PoseResult()
 
-        orig_h, orig_w = frame.shape[:2]
-        input_blob = self._preprocess(frame)
-
+        blob = self._preprocess(frame)
         input_name = self._session.get_inputs()[0].name
-        outputs = self._session.run(None, {input_name: input_blob})
+        outputs = self._session.run(None, {input_name: blob})
 
-        return self._postprocess(outputs[0], orig_h, orig_w)
+        if len(outputs) < 2:
+            logger.error("RTMPose expected 2 SimCC outputs, got %d", len(outputs))
+            return PoseResult()
+
+        a, b = outputs[0], outputs[1]
+        in_h, in_w = self._input_size
+        # simcc_x last dim == W*split, simcc_y last dim == H*split
+        if a.shape[-1] == round(in_w * self.SIMCC_SPLIT_RATIO):
+            simcc_x, simcc_y = a, b
+        else:
+            simcc_x, simcc_y = b, a
+        return self._decode_simcc(simcc_x, simcc_y)
 
 
 class YOLOPoseAdapter(PoseModelAdapter):

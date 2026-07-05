@@ -1,6 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { AccessToken, TrackSource } from 'livekit-server-sdk';
+import { AccessToken, RoomServiceClient, TrackSource } from 'livekit-server-sdk';
+
+/** The canonical LiveKit room name for a session. Use this EVERYWHERE. */
+export function liveKitRoomName(sessionId: string): string {
+  return `session_${sessionId}`;
+}
 
 @Injectable()
 export class LiveKitService {
@@ -8,15 +13,36 @@ export class LiveKitService {
   private readonly apiKey: string | undefined;
   private readonly apiSecret: string | undefined;
   private readonly url: string;
+  private readonly roomService: RoomServiceClient | null;
 
   constructor(private readonly configService: ConfigService) {
     this.apiKey = this.configService.get<string>('livekit.apiKey');
     this.apiSecret = this.configService.get<string>('livekit.apiSecret');
     this.url = this.configService.get<string>('livekit.url', 'ws://localhost:7880');
+    this.roomService =
+      this.apiKey && this.apiSecret
+        ? new RoomServiceClient(this.url.replace(/^ws/, 'http'), this.apiKey, this.apiSecret)
+        : null;
   }
 
   getLiveKitUrl(): string {
     return this.url;
+  }
+
+  /** Force-disconnect all participants by deleting the room on the media server. */
+  async deleteRoom(sessionId: string): Promise<void> {
+    if (!this.roomService) {
+      this.logger.warn('RoomServiceClient unavailable (no LiveKit creds) — skipping deleteRoom');
+      return;
+    }
+    const room = liveKitRoomName(sessionId);
+    try {
+      await this.roomService.deleteRoom(room);
+      this.logger.log(`Deleted LiveKit room ${room}`);
+    } catch (err) {
+      // Non-fatal: room may already be gone. Log and continue.
+      this.logger.warn(`deleteRoom(${room}) failed: ${err instanceof Error ? err.message : err}`);
+    }
   }
 
   async generateToken(

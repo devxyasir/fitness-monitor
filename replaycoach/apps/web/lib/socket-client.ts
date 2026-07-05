@@ -8,10 +8,13 @@ export function getSocketUrl(): string {
 
 export const socket: Socket = io(SOCKET_URL, {
   autoConnect: false,
-  transports: ['websocket'],
+  // Allow polling as a fallback; Socket.IO upgrades to websocket when possible.
+  transports: ['websocket', 'polling'],
   reconnection: true,
-  reconnectionAttempts: 8,
-  reconnectionDelay: 2000,
+  reconnectionAttempts: 10,
+  reconnectionDelay: 1000,
+  reconnectionDelayMax: 5000,
+  timeout: 10000,
 });
 
 // Debug event listeners
@@ -27,16 +30,27 @@ socket.on('connect_error', (error) => {
   console.error('[Socket.IO] Connect error:', error.message || error);
 });
 
-export function connectSocket(token: string) {
-  const currentToken = (socket.auth as any)?.token;
-  
-  if (currentToken === token && (socket.connected || (socket as any).connecting)) {
+/**
+ * Connect (or reconnect) with the current access token.
+ * Refuses to connect without a token — an unauthenticated socket is dropped
+ * by the server immediately, which surfaces as "failed to connect".
+ */
+export function connectSocket(token: string | null | undefined): void {
+  if (!token) {
+    // No valid token yet — do not attempt. Caller should retry once auth is ready.
     return;
   }
 
+  const currentToken = (socket.auth as { token?: string } | undefined)?.token;
+
+  // Already connected/connecting with the same token → nothing to do.
+  if (currentToken === token && socket.active) return;
+
   socket.auth = { token };
 
-  if (socket.connected) {
+  // If a socket is live under an old token, restart it so the new token is used
+  // in the handshake.
+  if (socket.active) {
     console.log('[Socket.IO] Reconnecting due to authentication token change');
     socket.disconnect();
   }
@@ -45,8 +59,8 @@ export function connectSocket(token: string) {
   socket.connect();
 }
 
-export function disconnectSocket() {
-  if (socket.connected) {
+export function disconnectSocket(): void {
+  if (socket.active) {
     console.log('[Socket.IO] Disconnecting socket...');
     socket.disconnect();
   }

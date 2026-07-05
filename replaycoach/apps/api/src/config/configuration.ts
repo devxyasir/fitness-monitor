@@ -15,6 +15,10 @@ export default () => ({
     refreshSecret: process.env['JWT_REFRESH_SECRET'],
     refreshExpiry: process.env['JWT_REFRESH_EXPIRY'] ?? '7d',
   },
+  auth: {
+    cookieSameSite: process.env['AUTH_COOKIE_SAMESITE'] ?? 'strict',
+    cookieDomain: process.env['AUTH_COOKIE_DOMAIN'] ?? '',
+  },
   redis: {
     url: process.env['REDIS_URL'] ?? 'redis://localhost:6379',
   },

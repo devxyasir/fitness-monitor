@@ -1,10 +1,9 @@
 import { Test } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
-import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import { EgressWebhookController } from './egress-webhook.controller';
 import { EgressService } from './egress.service';
-import { Recording } from '../database/entities/others.entities';
+import { RecordingsService } from '../recordings/recordings.service';
+import { SessionsService } from '../sessions/sessions.service';
 import { WebhookReceiver } from 'livekit-server-sdk';
 
 jest.mock('livekit-server-sdk', () => {
@@ -19,17 +18,22 @@ jest.mock('livekit-server-sdk', () => {
 
 describe('EgressWebhookController', () => {
   let controller: EgressWebhookController;
-  let recordingRepo: jest.Mocked<Repository<Recording>>;
   let egressService: jest.Mocked<EgressService>;
   let mockWebhookReceiverInstance: any;
 
-  const mockRecordingRepo = {
-    save: jest.fn(),
-    findOne: jest.fn(),
+  const mockRecordingsService = {
+    findActiveParticipantRecording: jest.fn(),
+    updateStatusByEgressId: jest.fn(),
   };
 
   const mockEgressService = {
     startTrackComposite: jest.fn(),
+  };
+
+  const mockSessionsService = {
+    leave: jest.fn(),
+    countActiveParticipants: jest.fn(),
+    endIfLive: jest.fn(),
   };
 
   const mockConfigService = {
@@ -55,16 +59,19 @@ describe('EgressWebhookController', () => {
           useValue: mockEgressService,
         },
         {
-          provide: getRepositoryToken(Recording),
-          useValue: mockRecordingRepo,
+          provide: RecordingsService,
+          useValue: mockRecordingsService,
+        },
+        {
+          provide: SessionsService,
+          useValue: mockSessionsService,
         },
       ],
     }).compile();
 
     controller = module.get<EgressWebhookController>(EgressWebhookController);
-    recordingRepo = module.get(getRepositoryToken(Recording));
     egressService = module.get<any>(EgressService);
-    
+
     mockWebhookReceiverInstance = (WebhookReceiver as jest.Mock).mock.results[0]?.value;
   });
 
@@ -77,7 +84,7 @@ describe('EgressWebhookController', () => {
     it('should trigger track composite Egress when a CAMERA video track is published', async () => {
       const mockEvent = {
         event: 'track_published',
-        roomName: 'session_session-abc',
+        room: { name: 'session_session-abc' },
         participant: {
           identity: 'user-789',
           tracks: [
@@ -93,7 +100,7 @@ describe('EgressWebhookController', () => {
       };
 
       mockWebhookReceiverInstance.receive.mockResolvedValue(mockEvent);
-      recordingRepo.findOne.mockResolvedValue(null); // No existing active recording
+      mockRecordingsService.findActiveParticipantRecording.mockResolvedValue(null); // No existing active recording
       egressService.startTrackComposite.mockResolvedValue({
         egressId: 'egress_track_123',
         status: 'recording',
@@ -102,7 +109,7 @@ describe('EgressWebhookController', () => {
       const result = await controller.handleWebhook('valid-sig', mockEvent);
 
       expect(result).toEqual({ success: true });
-      expect(recordingRepo.findOne).toHaveBeenCalled();
+      expect(mockRecordingsService.findActiveParticipantRecording).toHaveBeenCalledWith('session-abc', 'user-789');
       expect(egressService.startTrackComposite).toHaveBeenCalledWith(
         'session-abc',
         'user-789',
@@ -114,7 +121,7 @@ describe('EgressWebhookController', () => {
     it('should not start track composite Egress if an active track recording already exists', async () => {
       const mockEvent = {
         event: 'track_published',
-        roomName: 'session_session-abc',
+        room: { name: 'session_session-abc' },
         participant: {
           identity: 'user-789',
           tracks: [{ sid: 'video-sid-1', type: 'VIDEO' }],
@@ -127,7 +134,7 @@ describe('EgressWebhookController', () => {
       };
 
       mockWebhookReceiverInstance.receive.mockResolvedValue(mockEvent);
-      recordingRepo.findOne.mockResolvedValue({ id: 'existing-recording' } as any);
+      mockRecordingsService.findActiveParticipantRecording.mockResolvedValue({ id: 'existing-recording' });
 
       await controller.handleWebhook('valid-sig', mockEvent);
 
@@ -137,7 +144,7 @@ describe('EgressWebhookController', () => {
     it('should ignore track published event if it is an AUDIO track', async () => {
       const mockEvent = {
         event: 'track_published',
-        roomName: 'session_session-abc',
+        room: { name: 'session_session-abc' },
         participant: {
           identity: 'user-789',
           tracks: [{ sid: 'audio-sid-1', type: 'AUDIO' }],
@@ -147,6 +154,21 @@ describe('EgressWebhookController', () => {
           type: 'AUDIO',
           source: 'MICROPHONE',
         },
+      };
+
+      mockWebhookReceiverInstance.receive.mockResolvedValue(mockEvent);
+
+      await controller.handleWebhook('valid-sig', mockEvent);
+
+      expect(egressService.startTrackComposite).not.toHaveBeenCalled();
+    });
+
+    it('should ignore track published event for a room not owned by this app', async () => {
+      const mockEvent = {
+        event: 'track_published',
+        room: { name: 'some-other-room' },
+        participant: { identity: 'user-789', tracks: [] },
+        track: { sid: 'video-sid-1', type: 'VIDEO', source: 'CAMERA' },
       };
 
       mockWebhookReceiverInstance.receive.mockResolvedValue(mockEvent);
@@ -173,31 +195,104 @@ describe('EgressWebhookController', () => {
       };
 
       mockWebhookReceiverInstance.receive.mockResolvedValue(mockEvent);
-      
-      const mockRecordingRow = {
+
+      mockRecordingsService.updateStatusByEgressId.mockResolvedValue({
         id: 'rec-row-1',
         sessionId: 'session-xyz',
         trackType: 'composite',
-        status: 'recording',
-        durationSeconds: 0,
-      };
-      
-      recordingRepo.findOne.mockResolvedValue(mockRecordingRow as any);
-      recordingRepo.save.mockResolvedValue({} as any);
+        status: 'ready',
+        durationSeconds: 35,
+      });
 
       const result = await controller.handleWebhook('valid-sig', mockEvent);
 
       expect(result).toEqual({ success: true });
-      expect(recordingRepo.findOne).toHaveBeenCalledWith({
-        where: { sessionId: 'session-xyz', trackType: 'composite' },
-      });
-      expect(recordingRepo.save).toHaveBeenCalledWith(
-        expect.objectContaining({
-          id: 'rec-row-1',
-          durationSeconds: 35, // rounded from 34.5
-          status: 'ready',
-        }),
+      expect(mockRecordingsService.updateStatusByEgressId).toHaveBeenCalledWith(
+        'egress_composite_123',
+        'ready',
+        35, // rounded from 34.5
       );
+    });
+  });
+
+  describe('handleWebhook - participant_left', () => {
+    it('should record the leave and check for auto-end', async () => {
+      const mockEvent = {
+        event: 'participant_left',
+        room: { name: 'session_session-abc' },
+        participant: { identity: 'user-789' },
+      };
+
+      mockWebhookReceiverInstance.receive.mockResolvedValue(mockEvent);
+      mockSessionsService.leave.mockResolvedValue({ leftAt: new Date() });
+      mockSessionsService.countActiveParticipants.mockResolvedValue(1);
+
+      await controller.handleWebhook('valid-sig', mockEvent);
+
+      expect(mockSessionsService.leave).toHaveBeenCalledWith('session-abc', 'user-789');
+      expect(mockSessionsService.countActiveParticipants).toHaveBeenCalledWith('session-abc');
+      expect(mockSessionsService.endIfLive).not.toHaveBeenCalled();
+    });
+
+    it('should auto-end the session when the last real participant leaves', async () => {
+      const mockEvent = {
+        event: 'participant_left',
+        room: { name: 'session_session-abc' },
+        participant: { identity: 'user-789' },
+      };
+
+      mockWebhookReceiverInstance.receive.mockResolvedValue(mockEvent);
+      mockSessionsService.leave.mockResolvedValue({ leftAt: new Date() });
+      mockSessionsService.countActiveParticipants.mockResolvedValue(0);
+
+      await controller.handleWebhook('valid-sig', mockEvent);
+
+      expect(mockSessionsService.endIfLive).toHaveBeenCalledWith('session-abc');
+    });
+
+    it('should ignore pose-worker bot identities', async () => {
+      const mockEvent = {
+        event: 'participant_left',
+        room: { name: 'session_session-abc' },
+        participant: { identity: 'pose_worker_session-abc_user-1' },
+      };
+
+      mockWebhookReceiverInstance.receive.mockResolvedValue(mockEvent);
+
+      await controller.handleWebhook('valid-sig', mockEvent);
+
+      expect(mockSessionsService.leave).not.toHaveBeenCalled();
+    });
+
+    it('should not crash when the participant is unknown to us', async () => {
+      const mockEvent = {
+        event: 'participant_left',
+        room: { name: 'session_session-abc' },
+        participant: { identity: 'unknown-user' },
+      };
+
+      mockWebhookReceiverInstance.receive.mockResolvedValue(mockEvent);
+      mockSessionsService.leave.mockRejectedValue(new Error('not found'));
+
+      const result = await controller.handleWebhook('valid-sig', mockEvent);
+
+      expect(result).toEqual({ success: true });
+      expect(mockSessionsService.countActiveParticipants).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('handleWebhook - room_finished', () => {
+    it('should end the session unconditionally when the room finishes', async () => {
+      const mockEvent = {
+        event: 'room_finished',
+        room: { name: 'session_session-abc' },
+      };
+
+      mockWebhookReceiverInstance.receive.mockResolvedValue(mockEvent);
+
+      await controller.handleWebhook('valid-sig', mockEvent);
+
+      expect(mockSessionsService.endIfLive).toHaveBeenCalledWith('session-abc');
     });
   });
 });

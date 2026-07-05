@@ -1,4 +1,4 @@
-import { Body, Controller, Headers, Logger, Post, Req, UnauthorizedException } from '@nestjs/common';
+import { Body, Controller, forwardRef, Headers, Inject, Logger, Post, Req, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { WebhookReceiver } from 'livekit-server-sdk';
 import type { RawBodyRequest } from '@nestjs/common';
@@ -6,6 +6,7 @@ import type { Request } from 'express';
 
 import { EgressService } from './egress.service';
 import { RecordingsService, RecordingStatus } from '../recordings/recordings.service';
+import { SessionsService } from '../sessions/sessions.service';
 
 interface LiveKitTrack {
   sid?: string;
@@ -24,12 +25,27 @@ interface LiveKitEgressInfo {
   duration?: string | number;
 }
 
+interface LiveKitRoom {
+  name?: string;
+}
+
 interface LiveKitWebhookEvent {
   event?: string;
-  roomName?: string;
+  room?: LiveKitRoom;
   participant?: LiveKitParticipant;
   track?: LiveKitTrack;
   egressInfo?: LiveKitEgressInfo;
+}
+
+/** Pose-service subscriber bots — never count these as real participants. */
+function isPoseWorkerIdentity(identity: string): boolean {
+  return identity.startsWith('pose_worker_');
+}
+
+/** `session_<id>` -> `<id>`, or null if the room isn't one of ours. */
+function sessionIdFromRoomName(roomName: string | undefined): string | null {
+  if (!roomName || !roomName.startsWith('session_')) return null;
+  return roomName.slice('session_'.length);
 }
 
 @Controller('media')
@@ -42,6 +58,8 @@ export class EgressWebhookController {
     private readonly configService: ConfigService,
     private readonly egressService: EgressService,
     private readonly recordingsService: RecordingsService,
+    @Inject(forwardRef(() => SessionsService))
+    private readonly sessionsService: SessionsService,
   ) {
     const apiKey = this.configService.get<string>('livekit.apiKey');
     const apiSecret = this.configService.get<string>('livekit.apiSecret');
@@ -89,6 +107,10 @@ export class EgressWebhookController {
         await this.handleTrackPublished(event);
       } else if (eventName === 'egress_updated' || eventName === 'egress_ended') {
         await this.handleEgressEvent(event);
+      } else if (eventName === 'participant_left') {
+        await this.handleParticipantLeft(event);
+      } else if (eventName === 'room_finished') {
+        await this.handleRoomFinished(event);
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
@@ -99,7 +121,12 @@ export class EgressWebhookController {
   }
 
   private async handleTrackPublished(event: any): Promise<void> {
-    const roomName = event.roomName;
+    // NOTE: WebhookEvent carries the room under a nested `room: { name }`, not a
+    // flat `roomName` — the field this used to read doesn't exist on the real
+    // parsed event (only in this file's own hand-built test fixtures), so this
+    // handler silently no-op'd on every real webhook call. Fixed alongside FIX_09
+    // since the new participant_left/room_finished handlers need the same field.
+    const roomName = event.room?.name;
     const participant = event.participant;
     const track = event.track;
 
@@ -107,12 +134,11 @@ export class EgressWebhookController {
       return;
     }
 
-    // Conventions: room name is session_{sessionId}
-    if (!roomName.startsWith('session_')) {
+    const sessionId = sessionIdFromRoomName(roomName);
+    if (!sessionId) {
       this.logger.debug(`Ignoring track published event for room ${roomName} (does not start with session_)`);
       return;
     }
-    const sessionId = roomName.replace('session_', '');
     const participantId = participant.identity;
 
     // 0 = AUDIO, 1 = VIDEO
@@ -201,5 +227,41 @@ export class EgressWebhookController {
     }
 
     this.logger.log(`Updated recording ${recording.id} from egress ${egressId} to ${recording.status}`);
+  }
+
+  /**
+   * Authoritative presence signal: a participant left the LiveKit room,
+   * independent of whether their browser/socket ever told us. Idempotent via
+   * SessionsService.leave(). If that was the last real (non-bot) participant,
+   * auto-end the session so it doesn't record forever.
+   */
+  private async handleParticipantLeft(event: any): Promise<void> {
+    const sessionId = sessionIdFromRoomName(event.room?.name);
+    const identity = event.participant?.identity;
+
+    if (!sessionId || !identity) return;
+    if (isPoseWorkerIdentity(identity)) return; // bots aren't real participants
+
+    try {
+      await this.sessionsService.leave(sessionId, identity);
+    } catch (err: unknown) {
+      // A participant_left for an identity we don't track (e.g. never joined
+      // through our API) is not actionable — log and move on.
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`Ignoring participant_left for unknown participant ${identity} in session ${sessionId}: ${message}`);
+      return;
+    }
+
+    const remaining = await this.sessionsService.countActiveParticipants(sessionId);
+    if (remaining === 0) {
+      await this.sessionsService.endIfLive(sessionId);
+    }
+  }
+
+  /** The LiveKit room fully closed — the session is over regardless of our own bookkeeping. */
+  private async handleRoomFinished(event: any): Promise<void> {
+    const sessionId = sessionIdFromRoomName(event.room?.name);
+    if (!sessionId) return;
+    await this.sessionsService.endIfLive(sessionId);
   }
 }

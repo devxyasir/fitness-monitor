@@ -231,12 +231,17 @@ class WorkerPool:
     def _worker_key(self, session_id: str, participant_id: str) -> str:
         return f"{session_id}:{participant_id}"
 
-    async def add_worker(self, session_id: str, participant_id: str) -> None:
-        """Spin up a worker for a new participant track."""
+    async def add_worker(self, session_id: str, participant_id: str) -> bool:
+        """
+        Spin up a worker for a new participant track.
+        Returns True if a worker is running for this key afterward (including
+        the already-exists case), False if this replica is at capacity — the
+        caller can use that to requeue the command for another replica.
+        """
         key = self._worker_key(session_id, participant_id)
         if key in self._workers:
             logger.warning("Worker already exists for %s", key)
-            return
+            return True
 
         if len(self._workers) >= settings.max_workers:
             logger.warning(
@@ -244,13 +249,14 @@ class WorkerPool:
                 settings.max_workers,
                 key,
             )
-            return
+            return False
 
         worker = PoseWorker(session_id, participant_id, self.redis, self.model)
         self._workers[key] = worker
         self._tasks[key] = asyncio.create_task(worker.start())
 
         logger.info("Added pose worker: %s", key)
+        return True
 
     async def remove_worker(self, session_id: str, participant_id: str) -> None:
         """Stop and remove a worker for a participant that left."""

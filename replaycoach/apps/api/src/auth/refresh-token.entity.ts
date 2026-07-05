@@ -11,9 +11,14 @@ import {
 import { User } from '../users/user.entity';
 
 /**
- * One row per active refresh token.
- * On rotation, old row deleted + new row inserted (same familyId).
- * On reuse detection, all rows with same familyId are deleted.
+ * One row per refresh token (active or recently rotated).
+ * On rotation, the old row is stamped with `rotatedAt` (soft delete) + a new row is
+ * inserted in the same familyId; this keeps a short-lived trace so a duplicate
+ * presentation of the just-rotated token within the grace window can be resolved
+ * instead of treated as reuse. Rows with `rotatedAt` set are purged after a
+ * retention buffer (see RefreshTokenService.purgeExpired).
+ * On reuse detection (a token presented outside the grace window), all rows with
+ * the same familyId are deleted.
  * See 06_Authentication_Authorization_RBAC.md §7.
  */
 @Entity('refresh_tokens')
@@ -43,6 +48,14 @@ export class RefreshToken {
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;
+
+  /**
+   * Set when this token is rotated out. NULL means still active.
+   * Kept briefly (see purgeExpired) so a same-token duplicate presented within the
+   * grace window can be resolved instead of triggering reuse detection.
+   */
+  @Column({ name: 'rotated_at', type: 'timestamptz', nullable: true })
+  rotatedAt!: Date | null;
 
   @ManyToOne(() => User, (user) => user.refreshTokens, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })

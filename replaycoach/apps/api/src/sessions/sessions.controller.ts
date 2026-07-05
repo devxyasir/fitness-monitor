@@ -18,7 +18,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { SessionsGuard } from './sessions.guard';
 import { SessionsService } from './sessions.service';
-import { LiveKitService } from '../media/livekit.service';
+import { LiveKitService, liveKitRoomName } from '../media/livekit.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { CreateSessionDto, UpdateSessionDto } from './session.dto';
 import type { JwtPayload, SessionStatus } from '@replaycoach/types';
@@ -196,7 +196,7 @@ export class SessionsController {
       throw new ForbiddenException('Your join request has been declined.');
     }
 
-    const roomName = `session_${id}`;
+    const roomName = liveKitRoomName(id);
     const token = await this.livekitService.generateToken(
       roomName,
       user.sub,

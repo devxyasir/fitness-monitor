@@ -9,12 +9,14 @@ import { SessionsGuard } from './sessions.guard';
 import { User } from '../users/user.entity';
 import { MediaModule } from '../media/media.module';
 import { RealtimeModule } from '../realtime/realtime.module';
+import { PoseModule } from '../pose/pose.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Session, SessionParticipant, User]),
-    MediaModule,
+    forwardRef(() => MediaModule),
     forwardRef(() => RealtimeModule),
+    PoseModule,
   ],
   providers: [SessionsService, SessionsGuard],
   controllers: [SessionsController],
