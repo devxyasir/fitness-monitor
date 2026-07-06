@@ -596,6 +596,12 @@ function ControlsArea({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<{
+    loaded: number;
+    total: number;
+    speedBps: number;
+  } | null>(null);
+  const uploadStartRef = useRef<number>(0);
 
   const toggleMic = async () => {
     await localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled);
@@ -616,13 +622,20 @@ function ControlsArea({
 
     setUploadingVideo(true);
     setUploadError(null);
+    uploadStartRef.current = Date.now();
+    setUploadProgress({ loaded: 0, total: file.size, speedBps: 0 });
     try {
       const formData = new FormData();
       formData.append('file', file);
 
-      const uploaded = await apiClient.postForm<{ id: string }>(
+      const uploaded = await apiClient.postFormWithProgress<{ id: string }>(
         `/sessions/${sessionId}/reference/upload`,
         formData,
+        (loaded, total) => {
+          const elapsedSec = (Date.now() - uploadStartRef.current) / 1000;
+          const speedBps = elapsedSec > 0 ? loaded / elapsedSec : 0;
+          setUploadProgress({ loaded, total, speedBps });
+        },
       );
 
       // Broadcasts reference:open to the whole room (including this client) —
@@ -636,8 +649,11 @@ function ControlsArea({
       setTimeout(() => setUploadError(null), 4000);
     } finally {
       setUploadingVideo(false);
+      setUploadProgress(null);
     }
   };
+
+  const formatMB = (bytes: number) => (bytes / (1024 * 1024)).toFixed(1);
 
   return (
     <>
@@ -706,7 +722,13 @@ function ControlsArea({
             >
               {uploadingVideo ? (
                 <>
-                  <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Uploading...
+                  <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                  Uploading...
+                  {uploadProgress && uploadProgress.total > 0 && (
+                    <span className="ml-1.5 tabular-nums">
+                      {Math.min(100, Math.round((uploadProgress.loaded / uploadProgress.total) * 100))}%
+                    </span>
+                  )}
                 </>
               ) : (
                 <>
@@ -714,6 +736,29 @@ function ControlsArea({
                 </>
               )}
             </button>
+            {uploadingVideo && uploadProgress && uploadProgress.total > 0 && (
+              <div className="absolute bottom-full mb-2 left-0 z-20 w-56 bg-slate-900/95 border border-slate-700 text-slate-200 text-xs font-medium px-3 py-2 rounded-lg shadow-xl">
+                <div className="flex justify-between mb-1">
+                  <span>
+                    {formatMB(uploadProgress.loaded)} / {formatMB(uploadProgress.total)} MB
+                  </span>
+                  <span>
+                    {Math.min(100, Math.round((uploadProgress.loaded / uploadProgress.total) * 100))}%
+                  </span>
+                </div>
+                <div className="h-1.5 w-full bg-slate-700 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-indigo-500 transition-all"
+                    style={{
+                      width: `${Math.min(100, (uploadProgress.loaded / uploadProgress.total) * 100)}%`,
+                    }}
+                  />
+                </div>
+                <div className="mt-1 text-slate-400">
+                  {formatMB(uploadProgress.speedBps)} MB/s
+                </div>
+              </div>
+            )}
             {uploadError && (
               <div className="absolute bottom-full mb-2 left-0 z-20 whitespace-nowrap bg-red-950/95 border border-red-800 text-red-300 text-xs font-medium px-3 py-2 rounded-lg shadow-xl">
                 {uploadError}

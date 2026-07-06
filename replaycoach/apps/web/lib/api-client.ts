@@ -117,5 +117,62 @@ async function postForm<TResponse>(path: string, formData: FormData): Promise<TR
   return res.json() as Promise<TResponse>;
 }
 
-export const apiClient = { get, post, patch, postForm };
+/**
+ * Multipart form upload with live upload-progress reporting. Fetch has no
+ * upload-progress event, so this uses XMLHttpRequest instead — mirrors
+ * postForm's 401-retry-once behavior.
+ */
+function postFormWithProgress<TResponse>(
+  path: string,
+  formData: FormData,
+  onProgress?: (loaded: number, total: number) => void,
+): Promise<TResponse> {
+  const formattedPath = formatPath(path);
+  const url = `${API_BASE_URL}${formattedPath}`;
+
+  const authHeaders = (): Record<string, string> => {
+    const token = useAuthStore.getState().accessToken;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
+  const send = (): Promise<{ status: number; body: string }> =>
+    new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', url);
+      const headers = authHeaders();
+      for (const [key, value] of Object.entries(headers)) {
+        xhr.setRequestHeader(key, value);
+      }
+      if (onProgress) {
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            onProgress(event.loaded, event.total);
+          }
+        };
+      }
+      xhr.onload = () => resolve({ status: xhr.status, body: xhr.responseText });
+      xhr.onerror = () => reject(new Error('Network error during upload'));
+      xhr.send(formData);
+    });
+
+  return (async () => {
+    let res = await send();
+
+    if (res.status === 401) {
+      try {
+        await authClient.refresh();
+        res = await send();
+      } catch (refreshErr) {
+        console.error('Form upload failed with 401 and refresh attempt failed:', refreshErr);
+      }
+    }
+
+    if (res.status < 200 || res.status >= 300) {
+      throw new Error(`API error ${res.status}: ${formattedPath}`);
+    }
+    return JSON.parse(res.body) as TResponse;
+  })();
+}
+
+export const apiClient = { get, post, patch, postForm, postFormWithProgress };
 
