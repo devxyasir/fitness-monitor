@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParticipants } from '@livekit/components-react';
 import { apiClient } from '../../../../lib/api-client';
 import { useReferenceStore, type Stroke, type ReferenceTool } from '../../../../stores/reference-store';
@@ -216,27 +216,38 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
     return () => ro.disconnect();
   }, []);
 
-  // Video <-> frameIndex sync
-  const handleTimeUpdate = useCallback(() => {
+  // Video <-> frameIndex sync — driven by requestAnimationFrame rather than
+  // the native `timeupdate` event, which only fires a handful of times per
+  // second and made the skeleton overlay visibly lag behind the video.
+  useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    const idx = Math.round(video.currentTime * fps);
-    setFrameIndex(idx);
+    let rafId: number;
 
-    if (isCoach) {
-      const now = Date.now();
-      if (now - lastEmitRef.current > 200) {
-        lastEmitRef.current = now;
-        emitState(!video.paused, idx);
+    const tick = () => {
+      const idx = Math.round(video.currentTime * fps);
+      if (idx !== useReferenceStore.getState().frameIndex) {
+        setFrameIndex(idx);
       }
-    }
+
+      if (isCoach) {
+        const now = Date.now();
+        if (now - lastEmitRef.current > 200) {
+          lastEmitRef.current = now;
+          emitState(!video.paused, idx);
+        }
+      }
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
   }, [fps, isCoach, emitState, setFrameIndex]);
 
   // Students: follow the coach's state
   useEffect(() => {
     if (isCoach) return;
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || !(fps > 0)) return;
     const targetTime = frameIndex / fps;
     if (Math.abs(video.currentTime - targetTime) > 0.15) {
       video.currentTime = targetTime;
@@ -249,7 +260,10 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
     const clamped = Math.max(0, Math.min(frameCount > 0 ? frameCount - 1 : idx, idx));
     setFrameIndex(clamped);
     const video = videoRef.current;
-    if (video) video.currentTime = clamped / fps;
+    // fps is 0/null until analysis finishes — assigning currentTime = Infinity
+    // throws a DOMException, which is exactly the "seeking gives an error"
+    // report when scrubbing while the video is still processing.
+    if (video && fps > 0) video.currentTime = clamped / fps;
     if (isCoach) emitState(!video?.paused, clamped);
   };
 
@@ -266,12 +280,27 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
     close();
   };
 
+  // Resizing a canvas (even to the same value) resets its 2D context, so
+  // this must be its own effect keyed only on `dims` — not re-run on every
+  // frameIndex/keypoints change, which would otherwise happen many times a
+  // second and was a source of the rendering lag.
+  useEffect(() => {
+    const canvas = drawCanvasRef.current;
+    if (canvas) {
+      canvas.width = dims.width;
+      canvas.height = dims.height;
+    }
+    const skeletonCanvas = skeletonCanvasRef.current;
+    if (skeletonCanvas) {
+      skeletonCanvas.width = dims.width;
+      skeletonCanvas.height = dims.height;
+    }
+  }, [dims]);
+
   // ── Draw canvas: render committed strokes for the current frame ──────────
   useEffect(() => {
     const canvas = drawCanvasRef.current;
     if (!canvas) return;
-    canvas.width = dims.width;
-    canvas.height = dims.height;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.clearRect(0, 0, dims.width, dims.height);
@@ -283,8 +312,6 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
   useEffect(() => {
     const canvas = skeletonCanvasRef.current;
     if (!canvas) return;
-    canvas.width = dims.width;
-    canvas.height = dims.height;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.clearRect(0, 0, dims.width, dims.height);
@@ -461,7 +488,6 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
               src={videoUrl}
               className="w-full h-full object-contain"
               playsInline
-              onTimeUpdate={handleTimeUpdate}
               onPlay={() => isCoach && setPlaying(true)}
               onPause={() => isCoach && setPlaying(false)}
             />

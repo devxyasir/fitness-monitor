@@ -58,7 +58,7 @@ interface ReferenceState {
 
   open: (payload: { refId: string; videoUrl: string; keypointsUrl?: string | null; fps: number; frameCount: number; status: ReferenceStatus }) => void;
   setKeypoints: (data: ReferenceKeypointsData) => void;
-  setStatus: (status: ReferenceStatus) => void;
+  setReady: (payload: { keypointsUrl: string | null; fps: number; frameCount: number }) => void;
   close: () => void;
   setPlaying: (playing: boolean) => void;
   setFrameIndex: (frameIndex: number) => void;
@@ -117,7 +117,17 @@ export const useReferenceStore = create<ReferenceState>((set, get) => ({
     set({ keypointsByFrame: map, fps: data.fps || get().fps, frameCount: data.frameCount || get().frameCount });
   },
 
-  setStatus: (status) => set({ status }),
+  // Called when 'reference:ready' arrives for an already-open modal — must
+  // carry keypointsUrl/fps/frameCount too, not just flip the status, or the
+  // keypoints-fetch effect (gated on `status === 'ready' && keypointsUrl`)
+  // never fires and the skeleton never renders even though analysis finished.
+  setReady: (payload) =>
+    set((s) => ({
+      status: 'ready',
+      keypointsUrl: payload.keypointsUrl,
+      fps: payload.fps || s.fps,
+      frameCount: payload.frameCount || s.frameCount,
+    })),
 
   close: () => set({ ...initial }),
 

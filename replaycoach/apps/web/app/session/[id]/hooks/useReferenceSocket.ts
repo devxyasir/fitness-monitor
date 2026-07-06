@@ -23,7 +23,7 @@ interface ReferenceOpenPayload {
  */
 export function useReferenceSocketListeners(sessionId: string) {
   const open = useReferenceStore((s) => s.open);
-  const setStatus = useReferenceStore((s) => s.setStatus);
+  const setReady = useReferenceStore((s) => s.setReady);
   const setPlaying = useReferenceStore((s) => s.setPlaying);
   const setFrameIndex = useReferenceStore((s) => s.setFrameIndex);
   const applyRemoteStroke = useReferenceStore((s) => s.applyRemoteStroke);
@@ -44,9 +44,14 @@ export function useReferenceSocketListeners(sessionId: string) {
     };
 
     const handleReady = (payload: ReferenceOpenPayload) => {
-      // Only relevant if this is the video currently open (or about to be).
-      setStatus('ready');
-      if (!useReferenceStore.getState().isOpen) {
+      // If the modal is already open (the common case — the coach presents
+      // the video immediately after upload, while it's still processing),
+      // we must carry keypointsUrl/fps/frameCount too, not just the status,
+      // or the skeleton never has data to fetch. Otherwise treat it like a
+      // fresh open.
+      if (useReferenceStore.getState().isOpen) {
+        setReady({ keypointsUrl: payload.keypointsUrl, fps: payload.fps, frameCount: payload.frameCount });
+      } else {
         handleOpen(payload);
       }
     };
@@ -89,7 +94,7 @@ export function useReferenceSocketListeners(sessionId: string) {
       socket.off('reference:clear', handleClear);
       socket.off('reference:close', handleClose);
     };
-  }, [sessionId, open, setStatus, setPlaying, setFrameIndex, applyRemoteStroke, applyRemoteUndo, applyRemoteClear, close]);
+  }, [sessionId, open, setReady, setPlaying, setFrameIndex, applyRemoteStroke, applyRemoteUndo, applyRemoteClear, close]);
 }
 
 /**
