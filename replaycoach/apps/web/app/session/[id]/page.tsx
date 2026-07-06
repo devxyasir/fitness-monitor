@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { LiveKitRoom, RoomAudioRenderer, useLocalParticipant, useTracks, TrackReference } from '@livekit/components-react';
 import { DisconnectReason, Track } from 'livekit-client';
 import { useLiveKitRoom } from './hooks/useLiveKitRoom';
@@ -34,6 +34,8 @@ import {
   VideoOff,
   ScreenShare,
   LayoutGrid,
+  Upload,
+  Loader2,
 } from 'lucide-react';
 
 export default function SessionRoomPage({ params }: { params: { id: string } }) {
@@ -414,7 +416,7 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
 
             {/* Control Toolbar */}
             <div className="bg-slate-900 border-t border-slate-900 px-6 py-4 flex items-center justify-between z-10 shadow-inner">
-              <ControlsArea isCoach={isCoach} layout={layout} setLayout={setLayout} />
+              <ControlsArea isCoach={isCoach} layout={layout} setLayout={setLayout} sessionId={sessionId} />
             </div>
           </>
         )}
@@ -569,13 +571,18 @@ function ControlsArea({
   isCoach,
   layout,
   setLayout,
+  sessionId,
 }: {
   isCoach: boolean;
   layout: 'gallery' | 'spotlight';
   setLayout: (l: 'gallery' | 'spotlight') => void;
+  sessionId: string;
 }) {
   const { isMicrophoneEnabled, isCameraEnabled, isScreenShareEnabled, localParticipant } =
     useLocalParticipant();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const toggleMic = async () => {
     await localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled);
@@ -587,6 +594,35 @@ function ControlsArea({
 
   const toggleScreen = async () => {
     await localParticipant.setScreenShareEnabled(!isScreenShareEnabled);
+  };
+
+  const handleVideoFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file later
+    if (!file || uploadingVideo) return;
+
+    setUploadingVideo(true);
+    setUploadError(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const uploaded = await apiClient.postForm<{ id: string }>(
+        `/sessions/${sessionId}/reference/upload`,
+        formData,
+      );
+
+      // Broadcasts reference:open to the whole room (including this client) —
+      // same pipeline as the per-participant "Analyze Last 10s" flow, just
+      // sourced from a coach-picked file instead of the live camera buffer.
+      await apiClient.post(`/sessions/${sessionId}/reference/${uploaded.id}/present`, {});
+    } catch (err) {
+      console.error('Failed to upload external video for analysis:', err);
+      setUploadError('Upload failed. Please try a different file.');
+      setTimeout(() => setUploadError(null), 4000);
+    } finally {
+      setUploadingVideo(false);
+    }
   };
 
   return (
@@ -633,6 +669,43 @@ function ControlsArea({
           >
             <ScreenShare className="w-3.5 h-3.5 mr-1.5" /> {isScreenShareEnabled ? 'Stop Sharing' : 'Share Screen'}
           </button>
+        )}
+
+        {/* Upload an external video for pose analysis: Coach Only. Runs
+            through the same pose-detection + draw-tools pipeline as the
+            per-participant "Analyze Last 10s" buffer flow. */}
+        {isCoach && (
+          <div className="relative">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="video/*"
+              className="hidden"
+              onChange={handleVideoFileSelected}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadingVideo}
+              className="flex items-center px-4 py-2 text-xs font-semibold rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Upload a video from your computer to run through pose detection and teach with the draw tools"
+            >
+              {uploadingVideo ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Uploading...
+                </>
+              ) : (
+                <>
+                  <Upload className="w-3.5 h-3.5 mr-1.5" /> Upload Video
+                </>
+              )}
+            </button>
+            {uploadError && (
+              <div className="absolute bottom-full mb-2 left-0 z-20 whitespace-nowrap bg-red-950/95 border border-red-800 text-red-300 text-xs font-medium px-3 py-2 rounded-lg shadow-xl">
+                {uploadError}
+              </div>
+            )}
+          </div>
         )}
 
         {/* Gallery / Spotlight toggles */}
