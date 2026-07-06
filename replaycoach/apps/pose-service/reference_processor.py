@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import os
 import tempfile
+import time
 from pathlib import Path
 
 import cv2
@@ -24,6 +25,13 @@ from inference import PoseModelAdapter
 logger = logging.getLogger(__name__)
 
 MAX_FRAMES = 1800  # bounds processing time (e.g. 60s @ 30fps, 120s @ 15fps)
+# Hard wall-clock budget independent of MAX_FRAMES — per-frame inference time
+# isn't constant (shared CPU with live pose workers, host-level contention),
+# so a frame-count cap alone can't bound wall-clock time. Without this, a
+# slow-but-not-crashed job just leaves the coach staring at "Analyzing..."
+# indefinitely with no feedback. Truncates and reports whatever was processed
+# so far instead, same as hitting MAX_FRAMES.
+MAX_PROCESSING_SECONDS = 240
 DOWNLOAD_TIMEOUT_S = 60
 CALLBACK_TIMEOUT_S = 30
 
@@ -76,12 +84,19 @@ def process_reference_video(
 
         frames: list[dict] = []
         frame_index = 0
+        start_time = time.monotonic()
         while True:
             ok, frame = cap.read()
             if not ok:
                 break
             if frame_index >= MAX_FRAMES:
                 logger.warning("Reference %s: hit MAX_FRAMES cap (%d), truncating", ref_id, MAX_FRAMES)
+                break
+            if time.monotonic() - start_time > MAX_PROCESSING_SECONDS:
+                logger.warning(
+                    "Reference %s: hit wall-clock budget (%ds) at frame %d, truncating",
+                    ref_id, MAX_PROCESSING_SECONDS, frame_index,
+                )
                 break
 
             result = model.infer(frame, track_id=ref_id)
