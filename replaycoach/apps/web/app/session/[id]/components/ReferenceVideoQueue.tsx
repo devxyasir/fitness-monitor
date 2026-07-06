@@ -59,7 +59,7 @@ export function ReferenceVideoQueue({ sessionId, refreshToken }: ReferenceVideoQ
   if (videos.length === 0) return null;
 
   return (
-    <div className="fixed bottom-6 right-6 z-40 w-72 bg-slate-900/95 border border-slate-800 rounded-2xl shadow-2xl backdrop-blur-md overflow-hidden">
+    <div className="fixed bottom-28 right-6 z-40 w-72 bg-slate-900/95 border border-slate-800 rounded-2xl shadow-2xl backdrop-blur-md overflow-hidden">
       <button
         type="button"
         onClick={() => setCollapsed((c) => !c)}
