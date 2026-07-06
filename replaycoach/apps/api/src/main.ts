@@ -14,7 +14,7 @@ async function bootstrap(): Promise<void> {
 
   // ── Redis WebSocket adapter horizontal scaling ─────────────────────────────
   const configService = app.get(ConfigService);
-  const redisIoAdapter = new RedisIoAdapter(configService);
+  const redisIoAdapter = new RedisIoAdapter(app, configService);
   await redisIoAdapter.connectToRedis();
   app.useWebSocketAdapter(redisIoAdapter);
 

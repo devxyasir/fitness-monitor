@@ -3,7 +3,7 @@ import { ServerOptions } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { createClient } from 'redis';
 import { ConfigService } from '@nestjs/config';
-import { Logger } from '@nestjs/common';
+import { INestApplicationContext, Logger } from '@nestjs/common';
 
 export class RedisIoAdapter extends IoAdapter {
   private readonly logger = new Logger(RedisIoAdapter.name);
@@ -11,8 +11,16 @@ export class RedisIoAdapter extends IoAdapter {
   private ioServer: any;
   private attached = false;
 
-  constructor(private readonly configService: ConfigService) {
-    super();
+  constructor(
+    app: INestApplicationContext,
+    private readonly configService: ConfigService,
+  ) {
+    // Must forward `app` to the base IoAdapter — otherwise `this.httpServer`
+    // is never set, and createIOServer() falls back to spinning up its own
+    // standalone HTTP server on an OS-assigned port instead of attaching
+    // Socket.IO to the real Express/Nest server. That standalone server is
+    // never exposed to nginx or any client, so every /socket.io/ request 404s.
+    super(app);
   }
 
   async connectToRedis(): Promise<void> {
