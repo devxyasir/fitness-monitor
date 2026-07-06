@@ -43,6 +43,25 @@ class Settings(BaseSettings):
     # onnx_model_path (auto-downloaded if missing).
     detector_model_path: str = "./models/yolo11n-pose.onnx"
 
+    # Reference-video (uploaded-video) analysis has no real-time deadline,
+    # unlike live per-participant tracking — a one-off upload can afford a
+    # much larger/more accurate model. This was never actually wired to its
+    # own model before: both paths shared the single `model_size`-driven
+    # instance, so when live tracking got downgraded to 'small' for CPU
+    # reasons, reference analysis silently inherited that too, producing
+    # skeletons that visibly drifted off the body on fast/acrobatic motion
+    # (e.g. pole-dance spins) — a stale/low-res crop, not a code bug.
+    # Defaults to 'large' to match the quality seen in local testing.
+    reference_model_size: str = "large"
+    reference_onnx_model_path: str | None = None
+    reference_detector_model_path: str | None = None
+    # Tighter bbox-refresh interval than live tracking's 16 — a reused stale
+    # box during fast motion sends RTMPose a crop the person has already
+    # moved out of, which produces confidently-wrong keypoints scattered off
+    # the body regardless of model size. Reference analysis isn't
+    # latency-sensitive, so it can afford to re-detect far more often.
+    reference_detect_interval_frames: int = 4
+
     # Sampling rate (inferences per second per participant)
     sample_hz: int = 10
 

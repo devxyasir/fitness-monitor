@@ -485,6 +485,7 @@ class TopDownPoseEstimator(PoseModelAdapter):
         detector_path: str | None = None,
         model_size: str = "medium",
         detector_size: str = "small",
+        detect_interval_frames: int | None = None,
     ):
         self._pose = RTMPoseAdapter(rtmpose_path, model_size=model_size)
         self._detector = PersonDetector(detector_path, model_size=detector_size)
@@ -493,6 +494,16 @@ class TopDownPoseEstimator(PoseModelAdapter):
         # 0.75 for both the 256x192 and 384x288 RTMPose variants.
         pose_h, pose_w = self._pose._input_size
         self.TARGET_ASPECT = pose_w / pose_h
+        # Per-instance override of the class default — lets one-off
+        # reference-video analysis (not latency-sensitive) use a much
+        # tighter interval than live tracking without affecting it. A stale
+        # reused bbox during fast/acrobatic motion (e.g. a pole-dance spin)
+        # sends RTMPose a crop the person has already moved out of, which
+        # produces confidently-wrong keypoints scattered off the body —
+        # bigger models alone don't fix that, since RTMPose can only find
+        # what's inside the box it's given.
+        if detect_interval_frames is not None:
+            self.DETECT_INTERVAL_FRAMES = detect_interval_frames
 
     def load(self) -> None:
         self._pose.load()
@@ -621,4 +632,44 @@ def create_model_adapter() -> PoseModelAdapter:
             model_size=model_size,
             detector_size=model_size,
         )
+
+
+def create_reference_model_adapter() -> PoseModelAdapter:
+    """
+    Separate factory for one-off reference-video (uploaded-video) analysis —
+    deliberately independent of create_model_adapter()/settings.model_size,
+    which is sized for live per-participant tracking's real-time constraint.
+    A reference upload has no such deadline, so it can use a much larger,
+    more accurate model plus a tighter bbox-refresh interval (see
+    settings.reference_detect_interval_frames) without affecting live calls.
+    """
+    model_size = settings.reference_model_size.lower()
+
+    model_path = settings.reference_onnx_model_path
+    if not model_path:
+        if model_size == "small":
+            model_path = "./models/rtmpose-s.onnx"
+        elif model_size == "medium":
+            model_path = "./models/rtmpose-m.onnx"
+        else:
+            model_path = "./models/rtmpose-l.onnx"
+
+    detector_path = settings.reference_detector_model_path
+    if not detector_path:
+        detector_tier = model_downloader.YOLO_POSE_TIERS.get(model_size, "l")
+        detector_path = f"./models/yolo11{detector_tier}-pose.onnx"
+
+    logger.info(
+        "Initializing reference-video RTMPose pipeline (%s size, detect_interval=%d): "
+        "person detector -> crop -> RTMPose",
+        model_size,
+        settings.reference_detect_interval_frames,
+    )
+    return TopDownPoseEstimator(
+        rtmpose_path=model_path,
+        detector_path=detector_path,
+        model_size=model_size,
+        detector_size=model_size,
+        detect_interval_frames=settings.reference_detect_interval_frames,
+    )
 

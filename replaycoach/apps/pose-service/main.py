@@ -20,7 +20,7 @@ from fastapi import BackgroundTasks, FastAPI
 from pydantic import BaseModel
 
 from config import settings
-from inference import PoseModelAdapter, create_model_adapter
+from inference import PoseModelAdapter, create_model_adapter, create_reference_model_adapter
 from reference_processor import process_reference_video
 from worker import WorkerPool
 
@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 # Module-level references initialized during lifespan
 _redis_client: aioredis.Redis | None = None
 _model: PoseModelAdapter | None = None
+_reference_model: PoseModelAdapter | None = None
 _worker_pool: WorkerPool | None = None
 _command_consumer_task: asyncio.Task[None] | None = None
 
@@ -130,12 +131,21 @@ async def _consume_commands(redis_client: aioredis.Redis, worker_pool: WorkerPoo
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Application lifespan: initialize model, Redis, worker pool, and the command consumer."""
-    global _redis_client, _model, _worker_pool, _command_consumer_task
+    global _redis_client, _model, _reference_model, _worker_pool, _command_consumer_task
 
-    # Initialize ONNX model
+    # Initialize ONNX model (live per-participant tracking — real-time, so
+    # sized for speed)
     _model = create_model_adapter()
     _model.load()
     logger.info("Pose model initialized and loaded")
+
+    # Separate, independently-sized model for one-off reference-video
+    # analysis (not latency-sensitive — see create_reference_model_adapter).
+    # Loaded eagerly at startup so the first upload isn't slowed by a cold
+    # model load.
+    _reference_model = create_reference_model_adapter()
+    _reference_model.load()
+    logger.info("Reference-video pose model initialized and loaded")
 
     # Initialize Redis connection
     _redis_client = aioredis.from_url(
@@ -186,12 +196,18 @@ async def ready() -> dict[str, str | bool]:
     Used by load balancers / orchestrators to gate traffic.
     """
     model_ready = _model is not None
+    reference_model_ready = _reference_model is not None
     redis_ready = _redis_client is not None
 
-    if model_ready and redis_ready:
-        return {"status": "ok", "model": True, "redis": True}
+    if model_ready and reference_model_ready and redis_ready:
+        return {"status": "ok", "model": True, "referenceModel": True, "redis": True}
 
-    return {"status": "not_ready", "model": model_ready, "redis": redis_ready}
+    return {
+        "status": "not_ready",
+        "model": model_ready,
+        "referenceModel": reference_model_ready,
+        "redis": redis_ready,
+    }
 
 
 @app.post("/workers/{session_id}/{participant_id}/start")
@@ -245,8 +261,8 @@ async def process_reference(
     status='failed' via callback instead of raising, so the coach can still
     present the raw video without a skeleton overlay.
     """
-    if not _model:
-        return {"status": "error", "message": "Pose model not initialized"}
+    if not _reference_model:
+        return {"status": "error", "message": "Reference pose model not initialized"}
 
     background_tasks.add_task(
         process_reference_video,
@@ -254,7 +270,7 @@ async def process_reference(
         req.videoUrl,
         req.callbackUrl,
         req.callbackToken,
-        _model,
+        _reference_model,
     )
     return {"status": "accepted"}
 
