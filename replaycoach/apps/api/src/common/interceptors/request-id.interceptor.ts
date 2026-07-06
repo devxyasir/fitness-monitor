@@ -20,7 +20,12 @@ export class RequestIdInterceptor implements NestInterceptor {
 
     return next.handle().pipe(
       tap(() => {
-        res.setHeader('X-Request-Id', requestId);
+        // Streaming responses (reference-video/clip playback) write headers
+        // directly via res.writeHead()/pipe before this tap ever runs — for
+        // those, headers are already sent by the time we get here.
+        if (!res.headersSent) {
+          res.setHeader('X-Request-Id', requestId);
+        }
       }),
     );
   }

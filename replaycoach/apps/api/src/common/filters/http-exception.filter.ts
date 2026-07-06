@@ -47,6 +47,19 @@ export class HttpExceptionFilter implements ExceptionFilter {
       );
     }
 
+    // A streaming response (e.g. reference-video/clip playback) can error
+    // out mid-stream after headers/body have already started — most
+    // commonly the client just aborting the request (nav away, seek,
+    // refresh). Calling .json() at that point throws ERR_HTTP_HEADERS_SENT,
+    // which — thrown from inside the last-resort exception filter itself —
+    // is fatal and crashes the whole process. Nothing left to do but log
+    // and let the connection close.
+    if (response.headersSent) {
+      this.logger.warn(`Response already sent for [${requestId}] — cannot write error body, destroying connection`);
+      response.destroy();
+      return;
+    }
+
     response.status(statusCode).json({ statusCode, error, message, requestId });
   }
 }
