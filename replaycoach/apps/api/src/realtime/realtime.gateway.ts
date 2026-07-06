@@ -26,6 +26,15 @@ import { AnnotationsService } from '../annotations/annotations.service';
     ],
     credentials: true,
   },
+  // Socket.IO's 20s default pingTimeout is too tight for a client that's
+  // also uploading a large video in the same tab: a slow/constrained
+  // connection's uplink gets saturated by the upload, delaying the pong
+  // response past 20s and killing the realtime connection as a false
+  // positive (observed as "ping timeout" disconnects exactly when a coach
+  // clicks Upload/Analyze). Both this and pingInterval must be raised
+  // together — pingTimeout is measured from each ping, not cumulative.
+  pingInterval: 25000,
+  pingTimeout: 60000,
 })
 export class RealtimeGateway implements OnGatewayConnection {
   private readonly logger = new Logger(RealtimeGateway.name);

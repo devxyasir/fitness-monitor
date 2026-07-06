@@ -21,12 +21,16 @@ class Settings(BaseSettings):
     model_type: str = "rtmpose"
     # Can be 'small', 'medium', 'large', or 'xlarge'. Both the pose model
     # and the person-detector scale with this tier (see model_downloader.py
-    # / create_model_adapter()). 'large' is the default — targets a proper
-    # server, not the constrained dev laptop this was originally tuned for.
+    # / create_model_adapter()). 'medium' is the default — 'large' pins a
+    # full CPU core continuously for live per-participant tracking (10Hz,
+    # for the whole meeting duration), which on a shared 2-vCPU box directly
+    # starves LiveKit's video encode/relay and causes visible call lag.
+    # 'large' is still fine for one-off reference-video analysis (not
+    # latency-sensitive) if explicitly requested via env override.
     # Note: OpenMMLab's body7 RTMPose ONNX ladder is s -> m -> x (no
     # separate "l"), so 'large'/'xlarge' both resolve to their biggest
     # export (rtmpose-x, 384x288, "performance" tier).
-    model_size: str = "large"
+    model_size: str = "medium"
     # Sentinel default — create_model_adapter() remaps this to the correct
     # sized file under ./models/ (auto-downloaded there on first run if
     # missing, see model_downloader.py). Override to pin an exact path.
