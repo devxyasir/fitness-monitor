@@ -145,11 +145,16 @@ def process_reference_video(
                 pass
 
     try:
-        requests.post(
+        resp = requests.post(
             callback_url,
             json=payload,
             headers={"X-Callback-Token": callback_token},
             timeout=CALLBACK_TIMEOUT_S,
         )
+        # Must check the status explicitly — requests doesn't raise on 4xx/5xx
+        # by default, so a rejected callback (e.g. payload-too-large) would
+        # otherwise look identical to success and leave the video stuck on
+        # 'processing' forever with no error anywhere in this service's logs.
+        resp.raise_for_status()
     except Exception:
         logger.exception("Reference %s: failed to post completion callback", ref_id)
