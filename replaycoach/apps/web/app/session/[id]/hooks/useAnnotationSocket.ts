@@ -17,12 +17,23 @@ export function useAnnotationSocket(sessionId: string) {
     // Connect socket using the token
     connectSocket(accessToken);
 
-    // Join the session channel
-    socket.emit('session:join', { sessionId }, (res: any) => {
-      if (res?.status === 'error') {
-        console.error('Failed to join session realtime room:', res.message);
-      }
-    });
+    // Join the session channel. Re-emitted on every 'connect' (not just once
+    // on mount) — a dropped/reconnected transport (server restart, network
+    // blip) gets a brand-new Socket.IO session server-side that isn't in any
+    // room until it rejoins, even though the client looks "connected" and
+    // gives no visible error. Without this, every broadcast (annotations,
+    // reference:open, replay sync, lobby approvals) silently stops arriving
+    // after any reconnect.
+    const joinRoom = () => {
+      socket.emit('session:join', { sessionId }, (res: any) => {
+        if (res?.status === 'error') {
+          console.error('Failed to join session realtime room:', res.message);
+        }
+      });
+    };
+
+    joinRoom();
+    socket.on('connect', joinRoom);
 
     // Register event listeners
     const handleDraw = (payload: any) => {
@@ -42,6 +53,7 @@ export function useAnnotationSocket(sessionId: string) {
     socket.on('annotation:clear', handleClear);
 
     return () => {
+      socket.off('connect', joinRoom);
       socket.off('annotation:draw', handleDraw);
       socket.off('annotation:undo', handleUndo);
       socket.off('annotation:clear', handleClear);

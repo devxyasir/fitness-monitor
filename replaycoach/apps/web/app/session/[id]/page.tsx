@@ -20,6 +20,7 @@ import { TrackBufferManager } from './components/TrackBufferManager';
 import { Roster } from './components/Roster';
 import { ReferenceAnalysisModal } from './components/ReferenceAnalysisModal';
 import { useReferenceSocketListeners } from './hooks/useReferenceSocket';
+import { useSessionRoom } from './hooks/useSessionRoom';
 import { useReferenceStore } from '../../../stores/reference-store';
 import {
   AlertTriangle,
@@ -53,6 +54,7 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
   const isCoach = user?.role === 'coach';
 
   // Real-time hooks registration
+  useSessionRoom(sessionId);
   usePoseOverlay(sessionId);
   useReplaySocket(sessionId);
   useReferenceSocketListeners(sessionId);
