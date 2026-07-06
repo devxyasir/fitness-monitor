@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
 import type { ClientAnnotation } from '../../../stores/annotation-store';
 import { getVisibleAnnotations } from '../../../stores/annotation-store';
+import { X, Play, Pause, Palette } from 'lucide-react';
 
 interface ClipPlaybackModalProps {
   clip: {
@@ -12,6 +13,7 @@ interface ClipPlaybackModalProps {
     startMs: number;
     endMs: number;
     sessionId: string;
+    clipType?: 'recording' | 'reference';
   };
   playUrl: string;
   annotations: ClientAnnotation[];
@@ -43,7 +45,8 @@ export function ClipPlaybackModal({ clip, playUrl, annotations, onClose }: ClipP
     ? getVisibleAnnotations(annotations, activeFrameMs)
     : [];
 
-  // Setup HLS Player
+  // Setup player — reference clips are a plain MP4/WebM file (no HLS
+  // manifest exists for them), recording clips are HLS-segmented.
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !playUrl) return;
@@ -53,7 +56,10 @@ export function ClipPlaybackModal({ clip, playUrl, annotations, onClose }: ClipP
       hlsRef.current = null;
     }
 
-    if (Hls.isSupported()) {
+    if (clip.clipType === 'reference') {
+      video.src = playUrl;
+      video.play().catch(() => {});
+    } else if (Hls.isSupported()) {
       const hls = new Hls({ maxMaxBufferLength: 8, enableWorker: true });
       hlsRef.current = hls;
       hls.loadSource(playUrl);
@@ -74,7 +80,7 @@ export function ClipPlaybackModal({ clip, playUrl, annotations, onClose }: ClipP
         hlsRef.current = null;
       }
     };
-  }, [playUrl]);
+  }, [playUrl, clip.clipType]);
 
   // Video status event binds
   useEffect(() => {
@@ -237,7 +243,7 @@ export function ClipPlaybackModal({ clip, playUrl, annotations, onClose }: ClipP
             onClick={onClose}
             className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
           >
-            ✕
+            <X className="w-4 h-4" />
           </button>
         </div>
 
@@ -245,7 +251,7 @@ export function ClipPlaybackModal({ clip, playUrl, annotations, onClose }: ClipP
         <div className="flex-1 min-h-0 bg-slate-950 flex items-center justify-center p-4">
           <div
             ref={containerRef}
-            className="relative aspect-video w-full max-h-[60vh] rounded-2xl overflow-hidden bg-slate-900 border border-slate-850 flex items-center justify-center group shadow-md"
+            className="relative aspect-video w-full max-h-[60vh] rounded-2xl overflow-hidden bg-slate-900 border border-slate-900 flex items-center justify-center group shadow-md"
           >
             <video
               ref={videoRef}
@@ -259,9 +265,9 @@ export function ClipPlaybackModal({ clip, playUrl, annotations, onClose }: ClipP
             {!isPlaying && (
               <button
                 onClick={togglePlay}
-                className="absolute p-5 rounded-full bg-slate-950/80 hover:bg-slate-900 border border-slate-800 hover:scale-105 backdrop-blur-sm text-white text-3xl font-medium transition cursor-pointer shadow-lg"
+                className="absolute p-5 rounded-full bg-slate-950/80 hover:bg-slate-900 border border-slate-800 hover:scale-105 backdrop-blur-sm text-white transition cursor-pointer shadow-lg"
               >
-                ▶️
+                <Play className="w-7 h-7 fill-current" />
               </button>
             )}
           </div>
@@ -293,20 +299,20 @@ export function ClipPlaybackModal({ clip, playUrl, annotations, onClose }: ClipP
             <div className="flex items-center gap-3">
               <button
                 onClick={togglePlay}
-                className="bg-slate-800 hover:bg-slate-700 text-white rounded-xl px-4 py-2 text-xs font-semibold transition"
+                className="bg-slate-800 hover:bg-slate-700 text-white rounded-xl px-4 py-2 text-xs font-semibold transition inline-flex items-center gap-1.5"
               >
-                {isPlaying ? '⏸️ Pause' : '▶️ Play'}
+                {isPlaying ? (<><Pause className="w-3.5 h-3.5 fill-current" /> Pause</>) : (<><Play className="w-3.5 h-3.5 fill-current" /> Play</>)}
               </button>
 
               <button
                 onClick={() => setShowAnnotations(!showAnnotations)}
-                className={`rounded-xl px-4 py-2 text-xs font-semibold transition ${
+                className={`rounded-xl px-4 py-2 text-xs font-semibold transition inline-flex items-center gap-1.5 ${
                   showAnnotations
-                    ? 'bg-indigo-650 text-white shadow'
-                    : 'bg-slate-800 text-slate-400 hover:text-slate-205 hover:bg-slate-750'
+                    ? 'bg-indigo-700 text-white shadow'
+                    : 'bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
                 }`}
               >
-                🎨 Annotations: {showAnnotations ? 'ON' : 'OFF'}
+                <Palette className="w-3.5 h-3.5" /> Annotations: {showAnnotations ? 'ON' : 'OFF'}
               </button>
             </div>
 

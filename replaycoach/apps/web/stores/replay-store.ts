@@ -13,6 +13,7 @@ interface ReplayState {
   manifestUrl: string | null;
   participantId: string | null;
   getReplayBlob: ((participantId: string, fromOffsetMs: number, toOffsetMs?: number) => Blob | null) | null;
+  getBufferedDurationMs: ((participantId: string) => number) | null;
   // Actions
   setMode: (mode: ReplayMode) => void;
   setTimestamp: (ts: number) => void;
@@ -21,6 +22,7 @@ interface ReplayState {
   setGetReplayBlob: (
     fn: ((participantId: string, fromOffsetMs: number, toOffsetMs?: number) => Blob | null) | null,
   ) => void;
+  setGetBufferedDurationMs: (fn: ((participantId: string) => number) | null) => void;
   setPlaybackRate: (rate: number) => void;
   reset: () => void;
 }
@@ -32,11 +34,13 @@ export const useReplayStore = create<ReplayState>((set) => ({
   manifestUrl: null,
   participantId: null,
   getReplayBlob: null,
+  getBufferedDurationMs: null,
   setMode: (mode) => set({ mode }),
   setTimestamp: (ts) => set({ currentTimestamp: ts }),
   setManifestUrl: (url) => set({ manifestUrl: url }),
   setParticipantId: (id) => set({ participantId: id }),
   setGetReplayBlob: (fn) => set({ getReplayBlob: fn }),
+  setGetBufferedDurationMs: (fn) => set({ getBufferedDurationMs: fn }),
   setPlaybackRate: (rate) => set({ playbackRateMultiplier: rate }),
   reset: () =>
     set({

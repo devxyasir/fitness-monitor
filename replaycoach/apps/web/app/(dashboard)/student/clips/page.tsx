@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { apiClient } from '../../../../lib/api-client';
 import { ClipPlaybackModal } from '../../components/ClipPlaybackModal';
+import { RefreshCw, Clapperboard, Play, Video } from 'lucide-react';
 
 interface Clip {
   id: string;
@@ -13,6 +14,7 @@ interface Clip {
   sessionId: string;
   createdBy: string;
   createdAt: string;
+  clipType?: 'recording' | 'reference';
 }
 
 export default function StudentClipsPage() {
@@ -102,9 +104,9 @@ export default function StudentClipsPage() {
             </div>
             <button
               onClick={fetchClips}
-              className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl text-xs font-semibold text-slate-300 transition"
+              className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl text-xs font-semibold text-slate-300 transition inline-flex items-center gap-1.5"
             >
-              🔄 Refresh
+              <RefreshCw className="w-3.5 h-3.5" /> Refresh
             </button>
           </div>
 
@@ -121,7 +123,7 @@ export default function StudentClipsPage() {
             </div>
           ) : clips.length === 0 ? (
             <div className="bg-slate-900/40 border border-slate-900 rounded-3xl p-16 text-center max-w-xl mx-auto mt-6">
-              <div className="text-4xl mb-4">🎬</div>
+              <Clapperboard className="w-10 h-10 mb-4 mx-auto text-slate-500" />
               <h3 className="text-base font-bold text-white mb-2">No clips shared yet</h3>
               <p className="text-xs text-slate-400 leading-relaxed max-w-sm mx-auto">
                 Once a coach extracts and shares a particular highlight range with you, it will appear here for toggleable playback review.
@@ -142,10 +144,10 @@ export default function StudentClipsPage() {
                           onClick={() => handleOpenPlay(clip)}
                           className="bg-indigo-600 hover:bg-indigo-700 text-white p-3 rounded-full shadow-lg transform scale-90 group-hover:scale-100 transition duration-300"
                         >
-                          ▶️
+                          <Play className="w-5 h-5 fill-current" />
                         </button>
                       </div>
-                      <span className="text-2xl opacity-60">📹</span>
+                      <Video className="w-6 h-6 opacity-60" />
                       <span className="absolute bottom-2 right-2 bg-slate-950/80 px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold text-slate-300 tracking-wider">
                         {formatDuration(clip.startMs, clip.endMs)}
                       </span>
@@ -165,9 +167,9 @@ export default function StudentClipsPage() {
                   <div className="mt-5">
                     <button
                       onClick={() => handleOpenPlay(clip)}
-                      className="w-full py-2 bg-indigo-600 hover:bg-indigo-705 text-white rounded-xl text-xs font-semibold tracking-wide transition shadow"
+                      className="w-full py-2 bg-indigo-600 hover:bg-indigo-705 text-white rounded-xl text-xs font-semibold tracking-wide transition shadow inline-flex items-center justify-center gap-1.5"
                     >
-                      ▶️ Play Clip
+                      <Play className="w-3.5 h-3.5 fill-current" /> Play Clip
                     </button>
                   </div>
                 </div>

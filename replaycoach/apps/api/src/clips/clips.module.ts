@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ClipsController } from './clips.controller';
 import { ClipsService } from './clips.service';
 import { MediaModule } from '../media/media.module';
+import { ReferenceModule } from '../reference/reference.module';
 import { Session } from '../sessions/session.entity';
 import {
   Clip,
@@ -16,6 +17,7 @@ import {
   imports: [
     TypeOrmModule.forFeature([Session, Recording, Clip, ClipShare, Annotation]),
     MediaModule,
+    ReferenceModule,
   ],
   controllers: [ClipsController],
   providers: [ClipsService],

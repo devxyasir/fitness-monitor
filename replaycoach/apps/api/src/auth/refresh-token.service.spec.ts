@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { UnauthorizedException } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import * as argon2 from 'argon2';
+import { createHash } from 'crypto';
 
 import { RefreshTokenService } from './refresh-token.service';
 import { RefreshToken } from './refresh-token.entity';
@@ -12,6 +13,7 @@ const mockRepo = {
   delete: jest.fn(),
   update: jest.fn(),
   createQueryBuilder: jest.fn(),
+  findOne: jest.fn(),
   find: jest.fn(),
 };
 
@@ -23,6 +25,8 @@ const buildQueryBuilder = (rows: RefreshToken[]) => ({
   delete: jest.fn().mockReturnThis(),
   execute: jest.fn().mockResolvedValue({}),
 });
+
+const lookupHash = (rawToken: string) => createHash('sha256').update(rawToken).digest('hex');
 
 describe('RefreshTokenService', () => {
   let service: RefreshTokenService;
@@ -48,6 +52,7 @@ describe('RefreshTokenService', () => {
     userId: 'user-1',
     familyId,
     tokenHash: await argon2.hash(rawToken, { type: argon2.argon2id }),
+    tokenLookupHash: lookupHash(rawToken),
     expiresAt: new Date(Date.now() + 86400000),
     createdAt: new Date(),
     rotatedAt,
@@ -69,6 +74,9 @@ describe('RefreshTokenService', () => {
       expect(saved.tokenHash).not.toBe(raw);
       // And it should be an argon2id hash
       expect(saved.tokenHash).toMatch(/^\$argon2id\$/);
+      // The fast lookup hash is a plain SHA-256 hex digest of the raw token
+      // (not secret — used purely as a DB index, see refresh-token.service.ts).
+      expect(saved.tokenLookupHash).toBe(lookupHash(raw));
     });
 
     it('should use provided familyId or generate a new one', async () => {
@@ -81,19 +89,34 @@ describe('RefreshTokenService', () => {
   // ── findValid ──────────────────────────────────────────────────────────────
 
   describe('findValid', () => {
-    it('should return the matching row on valid token', async () => {
+    it('should return the matching row on valid token (O(1) lookup, not a table scan)', async () => {
       const raw = 'valid-token';
       const rtRow = await makeRtRow(raw);
-      mockRepo.createQueryBuilder.mockReturnValue(buildQueryBuilder([rtRow]));
+      mockRepo.findOne.mockResolvedValue(rtRow);
 
       const result = await service.findValid(raw);
+
       expect(result).not.toBeNull();
       expect(result!.id).toBe('rt-id');
+      // Looked up by the fast hash — never a createQueryBuilder scan.
+      expect(mockRepo.findOne).toHaveBeenCalledWith({
+        where: { tokenLookupHash: lookupHash(raw), rotatedAt: expect.anything() },
+      });
+      expect(mockRepo.createQueryBuilder).not.toHaveBeenCalled();
     });
 
-    it('should return null if no token matches', async () => {
-      mockRepo.createQueryBuilder.mockReturnValue(buildQueryBuilder([]));
+    it('should return null if no row matches the lookup hash', async () => {
+      mockRepo.findOne.mockResolvedValue(null);
       const result = await service.findValid('nonexistent');
+      expect(result).toBeNull();
+    });
+
+    it('should return null if the row is found but the argon2 hash does not match', async () => {
+      // Same lookup hash bucket but a different underlying secret (would only
+      // happen on a SHA-256 collision in practice) — argon2 verify still gates it.
+      const rtRow = await makeRtRow('the-real-token');
+      mockRepo.findOne.mockResolvedValue(rtRow);
+      const result = await service.findValid('a-different-token');
       expect(result).toBeNull();
     });
   });
@@ -104,7 +127,7 @@ describe('RefreshTokenService', () => {
     it('should mark old token row as rotated and insert new one', async () => {
       const raw = 'old-token';
       const rtRow = await makeRtRow(raw);
-      mockRepo.createQueryBuilder.mockReturnValue(buildQueryBuilder([rtRow]));
+      mockRepo.findOne.mockResolvedValue(rtRow);
       mockRepo.update.mockResolvedValue({ affected: 1 });
       mockRepo.save.mockResolvedValue({});
 
@@ -121,7 +144,7 @@ describe('RefreshTokenService', () => {
 
     it('should throw UnauthorizedException if old token not found and no grace-window match', async () => {
       // findValid → no active match; findRotatedMatch → no rotated match either.
-      mockRepo.createQueryBuilder.mockReturnValue(buildQueryBuilder([]));
+      mockRepo.findOne.mockResolvedValue(null);
       await expect(service.rotate('bad-token', 'user-1', new Date())).rejects.toBeInstanceOf(
         UnauthorizedException,
       );
@@ -130,7 +153,7 @@ describe('RefreshTokenService', () => {
     it('new token should be different from old token after rotation', async () => {
       const raw = 'original-token';
       const rtRow = await makeRtRow(raw);
-      mockRepo.createQueryBuilder.mockReturnValue(buildQueryBuilder([rtRow]));
+      mockRepo.findOne.mockResolvedValue(rtRow);
       mockRepo.update.mockResolvedValue({ affected: 1 });
       mockRepo.save.mockResolvedValue({});
 
@@ -143,10 +166,11 @@ describe('RefreshTokenService', () => {
       const rotatedRow = await makeRtRow(rawOld, 'fam-grace', new Date()); // rotated just now
       const activeRow = await makeRtRow('current-active-token', 'fam-grace');
 
-      mockRepo.createQueryBuilder
-        .mockReturnValueOnce(buildQueryBuilder([])) // findValid: no active match
-        .mockReturnValueOnce(buildQueryBuilder([rotatedRow])) // findRotatedMatch: hit
-        .mockReturnValueOnce(buildQueryBuilder([activeRow])); // findActiveByFamily: getOne
+      mockRepo.findOne
+        .mockResolvedValueOnce(null) // findValid: no active match
+        .mockResolvedValueOnce(rotatedRow); // findRotatedMatch: hit
+      // findActiveByFamily still uses createQueryBuilder().getOne() (unchanged).
+      mockRepo.createQueryBuilder.mockReturnValue(buildQueryBuilder([activeRow]));
 
       mockRepo.update.mockResolvedValue({ affected: 1 });
       mockRepo.save.mockResolvedValue({});
@@ -167,9 +191,9 @@ describe('RefreshTokenService', () => {
       const staleRotatedAt = new Date(Date.now() - 60_000); // 60s ago, well outside the 10s grace window
       const rotatedRow = await makeRtRow(rawOld, 'fam-stale', staleRotatedAt);
 
-      mockRepo.createQueryBuilder
-        .mockReturnValueOnce(buildQueryBuilder([])) // findValid: no active match
-        .mockReturnValueOnce(buildQueryBuilder([rotatedRow])); // findRotatedMatch: hit, but stale
+      mockRepo.findOne
+        .mockResolvedValueOnce(null) // findValid: no active match
+        .mockResolvedValueOnce(rotatedRow); // findRotatedMatch: hit, but stale
 
       mockRepo.delete.mockResolvedValue({ affected: 2 });
 
@@ -221,11 +245,11 @@ describe('RefreshTokenService', () => {
       const rawA = 'token-A';
       const rtRowA = await makeRtRow(rawA, 'fam-x');
 
-      // First findValid call (rotation): returns A
-      mockRepo.createQueryBuilder
-        .mockReturnValueOnce(buildQueryBuilder([rtRowA]))
-        // Second call (simulating re-presentation of A after rotation): returns []
-        .mockReturnValue(buildQueryBuilder([]));
+      // First findValid call (rotation): returns A.
+      // Second call (simulating re-presentation of A after rotation): returns null.
+      mockRepo.findOne
+        .mockResolvedValueOnce(rtRowA)
+        .mockResolvedValueOnce(null);
 
       mockRepo.update.mockResolvedValue({ affected: 1 });
       mockRepo.save.mockResolvedValue({});

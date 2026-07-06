@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { apiClient } from '../../../../lib/api-client';
+import { CalendarDays } from 'lucide-react';
 
 interface Session {
   id: string;
@@ -90,36 +91,36 @@ export default function CoachSessionsPage() {
   const getStatusBadgeClass = (status: Session['status']) => {
     switch (status) {
       case 'live':
-        return 'bg-red-500/20 border-red-500/30 text-red-400';
+        return 'bg-live/10 border-live/30 text-live';
       case 'scheduled':
-        return 'bg-amber-500/20 border-amber-500/30 text-amber-400';
+        return 'bg-replay/10 border-replay/30 text-replay';
       case 'ended':
       case 'processed':
-        return 'bg-indigo-500/20 border-indigo-500/30 text-indigo-400';
+        return 'bg-brand-indigo/10 border-brand-indigo/30 text-brand-indigo';
       default:
-        return 'bg-slate-800 border-slate-700 text-slate-400';
+        return 'bg-panel-2 border-hairline text-ink-muted';
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans p-6 pb-12">
+    <div className="min-h-screen font-sans p-6 pb-12">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <header className="flex items-center justify-between mb-8 pb-4 border-b border-slate-800">
+        <header className="flex items-center justify-between mb-8 pb-4 border-b border-hairline">
           <div className="flex items-center gap-6">
-            <h1 className="text-2xl font-black text-white tracking-tight uppercase">
-              Replay<span className="text-indigo-500">Coach</span>
+            <h1 className="font-display text-2xl font-bold text-ink tracking-tight">
+              Replay<span className="bg-gradient-to-r from-brand-indigo to-brand-violet bg-clip-text text-transparent">Coach</span>
             </h1>
-            <nav className="flex items-center gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800">
+            <nav className="flex items-center gap-1 bg-panel p-1 rounded-md border border-hairline">
               <Link
                 href="/coach/sessions"
-                className="px-4 py-1.5 rounded-md text-xs font-semibold bg-slate-800 text-white"
+                className="px-4 py-1.5 rounded-md text-xs font-semibold bg-panel-2 text-ink"
               >
                 Sessions
               </Link>
               <Link
                 href="/coach/clips"
-                className="px-4 py-1.5 rounded-md text-xs font-semibold text-slate-400 hover:text-white transition"
+                className="px-4 py-1.5 rounded-md text-xs font-semibold text-ink-muted hover:text-ink transition"
               >
                 Clips Library
               </Link>
@@ -130,20 +131,20 @@ export default function CoachSessionsPage() {
         <div>
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="text-xl font-bold text-white">Coaching Sessions</h2>
-              <p className="text-xs text-slate-400 mt-1">
+              <h2 className="font-display text-xl font-bold text-ink">Coaching Sessions</h2>
+              <p className="text-xs text-ink-muted mt-1">
                 Create, join, or review your live coaching sessions.
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-lg p-1">
+              <div className="flex items-center gap-1 bg-panel border border-hairline rounded-md p-1">
                 <button
                   type="button"
                   onClick={() => setCreateAccessType('public')}
                   className={`px-3 py-1 rounded-md text-[10px] font-bold uppercase transition ${
                     createAccessType === 'public'
-                      ? 'bg-indigo-600 text-white'
-                      : 'text-slate-400 hover:text-slate-200'
+                      ? 'bg-brand-indigo text-white'
+                      : 'text-ink-muted hover:text-ink'
                   }`}
                 >
                   Public
@@ -153,8 +154,8 @@ export default function CoachSessionsPage() {
                   onClick={() => setCreateAccessType('lobby')}
                   className={`px-3 py-1 rounded-md text-[10px] font-bold uppercase transition ${
                     createAccessType === 'lobby'
-                      ? 'bg-indigo-600 text-white'
-                      : 'text-slate-400 hover:text-slate-200'
+                      ? 'bg-brand-indigo text-white'
+                      : 'text-ink-muted hover:text-ink'
                   }`}
                 >
                   Lobby
@@ -162,14 +163,14 @@ export default function CoachSessionsPage() {
               </div>
               <button
                 onClick={fetchSessions}
-                className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-lg text-xs font-semibold text-slate-300 transition"
+                className="btn-ghost px-3.5 py-2 text-xs"
               >
                 Refresh
               </button>
               <button
                 onClick={handleCreateSession}
                 disabled={creating}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition disabled:opacity-50 disabled:cursor-not-allowed"
+                className="btn-primary px-4 py-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {creating ? 'Creating...' : '+ New Session'}
               </button>
@@ -177,36 +178,36 @@ export default function CoachSessionsPage() {
           </div>
 
           {error && (
-            <div className="bg-red-950/30 border border-red-900 text-red-300 rounded-lg p-4 text-xs font-medium mb-6">
+            <div className="bg-danger/10 border border-danger/30 text-danger rounded-md p-4 text-xs font-medium mb-6">
               {error}
             </div>
           )}
 
           {loading ? (
             <div className="flex flex-col items-center justify-center p-20 gap-3">
-              <div className="w-8 h-8 rounded-full border-4 border-indigo-500 border-t-transparent animate-spin" />
-              <p className="text-xs text-slate-400">Loading Sessions...</p>
+              <div className="w-8 h-8 rounded-full border-4 border-brand-indigo border-t-transparent animate-spin" />
+              <p className="text-xs text-ink-muted">Loading Sessions...</p>
             </div>
           ) : sessions.length === 0 ? (
-            <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-16 text-center max-w-xl mx-auto mt-6">
-              <div className="text-4xl mb-4">🗓️</div>
-              <h3 className="text-base font-bold text-white mb-2">No sessions yet</h3>
-              <p className="text-sm text-slate-400 leading-relaxed mb-6">
+            <div className="card p-16 text-center max-w-xl mx-auto mt-6">
+              <CalendarDays className="w-10 h-10 mb-4 mx-auto text-ink-faint" />
+              <h3 className="text-base font-bold text-ink mb-2">No sessions yet</h3>
+              <p className="text-sm text-ink-muted leading-relaxed mb-6">
                 Click &quot;+ New Session&quot; to create an instant live room. Share the session link with your students so they can join.
               </p>
               <button
                 onClick={handleCreateSession}
                 disabled={creating}
-                className="inline-flex px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-bold transition disabled:opacity-50"
+                className="btn-primary inline-flex px-5 py-2.5 text-sm disabled:opacity-50"
               >
                 {creating ? 'Creating...' : '+ Create Your First Session'}
               </button>
             </div>
           ) : (
-            <div className="border border-slate-800 bg-slate-900/40 rounded-xl overflow-hidden">
+            <div className="card overflow-hidden">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b border-slate-800 text-[11px] font-bold uppercase tracking-wider text-slate-500 bg-slate-900/60">
+                  <tr className="border-b border-hairline text-[11px] font-bold uppercase tracking-wider text-ink-faint bg-panel-2">
                     <th className="px-6 py-3">Room</th>
                     <th className="px-6 py-3">Access</th>
                     <th className="px-6 py-3">Status</th>
@@ -214,13 +215,13 @@ export default function CoachSessionsPage() {
                     <th className="px-6 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/50">
+                <tbody className="divide-y divide-hairline">
                   {sessions.map((session) => (
-                    <tr key={session.id} className="hover:bg-slate-900/30 transition">
-                      <td className="px-6 py-4 font-mono text-xs text-slate-300">
+                    <tr key={session.id} className="hover:bg-panel-2/50 transition">
+                      <td className="px-6 py-4 font-mono text-xs text-ink">
                         {session.id.substring(0, 8)}...
                       </td>
-                      <td className="px-6 py-4 text-xs font-semibold capitalize text-slate-400">
+                      <td className="px-6 py-4 text-xs font-semibold capitalize text-ink-muted">
                         {session.accessType ?? 'public'}
                       </td>
                       <td className="px-6 py-4">
@@ -228,14 +229,14 @@ export default function CoachSessionsPage() {
                           {session.status}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-xs text-slate-400">
+                      <td className="px-6 py-4 text-xs text-ink-muted">
                         {new Date(session.scheduledAt).toLocaleString()}
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex justify-end items-center gap-2">
                           <button
                             onClick={() => handleCopyLink(session)}
-                            className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-lg text-xs font-semibold transition"
+                            className="btn-ghost px-3.5 py-1.5 text-xs"
                           >
                             {copiedSessionId === session.id ? 'Copied!' : 'Copy Invite'}
                           </button>
@@ -243,13 +244,13 @@ export default function CoachSessionsPage() {
                             <>
                               <button
                                 onClick={() => handleStopSession(session.id)}
-                                className="px-3.5 py-1.5 bg-red-950/40 hover:bg-red-900/60 text-red-400 border border-red-900/40 rounded-lg text-xs font-semibold transition"
+                                className="btn-danger px-3.5 py-1.5 text-xs"
                               >
                                 Stop
                               </button>
                               <Link
                                 href={`/session/${session.id}`}
-                                className="px-3.5 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-semibold transition"
+                                className="px-3.5 py-1.5 bg-live text-canvas hover:brightness-110 rounded-md text-xs font-semibold transition"
                               >
                                 Join Room
                               </Link>
@@ -258,13 +259,13 @@ export default function CoachSessionsPage() {
                             <>
                               <Link
                                 href={`/session/${session.id}?replay=true`}
-                                className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold transition"
+                                className="btn-ghost px-3.5 py-1.5 text-xs"
                               >
                                 Replay
                               </Link>
                               <Link
                                 href={`/coach/clips?sessionId=${session.id}`}
-                                className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold transition"
+                                className="btn-primary px-3.5 py-1.5 text-xs"
                               >
                                 Clips
                               </Link>

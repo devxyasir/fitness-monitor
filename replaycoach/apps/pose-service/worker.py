@@ -45,6 +45,7 @@ class PoseWorker:
         self._running = False
         self._interval = 1.0 / settings.sample_hz
         self._room = None
+        self._track_id = f"{session_id}:{participant_id}"
 
     async def start(self) -> None:
         """
@@ -166,9 +167,11 @@ class PoseWorker:
                 )
                 bgr_frame = cv2.cvtColor(np_rgba, cv2.COLOR_RGBA2BGR)
 
-                # Run inference
+                # Run inference. track_id keys the top-down estimator's
+                # per-participant tracking state — the model instance is
+                # shared across every concurrent worker (see WorkerPool).
                 result = await asyncio.get_event_loop().run_in_executor(
-                    None, self.model.infer, bgr_frame
+                    None, self.model.infer, bgr_frame, self._track_id
                 )
 
                 if not result.keypoints:
@@ -208,6 +211,7 @@ class PoseWorker:
         finally:
             if self._room:
                 await self._room.disconnect()
+            self.model.reset_track(self._track_id)
             logger.info(
                 "PoseWorker stopped for session=%s participant=%s",
                 self.session_id,

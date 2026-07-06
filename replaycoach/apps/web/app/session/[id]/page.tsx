@@ -18,6 +18,23 @@ import { ReplayTargetPicker } from './components/ReplayTargetPicker';
 import { RecordingStatusIndicator } from './components/RecordingStatusIndicator';
 import { TrackBufferManager } from './components/TrackBufferManager';
 import { Roster } from './components/Roster';
+import { ReferenceAnalysisModal } from './components/ReferenceAnalysisModal';
+import { useReferenceSocketListeners } from './hooks/useReferenceSocket';
+import { useReferenceStore } from '../../../stores/reference-store';
+import {
+  AlertTriangle,
+  Flag,
+  Circle,
+  Pencil,
+  Check,
+  X,
+  Mic,
+  MicOff,
+  Video,
+  VideoOff,
+  ScreenShare,
+  LayoutGrid,
+} from 'lucide-react';
 
 export default function SessionRoomPage({ params }: { params: { id: string } }) {
   const sessionId = params.id;
@@ -36,6 +53,8 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
   // Real-time hooks registration
   usePoseOverlay(sessionId);
   useReplaySocket(sessionId);
+  useReferenceSocketListeners(sessionId);
+  const isReferenceModalOpen = useReferenceStore((s) => s.isOpen);
 
   // If the socket is dropped for an auth reason, refresh the token and reconnect
   // rather than leaving the session stuck on a dead connection.
@@ -232,8 +251,8 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-slate-200 p-6">
         <div className="max-w-md w-full bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-xl text-center">
-          <div className="w-16 h-16 bg-red-950 border border-red-800 rounded-full flex items-center justify-center mx-auto mb-6 text-red-500 text-3xl">
-            ⚠️
+          <div className="w-16 h-16 bg-red-950 border border-red-800 rounded-full flex items-center justify-center mx-auto mb-6 text-red-500">
+            <AlertTriangle className="w-8 h-8" />
           </div>
           <h2 className="text-xl font-bold text-white mb-2">Connection Failed</h2>
           <p className="text-slate-400 mb-6 text-sm">
@@ -241,7 +260,7 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
           </p>
           <Link
             href="/dashboard"
-            className="inline-flex justify-center items-center w-full px-5 py-2.5 rounded-xl bg-slate-805 hover:bg-slate-800 border border-slate-700 text-white font-medium transition"
+            className="inline-flex justify-center items-center w-full px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-800 border border-slate-700 text-white font-medium transition"
           >
             Return to Dashboard
           </Link>
@@ -254,8 +273,8 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-slate-200 p-6">
         <div className="max-w-md w-full bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-xl text-center">
-          <div className="w-16 h-16 bg-slate-800 border border-slate-700 rounded-full flex items-center justify-center mx-auto mb-6 text-slate-400 text-3xl">
-            🏁
+          <div className="w-16 h-16 bg-slate-800 border border-slate-700 rounded-full flex items-center justify-center mx-auto mb-6 text-slate-400">
+            <Flag className="w-8 h-8" />
           </div>
           <h2 className="text-xl font-bold text-white mb-2">This session has ended</h2>
           <p className="text-slate-400 mb-6 text-sm">
@@ -263,7 +282,7 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
           </p>
           <Link
             href="/dashboard"
-            className="inline-flex justify-center items-center w-full px-5 py-2.5 rounded-xl bg-slate-805 hover:bg-slate-800 border border-slate-700 text-white font-medium transition"
+            className="inline-flex justify-center items-center w-full px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-800 border border-slate-700 text-white font-medium transition"
           >
             Back to Dashboard
           </Link>
@@ -275,9 +294,9 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
   return (
     <div className="relative flex flex-col h-screen bg-slate-950 text-slate-100 overflow-hidden font-sans">
       {/* Session Title Header */}
-      <header className="flex items-center justify-between px-6 py-4 bg-slate-900 border-b border-slate-850 z-10 shadow-md">
+      <header className="flex items-center justify-between px-6 py-4 bg-slate-900 border-b border-slate-900 z-10 shadow-md">
         <div className="flex items-center gap-3">
-          <div className={`w-2.5 h-2.5 rounded-full ${mode === 'playing' ? 'bg-amber-500 animate-pulse' : 'bg-red-550 animate-ping'}`} />
+          <div className={`w-2.5 h-2.5 rounded-full ${mode === 'playing' ? 'bg-amber-500 animate-pulse' : 'bg-red-600 animate-ping'}`} />
           <h1 className="text-sm font-semibold tracking-tight text-white flex items-center gap-2">
             <span>Session: {sessionId.substring(0, 8)}</span>
             {isCoach && <RecordingStatusIndicator />}
@@ -289,8 +308,16 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
           </h1>
         </div>
         <div className="flex items-center gap-3">
-          <span className="bg-slate-800 border border-slate-700 text-slate-300 text-xs px-2.5 py-1 rounded-md font-medium tracking-wide">
-            {isCoach ? '🟢 COACH ROLE' : '✏️ STUDENT ROLE'}
+          <span className="bg-slate-800 border border-slate-700 text-slate-300 text-xs px-2.5 py-1 rounded-md font-medium tracking-wide inline-flex items-center gap-1.5">
+            {isCoach ? (
+              <>
+                <Circle className="w-2.5 h-2.5 fill-emerald-500 text-emerald-500" /> COACH ROLE
+              </>
+            ) : (
+              <>
+                <Pencil className="w-3 h-3" /> STUDENT ROLE
+              </>
+            )}
           </span>
           <button
             onClick={() => {
@@ -300,7 +327,7 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
                 leaveAndExit();
               }
             }}
-            className="px-4 py-1.5 rounded-lg bg-red-650 hover:bg-red-700 text-white text-xs font-semibold tracking-wide transition shadow-sm"
+            className="px-4 py-1.5 rounded-lg bg-red-700 hover:bg-red-700 text-white text-xs font-semibold tracking-wide transition shadow-sm"
           >
             Leave Room
           </button>
@@ -344,7 +371,7 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
               </div>
 
               {/* Coach Replay controls sidebar */}
-              <div className="flex-1 lg:max-w-xs border-t lg:border-t-0 lg:border-l border-slate-850 bg-slate-900/60 p-4 flex flex-col gap-4 overflow-y-auto min-h-0 shadow-lg">
+              <div className="flex-1 lg:max-w-xs border-t lg:border-t-0 lg:border-l border-slate-900 bg-slate-900/60 p-4 flex flex-col gap-4 overflow-y-auto min-h-0 shadow-lg">
                 <ReplayTargetPicker
                   selectedStudentIds={selectedStudentIds}
                   onChange={setSelectedStudentIds}
@@ -386,7 +413,7 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
             />
 
             {/* Control Toolbar */}
-            <div className="bg-slate-900 border-t border-slate-850 px-6 py-4 flex items-center justify-between z-10 shadow-inner">
+            <div className="bg-slate-900 border-t border-slate-900 px-6 py-4 flex items-center justify-between z-10 shadow-inner">
               <ControlsArea isCoach={isCoach} layout={layout} setLayout={setLayout} />
             </div>
           </>
@@ -395,6 +422,9 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
         <RoomAudioRenderer />
         <TrackBufferManager />
         <Roster />
+        {isReferenceModalOpen && (
+          <ReferenceAnalysisModal sessionId={sessionId} isCoach={isCoach} />
+        )}
       </LiveKitRoom>
 
       {isCoach && lobbyRequests.length > 0 && (
@@ -408,7 +438,7 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
           <div className="h-px bg-slate-800" />
           <div className="flex-1 overflow-y-auto flex flex-col gap-2.5 max-h-[300px] pr-1">
             {lobbyRequests.map((req) => (
-              <div key={req.userId} className="bg-slate-950 border border-slate-850 p-2.5 rounded-lg flex items-center justify-between gap-3">
+              <div key={req.userId} className="bg-slate-950 border border-slate-900 p-2.5 rounded-lg flex items-center justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-medium text-slate-200 truncate">
                     {req.user?.email || req.userId.substring(0, 8)}
@@ -423,14 +453,14 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
                     className="w-7 h-7 bg-emerald-950 border border-emerald-900/50 hover:bg-emerald-900 text-emerald-400 rounded-md flex items-center justify-center text-xs transition font-bold"
                     title="Approve student"
                   >
-                    ✓
+                    <Check className="w-3.5 h-3.5" />
                   </button>
                   <button
                     onClick={() => handleRejectLobby(req.userId)}
                     className="w-7 h-7 bg-red-950 border border-red-900/50 hover:bg-red-900 text-red-400 rounded-md flex items-center justify-center text-xs transition font-bold"
                     title="Decline student"
                   >
-                    ✗
+                    <X className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
@@ -460,13 +490,13 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
                     console.error('Failed to end meeting:', err);
                   }
                 }}
-                className="w-full py-2 bg-red-650 hover:bg-red-700 text-white text-xs font-semibold rounded-lg shadow transition"
+                className="w-full py-2 bg-red-700 hover:bg-red-700 text-white text-xs font-semibold rounded-lg shadow transition"
               >
                 End Meeting for Everyone
               </button>
               <button
                 onClick={leaveAndExit}
-                className="w-full py-2 bg-slate-850 hover:bg-slate-800 border border-slate-750 text-slate-200 text-xs font-semibold rounded-lg shadow transition"
+                className="w-full py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-200 text-xs font-semibold rounded-lg shadow transition"
               >
                 Just Leave Meeting
               </button>
@@ -567,12 +597,12 @@ function ControlsArea({
           onClick={toggleMic}
           className={`flex items-center justify-center w-11 h-11 rounded-full transition border shadow-sm ${
             isMicrophoneEnabled
-              ? 'bg-slate-800 border-slate-750 hover:bg-slate-700 text-white'
+              ? 'bg-slate-800 border-slate-800 hover:bg-slate-700 text-white'
               : 'bg-red-950 border-red-900 text-red-500 hover:bg-red-900'
           }`}
           title={isMicrophoneEnabled ? 'Mute Microphone' : 'Unmute Microphone'}
         >
-          {isMicrophoneEnabled ? '🎙️' : '🔇'}
+          {isMicrophoneEnabled ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
         </button>
 
         <button
@@ -580,12 +610,12 @@ function ControlsArea({
           onClick={toggleCam}
           className={`flex items-center justify-center w-11 h-11 rounded-full transition border shadow-sm ${
             isCameraEnabled
-              ? 'bg-slate-800 border-slate-750 hover:bg-slate-700 text-white'
+              ? 'bg-slate-800 border-slate-800 hover:bg-slate-700 text-white'
               : 'bg-red-950 border-red-900 text-red-500 hover:bg-red-900'
           }`}
           title={isCameraEnabled ? 'Disable Camera' : 'Enable Camera'}
         >
-          {isCameraEnabled ? '📹' : '❌'}
+          {isCameraEnabled ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
         </button>
       </div>
 
@@ -597,11 +627,11 @@ function ControlsArea({
             onClick={toggleScreen}
             className={`flex items-center px-4 py-2 text-xs font-semibold rounded-lg transition border shadow-sm ${
               isScreenShareEnabled
-                ? 'bg-indigo-605 hover:bg-indigo-700 text-white border-indigo-500 shadow'
+                ? 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-500 shadow'
                 : 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-300'
             }`}
           >
-            🖥️ {isScreenShareEnabled ? 'Stop Sharing' : 'Share Screen'}
+            <ScreenShare className="w-3.5 h-3.5 mr-1.5" /> {isScreenShareEnabled ? 'Stop Sharing' : 'Share Screen'}
           </button>
         )}
 
@@ -609,9 +639,9 @@ function ControlsArea({
         <button
           type="button"
           onClick={() => setLayout(layout === 'gallery' ? 'spotlight' : 'gallery')}
-          className="flex items-center px-4 py-2 text-xs font-semibold rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-350 transition shadow-sm"
+          className="flex items-center px-4 py-2 text-xs font-semibold rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 transition shadow-sm"
         >
-          🖼️ Layout: {layout === 'gallery' ? 'Gallery' : 'Spotlight'}
+          <LayoutGrid className="w-3.5 h-3.5 mr-1.5" /> Layout: {layout === 'gallery' ? 'Gallery' : 'Spotlight'}
         </button>
       </div>
     </>

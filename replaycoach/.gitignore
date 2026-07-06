@@ -10,6 +10,10 @@ build/
 out/
 *.tsbuildinfo
 
+# Local dev-mode media storage (reference videos stored on disk when no
+# S3 credentials are configured — see ReferenceStorageService)
+apps/api/uploads/
+
 # Turborepo cache
 .turbo/
 
@@ -65,4 +69,8 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+
+# Pose-service ONNX checkpoints — too large for git; auto-downloaded on
+# first run by model_downloader.py instead (see inference.py load()).
+apps/pose-service/models/*.onnx
 

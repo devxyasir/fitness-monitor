@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useParticipants } from '@livekit/components-react';
+import { ChevronUp, ChevronDown } from 'lucide-react';
 
 interface Toast {
   id: string;
@@ -65,7 +66,7 @@ export function Roster() {
         >
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
           {realParticipants.length} in call
-          <span className="text-slate-500">{expanded ? '▲' : '▼'}</span>
+          <span className="text-slate-500">{expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}</span>
         </button>
         {expanded && (
           <ul className="border-t border-slate-800 px-3 py-2 flex flex-col gap-1 max-h-52 overflow-y-auto min-w-[10rem]">

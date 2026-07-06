@@ -16,6 +16,11 @@ interface VideoGridProps {
   isCoach: boolean;
 }
 
+/** Pose-service subscriber bots never publish camera/mic — never show them as a tile. */
+function isPoseWorkerIdentity(identity: string): boolean {
+  return identity.startsWith('pose_worker_');
+}
+
 export function VideoGrid({
   sessionId,
   startedAt,
@@ -31,11 +36,11 @@ export function VideoGrid({
       { source: Track.Source.ScreenShare, withPlaceholder: false }
     ],
     { onlySubscribed: false }
-  );
+  ).filter((ref) => !isPoseWorkerIdentity(ref.participant.identity));
 
   // Play audio tracks invisibly for all microphones
   const audioTracks = useTracks([{ source: Track.Source.Microphone, withPlaceholder: false }])
-    .filter((ref) => ref.publication !== undefined) as TrackReference[];
+    .filter((ref) => ref.publication !== undefined && !isPoseWorkerIdentity(ref.participant.identity)) as TrackReference[];
 
   // Resolve manually pinned track either by its track SID or participant SID
   const pinnedTrack = trackRefs.find(
@@ -148,6 +153,7 @@ export function ParticipantVideoTile({
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 640, height: 360 });
   const [isReplaying, setIsReplaying] = useState(false);
+  const [insufficientFootage, setInsufficientFootage] = useState(false);
   const setReplayMode = useReplayStore((s) => s.setMode);
   const setReplayManifest = useReplayStore((s) => s.setManifestUrl);
   const setReplayTimestamp = useReplayStore((s) => s.setTimestamp);
@@ -172,20 +178,54 @@ export function ParticipantVideoTile({
     return () => resizeObserver.disconnect();
   }, []);
 
-  const handleReplayLast30s = async () => {
+  // How much clip we ask for, and the minimum we'll accept before showing
+  // "not enough footage yet" instead of sending a too-short/empty clip to
+  // pose detection (e.g. clicking Analyze 10s into a fresh meeting).
+  const ANALYZE_WINDOW_MS = 10_000;
+  const MIN_REQUIRED_MS = 9_000;
+
+  const showInsufficientFootage = () => {
+    setInsufficientFootage(true);
+    setTimeout(() => setInsufficientFootage(false), 3000);
+  };
+
+  const handleAnalyzeClip = async () => {
     if (!isCoach || isReplaying) return;
+
+    const getBufferedDurationMs = useReplayStore.getState().getBufferedDurationMs;
+    const bufferedMs = getBufferedDurationMs?.(participantId) ?? 0;
+    if (bufferedMs < MIN_REQUIRED_MS) {
+      showInsufficientFootage();
+      return;
+    }
+
     setIsReplaying(true);
     try {
-      await apiClient.post(
-        `/sessions/${sessionId}/replay/seek`,
-        {
-          participantId,
-          fromOffsetMs: -30000,
-          toOffsetMs: 0,
-        }
+      // Slice the last ~10s straight from the client-side rolling buffer
+      // (TrackBufferManager) — no server round-trip to fetch source video.
+      const getReplayBlob = useReplayStore.getState().getReplayBlob;
+      const windowMs = Math.min(bufferedMs, ANALYZE_WINDOW_MS);
+      const blob = getReplayBlob?.(participantId, -windowMs, 0);
+      if (!blob) {
+        showInsufficientFootage();
+        return;
+      }
+
+      const file = new File([blob], `replay-${participantId}-${Date.now()}.webm`, {
+        type: blob.type || 'video/webm',
+      });
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const uploaded = await apiClient.postForm<{ id: string }>(
+        `/sessions/${sessionId}/reference/upload`,
+        formData,
       );
+
+      // Broadcasts reference:open to the whole room (including this client).
+      await apiClient.post(`/sessions/${sessionId}/reference/${uploaded.id}/present`, {});
     } catch (err) {
-      console.error('Failed to seek replay:', err);
+      console.error('Failed to analyze replay clip:', err);
     } finally {
       setIsReplaying(false);
     }
@@ -216,13 +256,13 @@ export function ParticipantVideoTile({
         <div className="absolute top-3 right-3 hidden group-hover:flex items-center gap-2 z-10">
           <button
             type="button"
-            onClick={handleReplayLast30s}
+            onClick={handleAnalyzeClip}
             disabled={isReplaying}
             className="bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-semibold px-2.5 py-1.5 rounded-md transition shadow"
           >
-            {isReplaying ? 'Fetching...' : 'Replay Last 30s'}
+            {isReplaying ? 'Analyzing...' : 'Analyze Last 10s'}
           </button>
-          
+
           <button
             type="button"
             onClick={() => onPinTrack(isPinned ? null : trackSid)}
@@ -230,6 +270,15 @@ export function ParticipantVideoTile({
           >
             {isPinned ? 'Unpin' : 'Spotlight Pin'}
           </button>
+        </div>
+      )}
+
+      {/* Graceful message when the buffer doesn't have enough footage yet
+          (e.g. Analyze clicked moments after the meeting started) — not
+          gated by group-hover so it stays visible after the pointer moves. */}
+      {insufficientFootage && (
+        <div className="absolute top-3 right-3 z-20 max-w-[220px] bg-slate-900/95 border border-amber-800 text-amber-300 text-xs font-medium px-3 py-2 rounded-lg shadow-xl">
+          Not enough recorded video yet — wait a few more seconds and try again.
         </div>
       )}
     </div>

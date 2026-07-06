@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useAuthStore } from '../../../../stores/auth-store';
 import { apiClient } from '../../../../lib/api-client';
 import { socket, connectSocket, disconnectSocket } from '../../../../lib/socket-client';
+import { Lock, AlertTriangle, Hourglass, Ban, Clapperboard } from 'lucide-react';
 
 interface Session {
   id: string;
@@ -120,8 +121,8 @@ export default function SessionJoinPage({ params }: { params: { id: string } }) 
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-slate-200 p-6">
         <div className="max-w-md w-full bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-xl text-center">
-          <div className="w-16 h-16 bg-indigo-950 border border-indigo-805 rounded-full flex items-center justify-center mx-auto mb-6 text-indigo-500 text-3xl">
-            🔒
+          <div className="w-16 h-16 bg-indigo-950 border border-indigo-800 rounded-full flex items-center justify-center mx-auto mb-6 text-indigo-500">
+            <Lock className="w-8 h-8" />
           </div>
           <h2 className="text-xl font-bold text-white mb-2">Authentication Required</h2>
           <p className="text-slate-400 mb-6 text-sm">
@@ -143,8 +144,8 @@ export default function SessionJoinPage({ params }: { params: { id: string } }) 
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-slate-200 p-6">
         <div className="max-w-md w-full bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-xl text-center">
-          <div className="w-16 h-16 bg-red-950 border border-red-800 rounded-full flex items-center justify-center mx-auto mb-6 text-red-500 text-3xl">
-            ⚠️
+          <div className="w-16 h-16 bg-red-950 border border-red-800 rounded-full flex items-center justify-center mx-auto mb-6 text-red-500">
+            <AlertTriangle className="w-8 h-8" />
           </div>
           <h2 className="text-xl font-bold text-white mb-2">Invite Error</h2>
           <p className="text-slate-400 mb-6 text-sm">
@@ -167,8 +168,8 @@ export default function SessionJoinPage({ params }: { params: { id: string } }) 
       <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-slate-200 p-6">
         <div className="max-w-md w-full bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-xl text-center relative overflow-hidden">
           <div className="absolute top-0 left-0 right-0 h-1 bg-indigo-500 animate-pulse" />
-          <div className="w-16 h-16 bg-amber-950/40 border border-amber-900/60 rounded-full flex items-center justify-center mx-auto mb-6 text-amber-500 text-2xl animate-pulse">
-            ⏳
+          <div className="w-16 h-16 bg-amber-950/40 border border-amber-900/60 rounded-full flex items-center justify-center mx-auto mb-6 text-amber-500 animate-pulse">
+            <Hourglass className="w-7 h-7" />
           </div>
           <h2 className="text-xl font-bold text-white mb-2">Waiting for Approval</h2>
           <p className="text-slate-400 mb-6 text-sm">
@@ -196,8 +197,8 @@ export default function SessionJoinPage({ params }: { params: { id: string } }) 
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-slate-200 p-6">
         <div className="max-w-md w-full bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-xl text-center">
-          <div className="w-16 h-16 bg-red-950/40 border border-red-900/60 rounded-full flex items-center justify-center mx-auto mb-6 text-red-500 text-3xl">
-            🚫
+          <div className="w-16 h-16 bg-red-950/40 border border-red-900/60 rounded-full flex items-center justify-center mx-auto mb-6 text-red-500">
+            <Ban className="w-8 h-8" />
           </div>
           <h2 className="text-xl font-bold text-white mb-2">Access Declined</h2>
           <p className="text-slate-400 mb-6 text-sm">
@@ -218,27 +219,27 @@ export default function SessionJoinPage({ params }: { params: { id: string } }) 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-slate-200 p-6">
       <div className="max-w-md w-full bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-xl text-center">
-        <div className="w-16 h-16 bg-indigo-950/80 border border-indigo-900/60 rounded-full flex items-center justify-center mx-auto mb-6 text-indigo-400 text-3xl">
-          🎬
+        <div className="w-16 h-16 bg-indigo-950/80 border border-indigo-900/60 rounded-full flex items-center justify-center mx-auto mb-6 text-indigo-400">
+          <Clapperboard className="w-8 h-8" />
         </div>
         <h2 className="text-xl font-bold text-white mb-1">Session Invitation</h2>
         <p className="text-xs text-slate-500 font-mono mb-6">{session.id}</p>
         
-        <div className="bg-slate-950/60 border border-slate-850 rounded-xl p-4 text-left mb-6 flex flex-col gap-2">
+        <div className="bg-slate-950/60 border border-slate-900 rounded-xl p-4 text-left mb-6 flex flex-col gap-2">
           <div className="flex justify-between items-center text-xs">
             <span className="text-slate-400">Security Gate:</span>
             <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold ${
               session.accessType === 'lobby' 
-                ? 'bg-amber-500/20 text-amber-400 border border-amber-505/35'
-                : 'bg-green-500/20 text-green-400 border border-green-550/35'
+                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/35'
+                : 'bg-green-500/20 text-green-400 border border-green-600/35'
             }`}>
               {session.accessType === 'lobby' ? 'Lobby Approval Needed' : 'Anyone Can Join'}
             </span>
           </div>
-          <div className="h-px bg-slate-850" />
+          <div className="h-px bg-slate-900" />
           <div className="flex justify-between items-center text-xs">
             <span className="text-slate-400">Current Status:</span>
-            <span className="text-slate-350 capitalize">{session.status}</span>
+            <span className="text-slate-300 capitalize">{session.status}</span>
           </div>
         </div>
 

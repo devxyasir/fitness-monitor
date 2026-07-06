@@ -15,6 +15,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+import model_downloader
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -59,6 +60,17 @@ class PoseResult:
     confidence_avg: float = 0.0
 
 
+@dataclass
+class BoundingBox:
+    """A detected person, normalized [0, 1] in full-frame coordinates."""
+
+    x1: float
+    y1: float
+    x2: float
+    y2: float
+    score: float
+
+
 class PoseModelAdapter(abc.ABC):
     """Abstract interface for swappable pose models (RTMPose, YOLO-Pose, etc.)."""
 
@@ -67,8 +79,24 @@ class PoseModelAdapter(abc.ABC):
         """Load model weights into memory."""
 
     @abc.abstractmethod
-    def infer(self, frame: np.ndarray) -> PoseResult:
-        """Run inference on a single BGR frame, return normalized keypoints."""
+    def infer(self, frame: np.ndarray, track_id: str = "default") -> PoseResult:
+        """
+        Run inference on a single BGR frame, return normalized keypoints.
+
+        track_id identifies which continuous stream this frame belongs to
+        (e.g. "{sessionId}:{participantId}", or a reference-video id).
+        A single model instance is shared across concurrent streams (see
+        WorkerPool in worker.py), so adapters that keep per-stream tracking
+        state (TopDownPoseEstimator) key it by track_id — callers that only
+        ever process one stream at a time can ignore this parameter.
+        """
+
+    def reset_track(self, track_id: str) -> None:
+        """
+        Drop any per-stream state for track_id (e.g. a tracked bounding box).
+        Call this when a stream ends so state doesn't leak indefinitely.
+        No-op for stateless adapters.
+        """
 
 
 class RTMPoseAdapter(PoseModelAdapter):
@@ -87,22 +115,27 @@ class RTMPoseAdapter(PoseModelAdapter):
     STD = np.array([58.395, 57.12, 57.375], dtype=np.float32)
     SIMCC_SPLIT_RATIO = 2.0
 
-    def __init__(self, model_path: str | None = None):
+    def __init__(self, model_path: str | None = None, model_size: str = "medium"):
         self._model_path = model_path or settings.onnx_model_path
+        self._model_size = model_size
         self._session = None
-        self._input_size = (256, 192)  # RTMPose default input resolution (H, W)
+        self._input_size = model_downloader.rtmpose_input_size(model_size)  # (H, W)
 
     def load(self) -> None:
-        """Load ONNX Runtime inference session."""
+        """Auto-download the model if missing, then load an ONNX Runtime session."""
         import onnxruntime as ort
 
         model_file = Path(self._model_path)
         if not model_file.exists():
-            logger.warning(
-                "ONNX model not found at %s — inference will use stub mode",
-                self._model_path,
-            )
-            return
+            try:
+                model_downloader.ensure_rtmpose_model(self._model_path, self._model_size)
+            except Exception:
+                logger.exception(
+                    "Failed to auto-download RTMPose model (%s) to %s — inference will use stub mode",
+                    self._model_size,
+                    self._model_path,
+                )
+                return
 
         providers = ort.get_available_providers()
         preferred = ["CUDAExecutionProvider", "CPUExecutionProvider"]
@@ -110,9 +143,10 @@ class RTMPoseAdapter(PoseModelAdapter):
 
         self._session = ort.InferenceSession(str(model_file), providers=active)
         logger.info(
-            "RTMPose ONNX model loaded from %s (providers: %s)",
+            "RTMPose ONNX model loaded from %s (providers: %s, input=%s)",
             self._model_path,
             active,
+            self._input_size,
         )
 
     def _preprocess(self, frame: np.ndarray) -> np.ndarray:
@@ -153,8 +187,8 @@ class RTMPoseAdapter(PoseModelAdapter):
                 kept.append(score)
         return PoseResult(keypoints=keypoints, confidence_avg=float(np.mean(kept)) if kept else 0.0)
 
-    def infer(self, frame: np.ndarray) -> PoseResult:
-        """Run single-frame inference."""
+    def infer(self, frame: np.ndarray, track_id: str = "default") -> PoseResult:
+        """Run single-frame inference. Stateless — track_id is unused."""
         if self._session is None:
             # Stub mode — return empty result when model is not loaded
             return PoseResult()
@@ -185,22 +219,27 @@ class YOLOPoseAdapter(PoseModelAdapter):
     to extract the person candidate with the highest bbox confidence.
     """
 
-    def __init__(self, model_path: str | None = None):
+    def __init__(self, model_path: str | None = None, model_size: str = "medium"):
         self._model_path = model_path or settings.onnx_model_path
+        self._model_size = model_size
         self._session = None
         self._input_size = (640, 640)  # Standard YOLO-Pose resolution
 
     def load(self) -> None:
-        """Load ONNX Runtime inference session."""
+        """Auto-download the model if missing, then load an ONNX Runtime session."""
         import onnxruntime as ort
 
         model_file = Path(self._model_path)
         if not model_file.exists():
-            logger.warning(
-                "YOLO Pose ONNX model not found at %s — inference will use stub mode",
-                self._model_path,
-            )
-            return
+            try:
+                model_downloader.ensure_yolo_pose_model(self._model_path, self._model_size)
+            except Exception:
+                logger.exception(
+                    "Failed to auto-download YOLO-Pose model (%s) to %s — inference will use stub mode",
+                    self._model_size,
+                    self._model_path,
+                )
+                return
 
         providers = ort.get_available_providers()
         preferred = ["CUDAExecutionProvider", "CPUExecutionProvider"]
@@ -266,8 +305,8 @@ class YOLOPoseAdapter(PoseModelAdapter):
         confidence_avg = float(np.mean(kp_scores)) if kp_scores else 0.0
         return PoseResult(keypoints=keypoints, confidence_avg=confidence_avg)
 
-    def infer(self, frame: np.ndarray) -> PoseResult:
-        """Run single-frame YOLO inference."""
+    def infer(self, frame: np.ndarray, track_id: str = "default") -> PoseResult:
+        """Run single-frame YOLO inference. Stateless — track_id is unused."""
         if self._session is None:
             return PoseResult()
 
@@ -275,6 +314,231 @@ class YOLOPoseAdapter(PoseModelAdapter):
         input_name = self._session.get_inputs()[0].name
         outputs = self._session.run(None, {input_name: input_blob})
         return self._postprocess(outputs[0])
+
+
+class PersonDetector:
+    """
+    Localizes the person in a frame using the YOLO-pose model's bounding-box
+    head — its own keypoints are discarded; RTMPose is more accurate at
+    keypoint localization once given a proper crop. Uses a letterbox resize
+    (preserve aspect ratio + pad) rather than a plain squish-resize, since a
+    squish distorts the person's proportions before the model ever sees them.
+    """
+
+    def __init__(self, model_path: str | None = None, model_size: str = "small"):
+        self._model_path = model_path or settings.detector_model_path
+        self._model_size = model_size
+        self._session = None
+        self._input_size = (640, 640)  # (H, W)
+
+    def load(self) -> None:
+        import onnxruntime as ort
+
+        model_file = Path(self._model_path)
+        if not model_file.exists():
+            try:
+                model_downloader.ensure_yolo_pose_model(self._model_path, self._model_size)
+            except Exception:
+                logger.exception(
+                    "Failed to auto-download person-detector model (%s) to %s — pose will run "
+                    "on whole frames (degrades gracefully, but crops will be less accurate)",
+                    self._model_size,
+                    self._model_path,
+                )
+                return
+
+        providers = ort.get_available_providers()
+        preferred = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+        active = [p for p in preferred if p in providers]
+        self._session = ort.InferenceSession(str(model_file), providers=active)
+        logger.info("Person detector loaded from %s (providers: %s)", self._model_path, active)
+
+    def _letterbox(self, frame: np.ndarray) -> tuple[np.ndarray, float, float, float]:
+        """Resize preserving aspect ratio and pad to the model's square input."""
+        h, w = frame.shape[:2]
+        in_h, in_w = self._input_size
+        scale = min(in_w / w, in_h / h)
+        nw, nh = max(1, round(w * scale)), max(1, round(h * scale))
+        resized = cv2.resize(frame, (nw, nh), interpolation=cv2.INTER_LINEAR)
+        pad_x = (in_w - nw) / 2.0
+        pad_y = (in_h - nh) / 2.0
+        canvas = np.full((in_h, in_w, 3), 114, dtype=np.uint8)
+        y0, x0 = int(round(pad_y)), int(round(pad_x))
+        canvas[y0:y0 + nh, x0:x0 + nw] = resized
+        return canvas, scale, pad_x, pad_y
+
+    def detect(self, frame: np.ndarray) -> BoundingBox | None:
+        """Returns the highest-confidence person bbox, normalized [0,1] in full-frame space."""
+        if self._session is None:
+            return None
+
+        h, w = frame.shape[:2]
+        canvas, scale, pad_x, pad_y = self._letterbox(frame)
+        rgb = cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
+        blob = np.transpose(rgb, (2, 0, 1))[None]
+        blob = np.ascontiguousarray(blob, dtype=np.float32)
+
+        input_name = self._session.get_inputs()[0].name
+        outputs = self._session.run(None, {input_name: blob})
+        output = outputs[0]
+        if output.ndim != 3:
+            return None
+
+        preds = output[0]  # (56, N): cx, cy, w, h, box_score, 17*3 keypoints
+        scores = preds[4, :]
+        best_id = int(np.argmax(scores))
+        best_score = float(scores[best_id])
+        if best_score < settings.min_confidence:
+            return None
+
+        cx, cy, bw, bh = (float(preds[i, best_id]) for i in range(4))
+
+        # Undo the letterbox transform to get back to original-frame pixels.
+        x1 = (cx - bw / 2 - pad_x) / scale
+        y1 = (cy - bh / 2 - pad_y) / scale
+        x2 = (cx + bw / 2 - pad_x) / scale
+        y2 = (cy + bh / 2 - pad_y) / scale
+
+        x1 = max(0.0, min(float(w), x1)) / w
+        y1 = max(0.0, min(float(h), y1)) / h
+        x2 = max(0.0, min(float(w), x2)) / w
+        y2 = max(0.0, min(float(h), y2)) / h
+        if x2 <= x1 or y2 <= y1:
+            return None
+
+        return BoundingBox(x1=x1, y1=y1, x2=x2, y2=y2, score=best_score)
+
+
+@dataclass
+class _TrackState:
+    last_bbox: BoundingBox | None = None
+    frames_since_detect: int = 0
+
+
+class TopDownPoseEstimator(PoseModelAdapter):
+    """
+    Two-stage top-down pose pipeline: PersonDetector localizes the person,
+    then RTMPose runs on a properly cropped region around them, and the
+    resulting keypoints are mapped back to full-frame coordinates.
+
+    RTMPose is a top-down keypoint model — it expects a tight single-person
+    crop, not a whole scene. Running it directly on a raw frame (the
+    previous behavior) squishes the entire frame, background included, into
+    its 192x256 input, which is why the skeleton didn't track the subject
+    correctly. This crops to the actual detected person first.
+
+    Falls back to whole-frame RTMPose if the detector is unavailable or
+    finds no one, so pose still degrades gracefully instead of failing.
+
+    One model instance is shared across every concurrent participant/stream
+    (see WorkerPool in worker.py), so the detect-and-track state below is
+    keyed by track_id — never held as plain instance fields — or one
+    participant's tracked bbox would leak into another's frames.
+    """
+
+    # Padding around the detected bbox so limbs near its edges aren't clipped,
+    # aligned to the pose model's own training aspect ratio (W:H, derived
+    # from its input_size below) so the final crop isn't itself squished
+    # before resizing.
+    MARGIN_RATIO = 0.25
+
+    # The detector (640x640 YOLO pass) is the expensive part — far slower
+    # than RTMPose itself. Re-detecting every frame is not viable for a live
+    # system (measured ~16x slower than RTMPose alone). Instead, detect
+    # periodically and reuse the last bbox for frames in between — normal
+    # video motion doesn't move a person far frame-to-frame. If RTMPose's own
+    # confidence on a reused-bbox crop drops (person likely drifted out of
+    # it), force an immediate re-detect rather than waiting out the interval.
+    DETECT_INTERVAL_FRAMES = 8
+    LOW_CONFIDENCE_REDETECT_THRESHOLD = 0.15
+
+    def __init__(
+        self,
+        rtmpose_path: str | None = None,
+        detector_path: str | None = None,
+        model_size: str = "medium",
+        detector_size: str = "small",
+    ):
+        self._pose = RTMPoseAdapter(rtmpose_path, model_size=model_size)
+        self._detector = PersonDetector(detector_path, model_size=detector_size)
+        self._tracks: dict[str, _TrackState] = {}
+        # Derived from the pose model's own input resolution (H, W) — e.g.
+        # 0.75 for both the 256x192 and 384x288 RTMPose variants.
+        pose_h, pose_w = self._pose._input_size
+        self.TARGET_ASPECT = pose_w / pose_h
+
+    def load(self) -> None:
+        self._pose.load()
+        self._detector.load()
+
+    def reset_track(self, track_id: str) -> None:
+        self._tracks.pop(track_id, None)
+
+    def _crop_box(self, bbox: BoundingBox, w: int, h: int) -> tuple[int, int, int, int]:
+        """Expand bbox by margin, then pad to RTMPose's aspect ratio, in pixel space."""
+        bw = (bbox.x2 - bbox.x1) * w
+        bh = (bbox.y2 - bbox.y1) * h
+        cx = (bbox.x1 + bbox.x2) / 2 * w
+        cy = (bbox.y1 + bbox.y2) / 2 * h
+
+        bw *= 1 + self.MARGIN_RATIO * 2
+        bh *= 1 + self.MARGIN_RATIO * 2
+
+        # Grow the shorter dimension so the crop matches RTMPose's aspect
+        # ratio — avoids distorting the person when resized to 192x256.
+        if bw / bh > self.TARGET_ASPECT:
+            bh = bw / self.TARGET_ASPECT
+        else:
+            bw = bh * self.TARGET_ASPECT
+
+        x1 = int(round(max(0.0, cx - bw / 2)))
+        y1 = int(round(max(0.0, cy - bh / 2)))
+        x2 = int(round(min(float(w), cx + bw / 2)))
+        y2 = int(round(min(float(h), cy + bh / 2)))
+        return x1, y1, x2, y2
+
+    def infer(self, frame: np.ndarray, track_id: str = "default") -> PoseResult:
+        h, w = frame.shape[:2]
+        state = self._tracks.setdefault(track_id, _TrackState())
+
+        need_detect = state.last_bbox is None or state.frames_since_detect >= self.DETECT_INTERVAL_FRAMES
+        if need_detect:
+            detected = self._detector.detect(frame)
+            if detected is not None:
+                state.last_bbox = detected
+            state.frames_since_detect = 0
+        else:
+            state.frames_since_detect += 1
+
+        bbox = state.last_bbox
+        if bbox is None:
+            return self._pose.infer(frame)
+
+        x1, y1, x2, y2 = self._crop_box(bbox, w, h)
+        if x2 <= x1 or y2 <= y1:
+            return self._pose.infer(frame)
+
+        crop = frame[y1:y2, x1:x2]
+        crop_result = self._pose.infer(crop)
+
+        if crop_result.confidence_avg < self.LOW_CONFIDENCE_REDETECT_THRESHOLD:
+            # The tracked bbox is probably stale (person moved out of it) —
+            # force a fresh detection on the next frame instead of waiting
+            # out the rest of the interval.
+            state.frames_since_detect = self.DETECT_INTERVAL_FRAMES
+
+        crop_w = x2 - x1
+        crop_h = y2 - y1
+        mapped = [
+            KeypointResult(
+                name=kp.name,
+                x=(x1 + kp.x * crop_w) / w,
+                y=(y1 + kp.y * crop_h) / h,
+                score=kp.score,
+            )
+            for kp in crop_result.keypoints
+        ]
+        return PoseResult(keypoints=mapped, confidence_avg=crop_result.confidence_avg)
 
 
 def create_model_adapter() -> PoseModelAdapter:
@@ -287,26 +551,47 @@ def create_model_adapter() -> PoseModelAdapter:
     if model_path == "./models/rtmpose.onnx":
         if model_type == "yolo":
             if model_size == "small":
-                model_path = "./models/yolov11s-pose.onnx"
+                model_path = "./models/yolo11s-pose.onnx"
             elif model_size in ("large", "xlarge"):
-                model_path = "./models/yolov11l-pose.onnx"
+                model_path = "./models/yolo11l-pose.onnx"
             else:
-                model_path = "./models/yolov11s-pose.onnx"
+                model_path = "./models/yolo11s-pose.onnx"
         else: # rtmpose
             if model_size == "small":
                 model_path = "./models/rtmpose-s.onnx"
+            elif model_size == "medium":
+                model_path = "./models/rtmpose-m.onnx"
             elif model_size in ("large", "xlarge"):
                 model_path = "./models/rtmpose-l.onnx"
             else:
-                model_path = "./models/rtmpose-s.onnx"
+                model_path = "./models/rtmpose-m.onnx"
 
     # Inject resolved path back into settings for transparency
     settings.onnx_model_path = model_path
 
+    # Person-detector path: same size ladder as the pose model (a "large"
+    # config now means both stages scale up, not just RTMPose) — remapped
+    # only if left at its sentinel default so an explicit env override wins.
+    detector_path = settings.detector_model_path
+    detector_tier = model_downloader.YOLO_POSE_TIERS.get(model_size, "n")
+    if detector_path == "./models/yolo11n-pose.onnx":
+        detector_path = f"./models/yolo11{detector_tier}-pose.onnx"
+        settings.detector_model_path = detector_path
+
     if model_type == "yolo":
         logger.info("Initializing YOLO-Pose Model Adapter (%s size)", model_size)
-        return YOLOPoseAdapter(model_path)
+        return YOLOPoseAdapter(model_path, model_size=model_size)
     else:
-        logger.info("Initializing RTMPose Model Adapter (%s size)", model_size)
-        return RTMPoseAdapter(model_path)
+        logger.info(
+            "Initializing top-down RTMPose pipeline (%s size, detector tier=%s): "
+            "person detector -> crop -> RTMPose",
+            model_size,
+            detector_tier,
+        )
+        return TopDownPoseEstimator(
+            rtmpose_path=model_path,
+            detector_path=detector_path,
+            model_size=model_size,
+            detector_size=model_size,
+        )
 

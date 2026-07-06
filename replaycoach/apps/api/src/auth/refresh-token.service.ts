@@ -1,7 +1,8 @@
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { LessThan, Repository } from 'typeorm';
+import { IsNull, LessThan, MoreThan, Repository } from 'typeorm';
 import * as argon2 from 'argon2';
+import { createHash } from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 
 import { RefreshToken } from './refresh-token.entity';
@@ -37,7 +38,7 @@ export class RefreshTokenService {
     private readonly repo: Repository<RefreshToken>,
   ) {}
 
-  /** Hash a raw token with argon2id. */
+  /** Hash a raw token with argon2id — the actual proof-of-possession check. */
   private hash(token: string): Promise<string> {
     return argon2.hash(token, { type: argon2.argon2id });
   }
@@ -45,6 +46,17 @@ export class RefreshTokenService {
   /** Verify a raw token against a stored hash. */
   private verify(hash: string, token: string): Promise<boolean> {
     return argon2.verify(hash, token).catch(() => false);
+  }
+
+  /**
+   * Fast, non-secret index for O(1) DB lookup. Safe for a 122-bit random
+   * token (not a password): SHA-256 preimage resistance already makes
+   * reversing it as infeasible as brute-forcing the token itself, so a fast
+   * hash here doesn't trade away any real security — it just avoids doing
+   * the slow argon2 check against every row in the table.
+   */
+  private lookupHash(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
   }
 
   /**
@@ -59,29 +71,22 @@ export class RefreshTokenService {
   ): Promise<string> {
     const family = familyId ?? uuidv4();
     const tokenHash = await this.hash(rawToken);
+    const tokenLookupHash = this.lookupHash(rawToken);
     await this.repo.save(
-      this.repo.create({ userId, familyId: family, tokenHash, expiresAt }),
+      this.repo.create({ userId, familyId: family, tokenHash, tokenLookupHash, expiresAt }),
     );
     return family;
   }
 
   /**
-   * Validates a raw token. Loads all active (non-expired, non-rotated) tokens and
-   * verifies the argon2id hash. Volume is bounded (one active token per user session
-   * by design).
+   * Validates a raw token: O(1) lookup by tokenLookupHash, then a single
+   * argon2id verify against that one row (not a scan of every active row).
    */
   async findValid(rawToken: string): Promise<RefreshToken | null> {
-    const now = new Date();
-    const active = await this.repo
-      .createQueryBuilder('rt')
-      .where('rt.expires_at > :now', { now })
-      .andWhere('rt.rotated_at IS NULL')
-      .getMany();
-
-    for (const row of active) {
-      if (await this.verify(row.tokenHash, rawToken)) return row;
-    }
-    return null;
+    const row = await this.repo.findOne({
+      where: { tokenLookupHash: this.lookupHash(rawToken), rotatedAt: IsNull() },
+    });
+    return this.verifyRow(row, rawToken, (r) => r.expiresAt > new Date());
   }
 
   /** The current active (non-rotated) row for a family, if any. */
@@ -98,16 +103,20 @@ export class RefreshTokenService {
   /** A rotated-out row (within the retention buffer) matching this raw token, if any. */
   private async findRotatedMatch(rawToken: string): Promise<RefreshToken | null> {
     const cutoff = new Date(Date.now() - ROTATED_RETENTION_MS);
-    const rotated = await this.repo
-      .createQueryBuilder('rt')
-      .where('rt.rotated_at IS NOT NULL')
-      .andWhere('rt.rotated_at > :cutoff', { cutoff })
-      .getMany();
+    const row = await this.repo.findOne({
+      where: { tokenLookupHash: this.lookupHash(rawToken), rotatedAt: MoreThan(cutoff) },
+    });
+    return this.verifyRow(row, rawToken, () => true);
+  }
 
-    for (const row of rotated) {
-      if (await this.verify(row.tokenHash, rawToken)) return row;
-    }
-    return null;
+  /** Single argon2 verify against a candidate row already matched by lookup hash. */
+  private async verifyRow(
+    row: RefreshToken | null,
+    rawToken: string,
+    extraCheck: (row: RefreshToken) => boolean,
+  ): Promise<RefreshToken | null> {
+    if (!row || !extraCheck(row)) return null;
+    return (await this.verify(row.tokenHash, rawToken)) ? row : null;
   }
 
   /**

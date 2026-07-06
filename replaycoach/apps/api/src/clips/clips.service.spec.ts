@@ -12,6 +12,7 @@ import {
   Recording,
 } from '../database/entities/others.entities';
 import { CloudFrontSigner } from '../media/cloudfront-signer';
+import { ReferenceStorageService } from '../reference/reference-storage.service';
 
 describe('ClipsService', () => {
   let service: ClipsService;
@@ -51,6 +52,10 @@ describe('ClipsService', () => {
     signUrl: jest.fn().mockImplementation((key) => `https://cdn.example.com/${key}?signed=true`),
   };
 
+  const mockReferenceStorage = {
+    getPlaybackUrl: jest.fn().mockImplementation((key) => Promise.resolve(`https://local.example.com/${key}?sig=abc`)),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -78,6 +83,10 @@ describe('ClipsService', () => {
         {
           provide: CloudFrontSigner,
           useValue: mockCloudFrontSigner,
+        },
+        {
+          provide: ReferenceStorageService,
+          useValue: mockReferenceStorage,
         },
       ],
     }).compile();
@@ -199,6 +208,23 @@ describe('ClipsService', () => {
       expect(result.clip.id).toBe(clipId);
       expect(result.playUrl).toContain('signed=true');
       expect(result.annotations).toEqual(mockAnns);
+    });
+
+    it('should sign playback via ReferenceStorageService for a reference-sourced clip', async () => {
+      const mockClip = {
+        id: clipId,
+        createdBy: coachId,
+        s3Key: 'sessions/s1/reference/r1/original.webm',
+        clipType: 'reference' as const,
+      } as Clip;
+      mockClipRepo.findOne.mockResolvedValue(mockClip);
+      mockAnnotationRepo.find.mockResolvedValue([]);
+
+      const result = await service.getClip(clipId, coachId, 'coach');
+
+      expect(mockReferenceStorage.getPlaybackUrl).toHaveBeenCalledWith(mockClip.s3Key);
+      expect(mockCloudFrontSigner.signUrl).not.toHaveBeenCalled();
+      expect(result.playUrl).toContain('sig=abc');
     });
 
     it('should allow shared student to retrieve clip', async () => {

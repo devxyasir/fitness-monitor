@@ -6,3 +6,7 @@ redis[hiredis]>=5.0.0
 numpy>=1.26.0
 opencv-python-headless>=4.10.0
 pydantic-settings>=2.3.0
+requests>=2.31.0
+# Only used to auto-download + export YOLO-pose checkpoints to ONNX on
+# first run (see model_downloader.py) — not needed at inference time.
+ultralytics>=8.3.0

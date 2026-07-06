@@ -6,6 +6,7 @@ import { AnnotationCanvas } from './AnnotationCanvas';
 import { usePoseStore } from '../../../../stores/pose-store';
 import { useReplayStore } from '../../../../stores/replay-store';
 import type { PoseFrameDto } from '@replaycoach/types';
+import { Rewind, Play, Pause, Circle } from 'lucide-react';
 
 interface ReplayPanelProps {
   sessionId: string;
@@ -202,9 +203,9 @@ export function ReplayPanel({
           <div className="flex items-center gap-2">
             <button
               onClick={() => videoRef.current?.paused ? videoRef.current.play() : videoRef.current?.pause()}
-              className="bg-slate-700 hover:bg-slate-600 text-white text-xs px-3 py-1.5 rounded-md transition font-semibold"
+              className="bg-slate-700 hover:bg-slate-600 text-white text-xs px-3 py-1.5 rounded-md transition font-semibold inline-flex items-center gap-1.5"
             >
-              {isPlaying ? '⏸ Pause' : '▶ Play'}
+              {isPlaying ? (<><Pause className="w-3.5 h-3.5 fill-current" /> Pause</>) : (<><Play className="w-3.5 h-3.5 fill-current" /> Play</>)}
             </button>
 
             <span className="text-slate-400 text-xs tabular-nums">
@@ -236,17 +237,17 @@ export function ReplayPanel({
           {isCoach && (
             <button
               onClick={handleEndReplay}
-              className="bg-green-700 hover:bg-green-600 text-white text-xs font-semibold px-3 py-1.5 rounded-md transition"
+              className="bg-green-700 hover:bg-green-600 text-white text-xs font-semibold px-3 py-1.5 rounded-md transition inline-flex items-center gap-1.5"
             >
-              ↩ Return to Live
+              <Rewind className="w-3.5 h-3.5" /> Return to Live
             </button>
           )}
         </div>
       </div>
 
       {/* DVR badge */}
-      <div className="absolute top-3 left-3 z-20 bg-amber-600/90 text-white text-xs font-bold px-2.5 py-1 rounded-md shadow animate-pulse">
-        ⏺ DVR PLAYBACK
+      <div className="absolute top-3 left-3 z-20 bg-amber-600/90 text-white text-xs font-bold px-2.5 py-1 rounded-md shadow animate-pulse inline-flex items-center gap-1.5">
+        <Circle className="w-2.5 h-2.5 fill-current" /> DVR PLAYBACK
       </div>
     </div>
   );

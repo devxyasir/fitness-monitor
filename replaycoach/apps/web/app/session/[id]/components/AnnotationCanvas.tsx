@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAnnotationStore, ClientAnnotation, getVisibleAnnotations, AnnotationTool } from '../../../../stores/annotation-store';
 import { useAnnotationSocket } from '../hooks/useAnnotationSocket';
+import { Pencil, ArrowRight, Circle, Type, Undo2, Trash2 } from 'lucide-react';
 
 interface AnnotationCanvasProps {
   sessionId: string;
@@ -446,16 +447,16 @@ export function AnnotationCanvas({
                   setActiveTool(tool);
                   setTextInputPos(null);
                 }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition inline-flex items-center gap-1.5 ${
                   activeTool === tool
                     ? 'bg-indigo-600 text-white shadow-md'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
                 }`}
               >
-                {tool === 'pen' && '✏️ Pen'}
-                {tool === 'arrow' && '➡️ Arrow'}
-                {tool === 'circle' && '⭕ Circle'}
-                {tool === 'text' && '🔤 Text'}
+                {tool === 'pen' && (<><Pencil className="w-3.5 h-3.5" /> Pen</>)}
+                {tool === 'arrow' && (<><ArrowRight className="w-3.5 h-3.5" /> Arrow</>)}
+                {tool === 'circle' && (<><Circle className="w-3.5 h-3.5" /> Circle</>)}
+                {tool === 'text' && (<><Type className="w-3.5 h-3.5" /> Text</>)}
               </button>
             ))}
           </div>
@@ -479,18 +480,18 @@ export function AnnotationCanvas({
             <button
               type="button"
               onClick={handleUndo}
-              className="px-2.5 py-1.5 text-xs text-slate-300 hover:text-white font-medium rounded-lg hover:bg-slate-800 transition"
+              className="px-2.5 py-1.5 text-xs text-slate-300 hover:text-white font-medium rounded-lg hover:bg-slate-800 transition inline-flex items-center gap-1.5"
               title="Undo last stroke"
             >
-              ↩️ Undo
+              <Undo2 className="w-3.5 h-3.5" /> Undo
             </button>
             <button
               type="button"
               onClick={handleClear}
-              className="px-2.5 py-1.5 text-xs text-red-400 hover:text-red-300 font-semibold rounded-lg hover:bg-red-950/20 transition"
+              className="px-2.5 py-1.5 text-xs text-red-400 hover:text-red-300 font-semibold rounded-lg hover:bg-red-950/20 transition inline-flex items-center gap-1.5"
               title="Clear all strokes"
             >
-              🗑️ Clear
+              <Trash2 className="w-3.5 h-3.5" /> Clear
             </button>
           </div>
         </div>

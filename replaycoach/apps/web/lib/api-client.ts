@@ -87,5 +87,35 @@ async function patch<TBody, TResponse>(path: string, body: TBody): Promise<TResp
   return res.json() as Promise<TResponse>;
 }
 
-export const apiClient = { get, post, patch };
+/**
+ * Multipart form upload (e.g. video files). Cannot reuse fetchWithAuth's
+ * getHeaders() — it always forces Content-Type: application/json, which
+ * would strip the browser's multipart boundary. Duplicates fetchWithAuth's
+ * 401-retry-once behavior instead.
+ */
+async function postForm<TResponse>(path: string, formData: FormData): Promise<TResponse> {
+  const formattedPath = formatPath(path);
+  const url = `${API_BASE_URL}${formattedPath}`;
+
+  const authHeaders = (): Record<string, string> => {
+    const token = useAuthStore.getState().accessToken;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
+  let res = await fetch(url, { method: 'POST', headers: authHeaders(), body: formData });
+
+  if (res.status === 401) {
+    try {
+      await authClient.refresh();
+      res = await fetch(url, { method: 'POST', headers: authHeaders(), body: formData });
+    } catch (refreshErr) {
+      console.error('Form upload failed with 401 and refresh attempt failed:', refreshErr);
+    }
+  }
+
+  if (!res.ok) throw new Error(`API error ${res.status}: ${formattedPath}`);
+  return res.json() as Promise<TResponse>;
+}
+
+export const apiClient = { get, post, patch, postForm };
 

@@ -40,29 +40,29 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-radial-dark p-6">
-      <div className="relative w-full max-w-md bg-zinc-900/80 border border-zinc-800 rounded-2xl shadow-2xl p-8 backdrop-blur-md overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center p-6">
+      <div className="relative w-full max-w-md glass rounded-lg shadow-2xl p-8 overflow-hidden animate-rise">
         {/* Glow effect */}
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl" />
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-brand-indigo/10 rounded-full blur-3xl" />
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-brand-violet/10 rounded-full blur-3xl" />
 
         <div className="relative z-10">
           <div className="mb-8 text-center">
-            <h1 className="text-3xl font-extrabold tracking-tight text-white mb-2">
-              Replay<span className="text-blue-500">Coach</span>
+            <h1 className="font-display text-3xl font-bold tracking-tight text-ink mb-2">
+              Replay<span className="bg-gradient-to-r from-brand-indigo to-brand-violet bg-clip-text text-transparent">Coach</span>
             </h1>
-            <p className="text-sm text-zinc-400">Welcome back. Enter your credentials to sign in.</p>
+            <p className="text-sm text-ink-muted">Welcome back. Enter your credentials to sign in.</p>
           </div>
 
           {error && (
-            <div className="mb-6 p-4 bg-red-950/40 border border-red-800/80 text-red-400 text-xs rounded-lg animate-pulse">
+            <div className="mb-6 p-4 bg-danger/10 border border-danger/30 text-danger text-xs rounded-md">
               {error}
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label htmlFor="email" className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+              <label htmlFor="email" className="block text-xs font-semibold text-ink-muted uppercase tracking-wider mb-2">
                 Email Address
               </label>
               <input
@@ -71,17 +71,17 @@ export default function LoginPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-blue-500 transition-colors"
+                className="input"
                 placeholder="you@example.com"
               />
             </div>
 
             <div>
               <div className="flex justify-between mb-2">
-                <label htmlFor="password" className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+                <label htmlFor="password" className="text-xs font-semibold text-ink-muted uppercase tracking-wider">
                   Password
                 </label>
-                <a href="#" className="text-xs text-blue-500 hover:underline">
+                <a href="#" className="text-xs text-brand-indigo hover:underline">
                   Forgot?
                 </a>
               </div>
@@ -91,7 +91,7 @@ export default function LoginPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-blue-500 transition-colors"
+                className="input"
                 placeholder="••••••••••••"
               />
             </div>
@@ -99,17 +99,17 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-medium py-3 rounded-lg text-sm transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.01]"
+              className="btn-primary w-full py-3 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? 'Signing in...' : 'Sign In'}
             </button>
           </form>
 
-          <p className="mt-8 text-center text-xs text-zinc-500">
+          <p className="mt-8 text-center text-xs text-ink-faint">
             Don&apos;t have an account?{' '}
             <Link
               href={redirectTo ? `/register?redirectTo=${encodeURIComponent(redirectTo)}` : '/register'}
-              className="text-blue-400 hover:underline font-semibold"
+              className="text-brand-indigo hover:underline font-semibold"
             >
               Create an account
             </Link>

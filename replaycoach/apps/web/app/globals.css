@@ -1,3 +1,78 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  ::selection {
+    background: rgba(99, 102, 241, 0.35);
+    color: #fff;
+  }
+
+  * {
+    scrollbar-color: rgba(148, 163, 184, 0.25) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.25);
+    border-radius: 8px;
+  }
+
+  :focus-visible {
+    outline: 2px solid #6366f1;
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  .glass {
+    background: rgba(15, 21, 34, 0.6);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(148, 163, 184, 0.12);
+  }
+
+  .card {
+    @apply bg-panel border border-hairline rounded-lg;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md px-4 py-2.5 text-sm font-semibold transition;
+  }
+  .btn-primary {
+    @apply btn text-white hover:shadow-glow;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  }
+  .btn-ghost {
+    @apply btn bg-panel-2 hover:bg-panel-2/80 text-ink border border-hairline;
+  }
+  .btn-danger {
+    @apply btn bg-danger/10 hover:bg-danger/20 text-danger border border-danger/30;
+  }
+
+  .input {
+    @apply w-full bg-panel-2 border border-hairline rounded-md px-4 py-2.5 text-sm text-ink placeholder:text-ink-faint focus:outline-none focus:border-brand-indigo transition-colors;
+  }
+
+  .pill {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider border;
+  }
+  .pill-live {
+    @apply pill bg-live/10 border-live/30 text-live;
+  }
+  .pill-replay {
+    @apply pill bg-replay/10 border-replay/30 text-replay;
+  }
+}

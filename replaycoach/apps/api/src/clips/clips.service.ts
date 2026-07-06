@@ -17,6 +17,7 @@ import {
   Recording,
 } from '../database/entities/others.entities';
 import { CloudFrontSigner } from '../media/cloudfront-signer';
+import { ReferenceStorageService } from '../reference/reference-storage.service';
 import { CreateClipDto } from './clips.dto';
 
 @Injectable()
@@ -35,6 +36,7 @@ export class ClipsService {
     @InjectRepository(Annotation)
     private readonly annotationRepository: Repository<Annotation>,
     private readonly cloudFrontSigner: CloudFrontSigner,
+    private readonly referenceStorage: ReferenceStorageService,
   ) {}
 
   /**
@@ -200,8 +202,13 @@ export class ClipsService {
       }
     }
 
-    // Reuse CloudFront CDN signing configuration
-    const playUrl = this.cloudFrontSigner.signUrl(clip.s3Key);
+    // Reference-sourced clips (an uploaded/buffered MP4, not an HLS
+    // recording segment) are signed via ReferenceStorageService instead of
+    // CloudFront — see Clip.clipType.
+    const playUrl =
+      clip.clipType === 'reference'
+        ? await this.referenceStorage.getPlaybackUrl(clip.s3Key)
+        : this.cloudFrontSigner.signUrl(clip.s3Key);
 
     // Retrieve dynamically toggleable annotations
     const annotations = await this.annotationRepository.find({

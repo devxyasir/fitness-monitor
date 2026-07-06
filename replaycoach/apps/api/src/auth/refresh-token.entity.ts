@@ -38,10 +38,23 @@ export class RefreshToken {
   familyId!: string;
 
   /**
-   * Argon2id hash of the raw token — we never store the raw token.
+   * Argon2id hash of the raw token — we never store the raw token. This is
+   * the actual proof-of-possession check (single verify against the row
+   * found via tokenLookupHash, not a scan).
    */
   @Column({ name: 'token_hash', type: 'varchar', length: 255 })
   tokenHash!: string;
+
+  /**
+   * SHA-256 hex digest of the raw token, indexed for O(1) lookup. Not a
+   * security downgrade: the raw token is a 122-bit random UUID, not a
+   * password, so a fast non-secret index doesn't expose it to brute force
+   * (reversing SHA-256 of a random UUID is as infeasible as reversing
+   * argon2 of one — the search space is what protects it, not hash speed).
+   */
+  @Index({ unique: true })
+  @Column({ name: 'token_lookup_hash', type: 'varchar', length: 64 })
+  tokenLookupHash!: string;
 
   @Column({ name: 'expires_at', type: 'timestamptz' })
   expiresAt!: Date;

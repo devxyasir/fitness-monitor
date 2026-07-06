@@ -16,10 +16,12 @@ from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator
 
 import redis.asyncio as aioredis
-from fastapi import FastAPI
+from fastapi import BackgroundTasks, FastAPI
+from pydantic import BaseModel
 
 from config import settings
 from inference import PoseModelAdapter, create_model_adapter
+from reference_processor import process_reference_video
 from worker import WorkerPool
 
 logging.basicConfig(
@@ -221,6 +223,40 @@ async def list_workers() -> dict[str, list[str]]:
         return {"workers": []}
 
     return {"workers": list(_worker_pool._workers.keys())}
+
+
+class ReferenceProcessRequest(BaseModel):
+    refId: str
+    videoUrl: str
+    callbackUrl: str
+    callbackToken: str
+
+
+@app.post("/reference/process")
+async def process_reference(
+    req: ReferenceProcessRequest,
+    background_tasks: BackgroundTasks,
+) -> dict[str, str]:
+    """
+    Accept a reference-video analysis request and process it in the
+    background — long videos can take a while, so the API is notified via
+    callback (req.callbackUrl) rather than by polling this response.
+    Non-fatal by design: a missing model or processing failure reports
+    status='failed' via callback instead of raising, so the coach can still
+    present the raw video without a skeleton overlay.
+    """
+    if not _model:
+        return {"status": "error", "message": "Pose model not initialized"}
+
+    background_tasks.add_task(
+        process_reference_video,
+        req.refId,
+        req.videoUrl,
+        req.callbackUrl,
+        req.callbackToken,
+        _model,
+    )
+    return {"status": "accepted"}
 
 
 if __name__ == "__main__":

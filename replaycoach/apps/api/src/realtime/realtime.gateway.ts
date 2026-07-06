@@ -401,4 +401,151 @@ export class RealtimeGateway implements OnGatewayConnection {
     this.logger.warn(`Emitting session:recording:degraded to room: ${room}: ${reason}`);
     this.server.to(room).emit('session:recording:degraded', { sessionId, reason });
   }
+
+  // ── Reference video analysis (coach presents an external/buffered clip) ────
+
+  /**
+   * Broadcasts to specific students' rooms if targeted, else the whole
+   * session room — excluding the emitting coach's own socket (client.to,
+   * not server.to) since the coach already applies these interactions
+   * locally/optimistically before emitting; echoing back would double them
+   * up (most visibly: the same drawn stroke appended twice).
+   */
+  private emitToRoomOrStudents(client: Socket, sessionId: string, event: string, payload: any, studentIds?: string[]) {
+    if (studentIds && studentIds.length > 0) {
+      for (const studentId of studentIds) {
+        client.to(`session:${sessionId}:participant:${studentId}`).emit(event, payload);
+      }
+    } else {
+      client.to(`session:${sessionId}`).emit(event, payload);
+    }
+  }
+
+  /**
+   * Triggered from ReferenceController.present(). Always announced room-wide
+   * (a one-time "the coach is analyzing a clip" notice) — per-interaction
+   * targeting (state/annotate/undo/clear) is handled separately below, since
+   * that's where the existing annotation system also draws the line.
+   */
+  emitReferenceOpen(sessionId: string, payload: any) {
+    const room = `session:${sessionId}`;
+    this.logger.log(`Emitting reference:open to room: ${room}`);
+    this.server.to(room).emit('reference:open', payload);
+  }
+
+  /** Triggered from the pose-service completion callback — skeleton overlay is ready. */
+  emitReferenceReady(sessionId: string, payload: any) {
+    const room = `session:${sessionId}`;
+    this.logger.log(`Emitting reference:ready to room: ${room}`);
+    this.server.to(room).emit('reference:ready', payload);
+  }
+
+  private async assertCoach(sessionId: string, user: JwtPayload): Promise<Session> {
+    const session = await this.sessionRepository.findOne({ where: { id: sessionId } });
+    if (!session) throw new Error('Session not found');
+    if (session.coachId !== user.sub && user.role !== 'platform_admin') {
+      throw new Error('Forbidden');
+    }
+    return session;
+  }
+
+  /** Coach play/pause/seek on the reference video — relayed to the room or targeted students. */
+  @SubscribeMessage('reference:state')
+  async handleReferenceState(
+    @MessageBody() data: { sessionId: string; playing: boolean; frameIndex: number; studentIds?: string[] },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const user: JwtPayload | undefined = client.data?.['user'];
+    if (!user) return { status: 'error', message: 'Unauthorized' };
+    const { sessionId, playing, frameIndex, studentIds } = data;
+    if (!sessionId || typeof frameIndex !== 'number') {
+      return { status: 'error', message: 'Missing sessionId or frameIndex' };
+    }
+    try {
+      await this.assertCoach(sessionId, user);
+    } catch {
+      this.logger.warn(`Unauthorized reference:state trigger by non-coach user ${user.email}`);
+      return { status: 'error', message: 'Forbidden' };
+    }
+    this.emitToRoomOrStudents(client, sessionId, 'reference:state', { playing, frameIndex }, studentIds);
+    return { status: 'ok' };
+  }
+
+  /** One drawing stroke on the reference video's current frame — relayed to the room or targeted students. */
+  @SubscribeMessage('reference:annotate')
+  async handleReferenceAnnotate(
+    @MessageBody() data: { sessionId: string; frameIndex: number; stroke: any; studentIds?: string[] },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const user: JwtPayload | undefined = client.data?.['user'];
+    if (!user) return { status: 'error', message: 'Unauthorized' };
+    const { sessionId, frameIndex, stroke, studentIds } = data;
+    if (!sessionId || typeof frameIndex !== 'number' || !stroke) {
+      return { status: 'error', message: 'Missing sessionId, frameIndex, or stroke' };
+    }
+    try {
+      await this.assertCoach(sessionId, user);
+    } catch {
+      this.logger.warn(`Unauthorized reference:annotate trigger by non-coach user ${user.email}`);
+      return { status: 'error', message: 'Forbidden' };
+    }
+    this.emitToRoomOrStudents(client, sessionId, 'reference:annotate', { frameIndex, stroke }, studentIds);
+    return { status: 'ok' };
+  }
+
+  @SubscribeMessage('reference:undo')
+  async handleReferenceUndo(
+    @MessageBody() data: { sessionId: string; frameIndex: number; studentIds?: string[] },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const user: JwtPayload | undefined = client.data?.['user'];
+    if (!user) return { status: 'error', message: 'Unauthorized' };
+    const { sessionId, frameIndex, studentIds } = data;
+    if (!sessionId || typeof frameIndex !== 'number') {
+      return { status: 'error', message: 'Missing sessionId or frameIndex' };
+    }
+    try {
+      await this.assertCoach(sessionId, user);
+    } catch {
+      return { status: 'error', message: 'Forbidden' };
+    }
+    this.emitToRoomOrStudents(client, sessionId, 'reference:undo', { frameIndex }, studentIds);
+    return { status: 'ok' };
+  }
+
+  @SubscribeMessage('reference:clear')
+  async handleReferenceClear(
+    @MessageBody() data: { sessionId: string; frameIndex?: number; studentIds?: string[] },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const user: JwtPayload | undefined = client.data?.['user'];
+    if (!user) return { status: 'error', message: 'Unauthorized' };
+    const { sessionId, frameIndex, studentIds } = data;
+    if (!sessionId) return { status: 'error', message: 'Missing sessionId' };
+    try {
+      await this.assertCoach(sessionId, user);
+    } catch {
+      return { status: 'error', message: 'Forbidden' };
+    }
+    this.emitToRoomOrStudents(client, sessionId, 'reference:clear', { frameIndex }, studentIds);
+    return { status: 'ok' };
+  }
+
+  @SubscribeMessage('reference:close')
+  async handleReferenceClose(
+    @MessageBody() data: { sessionId: string; studentIds?: string[] },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const user: JwtPayload | undefined = client.data?.['user'];
+    if (!user) return { status: 'error', message: 'Unauthorized' };
+    const { sessionId, studentIds } = data;
+    if (!sessionId) return { status: 'error', message: 'Missing sessionId' };
+    try {
+      await this.assertCoach(sessionId, user);
+    } catch {
+      return { status: 'error', message: 'Forbidden' };
+    }
+    this.emitToRoomOrStudents(client, sessionId, 'reference:close', {}, studentIds);
+    return { status: 'ok' };
+  }
 }

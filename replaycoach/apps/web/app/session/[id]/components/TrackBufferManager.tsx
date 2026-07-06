@@ -59,8 +59,22 @@ export function TrackBufferManager() {
       if (parts.length === 0) return null;
       return new Blob(parts, { type: mime.current });
     };
+
+    // How far back the buffer actually reaches for this participant right
+    // now — e.g. a meeting that started 10s ago can't have 30s of footage
+    // yet, even though the rolling window holds up to WINDOW_MS.
+    const getBufferedDurationMs = (participantId: string): number => {
+      const arr = buffers.current.get(participantId);
+      if (!arr || arr.length === 0) return 0;
+      return Date.now() - arr[0]!.ts;
+    };
+
     useReplayStore.getState().setGetReplayBlob(getReplayBlob);
-    return () => useReplayStore.getState().setGetReplayBlob(null);
+    useReplayStore.getState().setGetBufferedDurationMs(getBufferedDurationMs);
+    return () => {
+      useReplayStore.getState().setGetReplayBlob(null);
+      useReplayStore.getState().setGetBufferedDurationMs(null);
+    };
   }, []);
 
   return null;

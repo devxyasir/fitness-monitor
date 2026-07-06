@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { apiClient } from '../../../../lib/api-client';
+import { RefreshCw, CalendarDays } from 'lucide-react';
 
 interface Session {
   id: string;
@@ -41,36 +42,36 @@ export default function StudentSessionsPage() {
   const getStatusBadgeClass = (status: Session['status']) => {
     switch (status) {
       case 'live':
-        return 'bg-red-500/20 border-red-500/30 text-red-400';
+        return 'bg-live/10 border-live/30 text-live';
       case 'scheduled':
-        return 'bg-amber-500/20 border-amber-500/30 text-amber-400';
+        return 'bg-replay/10 border-replay/30 text-replay';
       case 'ended':
       case 'processed':
-        return 'bg-indigo-500/20 border-indigo-500/30 text-indigo-400';
+        return 'bg-brand-indigo/10 border-brand-indigo/30 text-brand-indigo';
       default:
-        return 'bg-slate-800 border-slate-700 text-slate-400';
+        return 'bg-panel-2 border-hairline text-ink-muted';
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans p-6 pb-12">
+    <div className="min-h-screen font-sans p-6 pb-12">
       <div className="max-w-6xl mx-auto">
         {/* Navigation Sidebar/Header */}
-        <header className="flex items-center justify-between mb-8 pb-4 border-b border-slate-900">
+        <header className="flex items-center justify-between mb-8 pb-4 border-b border-hairline">
           <div className="flex items-center gap-6">
-            <h1 className="text-2xl font-black text-white tracking-tight uppercase">
-              Replay<span className="text-indigo-500">Coach</span>
+            <h1 className="font-display text-2xl font-bold text-ink tracking-tight">
+              Replay<span className="bg-gradient-to-r from-brand-indigo to-brand-violet bg-clip-text text-transparent">Coach</span>
             </h1>
-            <nav className="flex items-center gap-2 bg-slate-900 p-1 rounded-xl border border-slate-800">
+            <nav className="flex items-center gap-1 bg-panel p-1 rounded-md border border-hairline">
               <Link
                 href="/student/sessions"
-                className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-white shadow"
+                className="px-4 py-1.5 rounded-md text-xs font-semibold bg-panel-2 text-ink"
               >
                 My Sessions
               </Link>
               <Link
                 href="/student/clips"
-                className="px-4 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition"
+                className="px-4 py-1.5 rounded-md text-xs font-semibold text-ink-muted hover:text-ink transition"
               >
                 Shared Clips
               </Link>
@@ -81,61 +82,61 @@ export default function StudentSessionsPage() {
         <div>
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="text-xl font-bold text-white">My Sessions History</h2>
-              <p className="text-xs text-slate-400 mt-1">
+              <h2 className="font-display text-xl font-bold text-ink">My Sessions History</h2>
+              <p className="text-xs text-ink-muted mt-1">
                 View sessions you participated in and review clip notes shared with you.
               </p>
             </div>
             <button
               onClick={fetchSessions}
-              className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl text-xs font-semibold text-slate-300 transition"
+              className="btn-ghost px-3.5 py-1.5 text-xs"
             >
-              🔄 Refresh
+              <RefreshCw className="w-3.5 h-3.5" /> Refresh
             </button>
           </div>
 
           {error && (
-            <div className="bg-red-950/20 border border-red-900 text-red-300 rounded-2xl p-4 text-xs font-medium mb-6">
+            <div className="bg-danger/10 border border-danger/30 text-danger rounded-md p-4 text-xs font-medium mb-6">
               {error}
             </div>
           )}
 
           {loading ? (
             <div className="flex flex-col items-center justify-center p-20 gap-3">
-              <div className="w-8 h-8 rounded-full border-4 border-indigo-500 border-t-transparent animate-spin" />
-              <p className="text-xs text-slate-400">Loading Sessions...</p>
+              <div className="w-8 h-8 rounded-full border-4 border-brand-indigo border-t-transparent animate-spin" />
+              <p className="text-xs text-ink-muted">Loading Sessions...</p>
             </div>
           ) : sessions.length === 0 ? (
-            <div className="bg-slate-900/40 border border-slate-900 rounded-3xl p-16 text-center max-w-xl mx-auto mt-6">
-              <div className="text-4xl mb-4">🗓️</div>
-              <h3 className="text-base font-bold text-white mb-2">No active sessions found</h3>
-              <p className="text-xs text-slate-400 leading-relaxed mb-6">
+            <div className="card p-16 text-center max-w-xl mx-auto mt-6">
+              <CalendarDays className="w-10 h-10 mb-4 mx-auto text-ink-faint" />
+              <h3 className="text-base font-bold text-ink mb-2">No active sessions found</h3>
+              <p className="text-xs text-ink-muted leading-relaxed mb-6">
                 You will find your coaching session list here once you join a live session invitation.
               </p>
             </div>
           ) : (
-            <div className="border border-slate-900 bg-slate-900/30 rounded-3xl overflow-hidden shadow-2xl">
+            <div className="card overflow-hidden">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b border-slate-900 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-slate-900/40">
+                  <tr className="border-b border-hairline text-[10px] font-bold uppercase tracking-wider text-ink-faint bg-panel-2">
                     <th className="px-6 py-4">Session Room Id</th>
                     <th className="px-6 py-4">Status</th>
                     <th className="px-6 py-4">Date Time</th>
                     <th className="px-6 py-4 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-900/50">
+                <tbody className="divide-y divide-hairline">
                   {sessions.map((session) => (
-                    <tr key={session.id} className="hover:bg-slate-900/20 transition group">
-                      <td className="px-6 py-4 font-mono text-xs text-slate-300 font-medium">
+                    <tr key={session.id} className="hover:bg-panel-2/50 transition group">
+                      <td className="px-6 py-4 font-mono text-xs text-ink font-medium">
                         {session.id}
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`px-2 py-0.5 rounded-lg border text-[10px] uppercase font-bold tracking-wide ${getStatusBadgeClass(session.status)}`}>
+                        <span className={`px-2 py-0.5 rounded-md border text-[10px] uppercase font-bold tracking-wide ${getStatusBadgeClass(session.status)}`}>
                           {session.status}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-xs text-slate-400 font-medium">
+                      <td className="px-6 py-4 text-xs text-ink-muted font-medium">
                         {new Date(session.scheduledAt).toLocaleString()}
                       </td>
                       <td className="px-6 py-4 text-right">
@@ -143,14 +144,14 @@ export default function StudentSessionsPage() {
                           {['live', 'scheduled'].includes(session.status) ? (
                             <Link
                               href={`/session/${session.id}`}
-                              className="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-semibold tracking-wide transition shadow-sm"
+                              className="px-3.5 py-1.5 bg-live text-canvas hover:brightness-110 rounded-md text-xs font-semibold tracking-wide transition"
                             >
                               Join Room
                             </Link>
                           ) : (
                             <Link
                               href={`/student/clips?sessionId=${session.id}`}
-                              className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold tracking-wide transition shadow-sm animate-pulse-subtle"
+                              className="btn-primary px-3.5 py-1.5 text-xs"
                             >
                               View Shared Clips
                             </Link>

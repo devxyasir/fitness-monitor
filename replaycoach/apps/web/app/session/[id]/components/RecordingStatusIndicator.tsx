@@ -41,7 +41,7 @@ export function RecordingStatusIndicator() {
       ? 'border-emerald-900 bg-emerald-950/30 text-emerald-300'
       : status === 'degraded'
         ? 'border-amber-900 bg-amber-950/30 text-amber-300'
-        : 'border-slate-700 bg-slate-850 text-slate-400';
+        : 'border-slate-700 bg-slate-900 text-slate-400';
 
   return (
     <span
