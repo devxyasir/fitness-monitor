@@ -58,7 +58,7 @@ export function Roster() {
   }, [realParticipants.map((p) => p.identity).join(',')]);
 
   return (
-    <div className="absolute left-6 top-20 z-40 flex flex-col items-start gap-2">
+    <div className="absolute left-3 sm:left-6 top-20 z-40 flex flex-col items-start gap-2 max-w-[calc(100vw-1.5rem)]">
       <div className="bg-slate-900/95 border border-slate-800 rounded-xl shadow-xl backdrop-blur">
         <button
           onClick={() => setExpanded((e) => !e)}

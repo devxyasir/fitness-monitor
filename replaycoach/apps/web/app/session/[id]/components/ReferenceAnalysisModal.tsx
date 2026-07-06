@@ -485,8 +485,9 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
           )}
         </div>
 
-        {/* Body: video + tools */}
-        <div className="flex-1 flex min-h-0">
+        {/* Body: video + tools — stacked on mobile so the video keeps most
+            of the screen instead of being squeezed beside a fixed sidebar */}
+        <div className="flex-1 flex flex-col sm:flex-row min-h-0">
           <div ref={containerRef} className="flex-1 relative bg-black">
             <video
               ref={videoRef}
@@ -518,9 +519,10 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
             )}
           </div>
 
-          {/* Draw tools side panel — coach only */}
+          {/* Draw tools side panel — coach only. Below the video (capped
+              height, scrollable) on mobile; a fixed-width sidebar from sm+ */}
           {isCoach && (
-            <div className="w-56 border-l border-slate-900 bg-slate-900 p-4 flex flex-col gap-4 overflow-y-auto">
+            <div className="w-full sm:w-56 max-h-[35vh] sm:max-h-none border-t sm:border-t-0 sm:border-l border-slate-900 bg-slate-900 p-4 flex flex-col gap-4 overflow-y-auto">
               {students.length > 0 && (
                 <div>
                   <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center justify-between">
@@ -662,7 +664,7 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
               className="w-full accent-amber-500 h-1.5 cursor-pointer"
             />
           )}
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-2">
               {isCoach && (
                 <>

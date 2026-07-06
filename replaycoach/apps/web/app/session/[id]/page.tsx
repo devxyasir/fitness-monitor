@@ -35,7 +35,6 @@ import {
   Video,
   VideoOff,
   ScreenShare,
-  LayoutGrid,
   Upload,
   Loader2,
 } from 'lucide-react';
@@ -44,7 +43,6 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
   const sessionId = params.id;
   const { user } = useAuthStore();
   const { token, url, isLoading, error } = useLiveKitRoom(sessionId);
-  const [layout, setLayout] = useState<'gallery' | 'spotlight'>('gallery');
   const [pinnedTrackSid, setPinnedTrackSid] = useState<string | null>(null);
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [session, setSession] = useState<{ startedAt: string | null } | null>(null);
@@ -122,11 +120,6 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
   useEffect(() => {
     const handleCoachPin = (payload: { trackSid: string | null }) => {
       setPinnedTrackSid(payload.trackSid);
-      if (payload.trackSid) {
-        setLayout('spotlight');
-      } else {
-        setLayout('gallery');
-      }
     };
 
     socket.on('session:pin-track', handleCoachPin);
@@ -172,11 +165,6 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
       socket.emit('session:pin-track', { sessionId, trackSid });
     } else {
       setPinnedTrackSid(trackSid);
-      if (trackSid) {
-        setLayout('spotlight');
-      } else {
-        setLayout('gallery');
-      }
     }
   };
 
@@ -300,7 +288,7 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
   return (
     <div className="relative flex flex-col h-screen bg-slate-950 text-slate-100 overflow-hidden font-sans">
       {/* Session Title Header */}
-      <header className="flex items-center justify-between px-6 py-4 bg-slate-900 border-b border-slate-900 z-10 shadow-md">
+      <header className="flex items-center justify-between flex-wrap gap-2 px-3 sm:px-6 py-3 sm:py-4 bg-slate-900 border-b border-slate-900 z-10 shadow-md">
         <div className="flex items-center gap-3">
           <div className={`w-2.5 h-2.5 rounded-full ${mode === 'playing' ? 'bg-amber-500 animate-pulse' : 'bg-red-600 animate-ping'}`} />
           <h1 className="text-sm font-semibold tracking-tight text-white flex items-center gap-2">
@@ -412,18 +400,15 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
             <VideoGrid
               sessionId={sessionId}
               startedAt={session?.startedAt ?? null}
-              layout={layout}
               pinnedTrackSid={pinnedTrackSid}
               onPinTrack={handlePinTrack}
               isCoach={isCoach}
             />
 
             {/* Control Toolbar */}
-            <div className="bg-slate-900 border-t border-slate-900 px-6 py-4 flex items-center justify-between z-10 shadow-inner">
+            <div className="bg-slate-900 border-t border-slate-900 px-3 sm:px-6 py-3 sm:py-4 flex items-center justify-between flex-wrap gap-3 z-10 shadow-inner">
               <ControlsArea
                 isCoach={isCoach}
-                layout={layout}
-                setLayout={setLayout}
                 sessionId={sessionId}
                 onUploaded={() => setUploadRefreshToken((n) => n + 1)}
               />
@@ -441,7 +426,7 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
       </LiveKitRoom>
 
       {isCoach && lobbyRequests.length > 0 && (
-        <div className="absolute right-6 top-20 z-50 w-80 bg-slate-900/95 border border-slate-800 rounded-xl shadow-2xl p-4 backdrop-blur max-h-[400px] flex flex-col gap-3">
+        <div className="absolute right-3 sm:right-6 top-20 z-50 w-80 max-w-[calc(100vw-1.5rem)] bg-slate-900/95 border border-slate-800 rounded-xl shadow-2xl p-4 backdrop-blur max-h-[400px] flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
@@ -580,14 +565,10 @@ function LiveMiniGrid({
 // Inner controls component to resolve LocalParticipant state correctly
 function ControlsArea({
   isCoach,
-  layout,
-  setLayout,
   sessionId,
   onUploaded,
 }: {
   isCoach: boolean;
-  layout: 'gallery' | 'spotlight';
-  setLayout: (l: 'gallery' | 'spotlight') => void;
   sessionId: string;
   onUploaded: () => void;
 }) {
@@ -737,7 +718,7 @@ function ControlsArea({
               )}
             </button>
             {uploadingVideo && uploadProgress && uploadProgress.total > 0 && (
-              <div className="absolute bottom-full mb-2 left-0 z-20 w-56 bg-slate-900/95 border border-slate-700 text-slate-200 text-xs font-medium px-3 py-2 rounded-lg shadow-xl">
+              <div className="absolute bottom-full mb-2 left-0 z-20 w-56 max-w-[calc(100vw-2rem)] bg-slate-900/95 border border-slate-700 text-slate-200 text-xs font-medium px-3 py-2 rounded-lg shadow-xl">
                 <div className="flex justify-between mb-1">
                   <span>
                     {formatMB(uploadProgress.loaded)} / {formatMB(uploadProgress.total)} MB
@@ -766,15 +747,6 @@ function ControlsArea({
             )}
           </div>
         )}
-
-        {/* Gallery / Spotlight toggles */}
-        <button
-          type="button"
-          onClick={() => setLayout(layout === 'gallery' ? 'spotlight' : 'gallery')}
-          className="flex items-center px-4 py-2 text-xs font-semibold rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 transition shadow-sm"
-        >
-          <LayoutGrid className="w-3.5 h-3.5 mr-1.5" /> Layout: {layout === 'gallery' ? 'Gallery' : 'Spotlight'}
-        </button>
       </div>
     </>
   );

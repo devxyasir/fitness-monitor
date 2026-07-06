@@ -198,7 +198,7 @@ export function ReplayPanel({
           className="w-full accent-indigo-500 h-1.5 cursor-pointer"
         />
 
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center justify-between flex-wrap gap-3">
           {/* Play/Pause */}
           <div className="flex items-center gap-2">
             <button

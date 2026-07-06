@@ -10,7 +10,6 @@ import { useReplayStore } from '../../../../stores/replay-store';
 interface VideoGridProps {
   sessionId: string;
   startedAt: string | null;
-  layout: 'gallery' | 'spotlight';
   pinnedTrackSid: string | null;
   onPinTrack: (trackSid: string | null) => void;
   isCoach: boolean;
@@ -24,7 +23,6 @@ function isPoseWorkerIdentity(identity: string): boolean {
 export function VideoGrid({
   sessionId,
   startedAt,
-  layout,
   pinnedTrackSid,
   onPinTrack,
   isCoach,
@@ -251,9 +249,11 @@ export function ParticipantVideoTile({
         {trackRef.participant.isLocal && ' (You)'}
       </div>
 
-      {/* Hover overlay shortcuts: Coach only (don't overlay on oneself to prevent loops) */}
+      {/* Coach-only shortcuts (don't overlay on oneself to prevent loops).
+          Always visible rather than hover-only — hover doesn't exist on
+          touch devices, which made these completely unreachable on mobile. */}
       {isCoach && !trackRef.participant.isLocal && (
-        <div className="absolute top-3 right-3 hidden group-hover:flex items-center gap-2 z-10">
+        <div className="absolute top-3 right-3 flex items-center gap-2 z-10">
           <button
             type="button"
             onClick={handleAnalyzeClip}
