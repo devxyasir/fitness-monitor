@@ -285,11 +285,16 @@ export class ReferenceService {
 
   /**
    * Syncs the coach's live drawings into the already auto-saved/shared Clip
-   * for this reference video (see createClipForVideo/completeProcessing) —
-   * replaces its annotations wholesale with the current frame-indexed
-   * strokes, since the client always sends its full authoritative state,
-   * not a delta. Falls back to creating the clip here if analysis somehow
-   * finished without one (e.g. a prior server restart mid-callback).
+   * for this reference video (see createClipForVideo/completeProcessing).
+   * Appends rather than replaces: the modal's local strokesByFrame always
+   * starts empty on open (even for a video the coach already drew on and
+   * closed before, e.g. re-presented from the queue), so a "replace
+   * wholesale" would silently wipe out anything synced in an earlier
+   * session — reconstructing prior strokes back into editable form isn't
+   * reliable either, since the DB stores rendered shapes, not original tool
+   * choices (arrow/line collapse together, as do rect/ellipse). Falls back
+   * to creating the clip here if analysis somehow finished without one
+   * (e.g. a prior server restart mid-callback).
    */
   async syncAnnotations(
     sessionId: string,
@@ -305,8 +310,6 @@ export class ReferenceService {
     if (!clip) {
       clip = await this.createClipForVideo(video);
     }
-
-    await this.annotationRepo.delete({ clipId: clip.id });
 
     const fps = video.fps ?? 30;
     const annotations: Annotation[] = [];
@@ -336,7 +339,7 @@ export class ReferenceService {
     }
 
     this.logger.log(
-      `Synced ${annotations.length} annotations into Clip ${clip.id} for reference video ${refId}`,
+      `Appended ${annotations.length} annotations to Clip ${clip.id} for reference video ${refId}`,
     );
 
     return { clipId: clip.id };

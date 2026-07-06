@@ -51,8 +51,13 @@ class Settings(BaseSettings):
     # reasons, reference analysis silently inherited that too, producing
     # skeletons that visibly drifted off the body on fast/acrobatic motion
     # (e.g. pole-dance spins) — a stale/low-res crop, not a code bug.
-    # Defaults to 'large' to match the quality seen in local testing.
-    reference_model_size: str = "large"
+    # Defaults to 'medium' — confirmed via local testing (process_1mp4.py)
+    # as the best speed/quality balance; 'large' produced good skeletons too
+    # but its extra CPU cost (bigger model + 384x288 input vs medium's
+    # 256x192) was enough to starve the shared box and cause Socket.IO ping
+    # timeouts elsewhere during a live session while a reference video was
+    # processing.
+    reference_model_size: str = "medium"
     reference_onnx_model_path: str | None = None
     reference_detector_model_path: str | None = None
     # Tighter bbox-refresh interval than live tracking's 16 — a reused stale

@@ -162,14 +162,20 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
   const startRef = useRef<[number, number] | null>(null);
   const pathRef = useRef<[number, number][]>([]);
   const snappedRef = useRef(false);
+  const syncedRef = useRef(false);
 
   // Every analyzed video is auto-saved as a shared Clip the moment analysis
   // completes (see ReferenceService.completeProcessing on the backend) —
   // there's no manual save step. This just carries forward whatever the
   // coach drew into that already-created clip, fired on close so it isn't
-  // lost, without blocking the modal from closing immediately.
+  // lost, without blocking the modal from closing immediately. The backend
+  // appends rather than replaces (this modal always starts with an empty
+  // strokesByFrame, even when re-presenting a video drawn on earlier), so
+  // the guard here only prevents this one session's strokes from being
+  // double-submitted if close fires more than once (e.g. a rapid double-click).
   const syncAnnotations = () => {
-    if (!refId || !isCoach || Object.keys(strokesByFrame).length === 0) return;
+    if (!refId || !isCoach || syncedRef.current || Object.keys(strokesByFrame).length === 0) return;
+    syncedRef.current = true;
     apiClient
       .post(`/sessions/${sessionId}/reference/${refId}/sync-annotations`, { strokesByFrame })
       .catch((err) => console.error('[ReferenceAnalysisModal] Failed to sync annotations:', err));
