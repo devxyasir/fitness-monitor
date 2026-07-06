@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import abc
 import logging
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -19,6 +20,27 @@ import model_downloader
 from config import settings
 
 logger = logging.getLogger(__name__)
+
+# Shared across every ONNX Runtime session. Left unset, onnxruntime's default
+# thread-count heuristic doesn't account for the fact that this process also
+# runs several concurrent live pose workers (one per participant) plus
+# FastAPI's own thread pool on the same small number of cores — oversubscribing
+# threads causes context-switch overhead that slows down every single
+# inference. Pinning intra-op threads to the actual core count (and disabling
+# inter-op parallelism, since these sessions never run multiple subgraphs
+# concurrently) is a pure performance tune with no effect on detection
+# quality — same model, same input, same output.
+_CPU_COUNT = os.cpu_count() or 2
+
+
+def _build_session_options():
+    import onnxruntime as ort
+
+    opts = ort.SessionOptions()
+    opts.intra_op_num_threads = _CPU_COUNT
+    opts.inter_op_num_threads = 1
+    opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+    return opts
 
 # COCO-17 keypoint names in canonical order
 COCO_KEYPOINT_NAMES = [
@@ -141,7 +163,7 @@ class RTMPoseAdapter(PoseModelAdapter):
         preferred = ["CUDAExecutionProvider", "CPUExecutionProvider"]
         active = [p for p in preferred if p in providers]
 
-        self._session = ort.InferenceSession(str(model_file), providers=active)
+        self._session = ort.InferenceSession(str(model_file), sess_options=_build_session_options(), providers=active)
         logger.info(
             "RTMPose ONNX model loaded from %s (providers: %s, input=%s)",
             self._model_path,
@@ -245,7 +267,7 @@ class YOLOPoseAdapter(PoseModelAdapter):
         preferred = ["CUDAExecutionProvider", "CPUExecutionProvider"]
         active = [p for p in preferred if p in providers]
 
-        self._session = ort.InferenceSession(str(model_file), providers=active)
+        self._session = ort.InferenceSession(str(model_file), sess_options=_build_session_options(), providers=active)
         logger.info(
             "YOLO Pose ONNX model loaded from %s (providers: %s)",
             self._model_path,
@@ -350,7 +372,7 @@ class PersonDetector:
         providers = ort.get_available_providers()
         preferred = ["CUDAExecutionProvider", "CPUExecutionProvider"]
         active = [p for p in preferred if p in providers]
-        self._session = ort.InferenceSession(str(model_file), providers=active)
+        self._session = ort.InferenceSession(str(model_file), sess_options=_build_session_options(), providers=active)
         logger.info("Person detector loaded from %s (providers: %s)", self._model_path, active)
 
     def _letterbox(self, frame: np.ndarray) -> tuple[np.ndarray, float, float, float]:
@@ -449,7 +471,12 @@ class TopDownPoseEstimator(PoseModelAdapter):
     # video motion doesn't move a person far frame-to-frame. If RTMPose's own
     # confidence on a reused-bbox crop drops (person likely drifted out of
     # it), force an immediate re-detect rather than waiting out the interval.
-    DETECT_INTERVAL_FRAMES = 8
+    # Widening this halves the detector's amortized cost with no effect on
+    # output density — every frame still gets a full RTMPose keypoint pass
+    # regardless of the interval; only how often the bbox itself refreshes
+    # changes, and the low-confidence re-detect below already catches fast
+    # motion that would make a stale box actually matter.
+    DETECT_INTERVAL_FRAMES = 16
     LOW_CONFIDENCE_REDETECT_THRESHOLD = 0.15
 
     def __init__(
