@@ -21,6 +21,7 @@ import { Roster } from './components/Roster';
 import { ReferenceAnalysisModal } from './components/ReferenceAnalysisModal';
 import { useReferenceSocketListeners } from './hooks/useReferenceSocket';
 import { useSessionRoom } from './hooks/useSessionRoom';
+import { ReferenceVideoQueue } from './components/ReferenceVideoQueue';
 import { useReferenceStore } from '../../../stores/reference-store';
 import {
   AlertTriangle,
@@ -50,6 +51,7 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
   const [lobbyRequests, setLobbyRequests] = useState<{ userId: string; user: { email: string } }[]>([]);
   const [showExitModal, setShowExitModal] = useState(false);
   const [sessionEnded, setSessionEnded] = useState(false);
+  const [uploadRefreshToken, setUploadRefreshToken] = useState(0);
 
   const isCoach = user?.role === 'coach';
 
@@ -418,7 +420,13 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
 
             {/* Control Toolbar */}
             <div className="bg-slate-900 border-t border-slate-900 px-6 py-4 flex items-center justify-between z-10 shadow-inner">
-              <ControlsArea isCoach={isCoach} layout={layout} setLayout={setLayout} sessionId={sessionId} />
+              <ControlsArea
+                isCoach={isCoach}
+                layout={layout}
+                setLayout={setLayout}
+                sessionId={sessionId}
+                onUploaded={() => setUploadRefreshToken((n) => n + 1)}
+              />
             </div>
           </>
         )}
@@ -429,6 +437,7 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
         {isReferenceModalOpen && (
           <ReferenceAnalysisModal sessionId={sessionId} isCoach={isCoach} />
         )}
+        {isCoach && <ReferenceVideoQueue sessionId={sessionId} refreshToken={uploadRefreshToken} />}
       </LiveKitRoom>
 
       {isCoach && lobbyRequests.length > 0 && (
@@ -574,11 +583,13 @@ function ControlsArea({
   layout,
   setLayout,
   sessionId,
+  onUploaded,
 }: {
   isCoach: boolean;
   layout: 'gallery' | 'spotlight';
   setLayout: (l: 'gallery' | 'spotlight') => void;
   sessionId: string;
+  onUploaded: () => void;
 }) {
   const { isMicrophoneEnabled, isCameraEnabled, isScreenShareEnabled, localParticipant } =
     useLocalParticipant();
@@ -618,6 +629,7 @@ function ControlsArea({
       // same pipeline as the per-participant "Analyze Last 10s" flow, just
       // sourced from a coach-picked file instead of the live camera buffer.
       await apiClient.post(`/sessions/${sessionId}/reference/${uploaded.id}/present`, {});
+      onUploaded();
     } catch (err) {
       console.error('Failed to upload external video for analysis:', err);
       setUploadError('Upload failed. Please try a different file.');

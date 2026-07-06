@@ -209,6 +209,12 @@ export class ReferenceService {
     return video;
   }
 
+  /** Coach's queue of uploaded/analyzed videos for this session, newest first. */
+  async listForSession(sessionId: string, userId: string, role: string): Promise<ReferenceVideo[]> {
+    await this.assertCoach(sessionId, userId, role);
+    return this.repo.find({ where: { sessionId }, order: { createdAt: 'DESC' } });
+  }
+
   async present(sessionId: string, refId: string, userId: string, role: string): Promise<ReferenceVideo> {
     await this.assertCoach(sessionId, userId, role);
     return this.getForSession(sessionId, refId);

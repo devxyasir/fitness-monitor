@@ -60,6 +60,13 @@ export class ReferenceController {
     );
   }
 
+  /** Coach's queue of uploaded/analyzed videos for this session — newest first. */
+  @Get()
+  async list(@Param('id') sessionId: string, @CurrentUser() user: JwtPayload) {
+    const videos = await this.referenceService.listForSession(sessionId, user.sub, user.role);
+    return Promise.all(videos.map((v) => this.referenceService.toResponse(v)));
+  }
+
   @Get(':refId')
   async get(@Param('id') sessionId: string, @Param('refId') refId: string) {
     const video = await this.referenceService.getForSession(sessionId, refId);
