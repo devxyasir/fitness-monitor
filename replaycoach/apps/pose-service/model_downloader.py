@@ -87,7 +87,10 @@ def ensure_yolo_pose_model(target_path: str, model_size: str) -> None:
     `model_size` via the `ultralytics` package (its own hash-verified CDN)
     and exports it to ONNX at `target_path`, if not already present.
     """
-    dest = Path(target_path)
+    # Resolved to an absolute path *before* the chdir below — otherwise the
+    # final move target would be re-interpreted relative to the scratch cwd
+    # instead of the caller's original working directory.
+    dest = Path(target_path).resolve()
     if dest.exists():
         return
 
