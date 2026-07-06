@@ -16,6 +16,14 @@ const WINDOW_MS = 70_000;
 export function TrackBufferManager() {
   const tracks = useTracks([{ source: Track.Source.Camera, withPlaceholder: false }], { onlySubscribed: true });
   const buffers = useRef<Map<string, Chunk[]>>(new Map());
+  // The very first chunk a MediaRecorder instance emits carries the WebM
+  // container header (EBML/Segment/Tracks info) — every later chunk is just
+  // a continuation cluster that depends on it. A blob built purely from a
+  // time-window slice (e.g. "last 10s") almost always excludes that first
+  // chunk, producing bytes no decoder can open ("Could not open downloaded
+  // video"). Pinned here, per participant, exempt from the rolling eviction
+  // below, and always prepended when a clip is sliced.
+  const headers = useRef<Map<string, Blob>>(new Map());
   const recorders = useRef<Map<string, MediaRecorder>>(new Map());
   const mime = useRef<string>('video/webm');
 
@@ -25,6 +33,12 @@ export function TrackBufferManager() {
       const mst = t.publication?.track?.mediaStreamTrack;
       if (!mst || recorders.current.has(pid)) continue;
 
+      // A fresh MediaRecorder instance means a fresh container stream — any
+      // header/chunks buffered from a previous instance for this participant
+      // are no longer compatible and must not get mixed in.
+      headers.current.delete(pid);
+      buffers.current.delete(pid);
+
       const stream = new MediaStream([mst]);
       const type = MediaRecorder.isTypeSupported('video/webm;codecs=vp8')
         ? 'video/webm;codecs=vp8' : 'video/webm';
@@ -32,6 +46,9 @@ export function TrackBufferManager() {
       const rec = new MediaRecorder(stream, { mimeType: type });
       rec.ondataavailable = (e) => {
         if (!e.data.size) return;
+        if (!headers.current.has(pid)) {
+          headers.current.set(pid, e.data);
+        }
         const arr = buffers.current.get(pid) ?? [];
         arr.push({ ts: Date.now(), blob: e.data });
         const cutoff = Date.now() - WINDOW_MS;
@@ -55,8 +72,11 @@ export function TrackBufferManager() {
       if (!arr || arr.length === 0) return null;
       const start = Date.now() + fromOffsetMs;
       const end = Date.now() + toOffsetMs;
-      const parts = arr.filter((c) => c.ts >= start && c.ts <= end).map((c) => c.blob);
-      if (parts.length === 0) return null;
+      const windowParts = arr.filter((c) => c.ts >= start && c.ts <= end).map((c) => c.blob);
+      if (windowParts.length === 0) return null;
+
+      const header = headers.current.get(participantId);
+      const parts = header && windowParts[0] !== header ? [header, ...windowParts] : windowParts;
       return new Blob(parts, { type: mime.current });
     };
 
