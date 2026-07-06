@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { v4 as uuidv4 } from 'uuid';
 
 import { Annotation, Clip, ClipShare, ReferenceVideo } from '../database/entities/others.entities';
+import { SessionParticipant } from '../sessions/session-participant.entity';
 import { SessionsService } from '../sessions/sessions.service';
 import { ReferenceStorageService } from './reference-storage.service';
 import type { ReferenceStroke, ReferenceVideoResponse } from './reference.dto';
@@ -77,6 +78,8 @@ export class ReferenceService {
     private readonly clipShareRepo: Repository<ClipShare>,
     @InjectRepository(Annotation)
     private readonly annotationRepo: Repository<Annotation>,
+    @InjectRepository(SessionParticipant)
+    private readonly participantRepo: Repository<SessionParticipant>,
     private readonly sessionsService: SessionsService,
     private readonly storage: ReferenceStorageService,
     private readonly configService: ConfigService,
@@ -184,7 +187,9 @@ export class ReferenceService {
 
   /**
    * Called back by the pose-service on completion (see ReferenceController.complete).
-   * Persists the keypoints JSON and flips the row to 'ready'.
+   * Persists the keypoints JSON, flips the row to 'ready', and auto-saves +
+   * shares the result as a Clip — every analyzed video is available to the
+   * session's students automatically, without the coach saving manually.
    */
   async completeProcessing(
     id: string,
@@ -200,7 +205,65 @@ export class ReferenceService {
     await this.repo.update({ id }, { status: 'ready', keypointsKey, ...meta });
     const updated = await this.repo.findOne({ where: { id } });
     if (!updated) throw new NotFoundException(`Reference video ${id} not found`);
+
+    const existingClip = await this.clipRepo.findOne({ where: { referenceVideoId: id } });
+    if (!existingClip) {
+      // Non-fatal: a clip-save hiccup must never block reporting 'ready'
+      // back to the coach's client, which is waiting to reveal the video.
+      await this.createClipForVideo(updated).catch((err) => {
+        this.logger.warn(
+          `Failed to auto-save reference video ${id} as a shared clip: ${err instanceof Error ? err.message : err}`,
+        );
+      });
+    }
+
     return updated;
+  }
+
+  /**
+   * Auto-saves an analyzed reference video as a Clip and shares it with
+   * every approved student in the session — this is what makes analyzed
+   * clips always available afterward, whether they came from a live
+   * "Analyze Last 10s" buffer grab or a coach-uploaded file, with no manual
+   * save step. Uses SessionParticipant (not currently-connected LiveKit
+   * participants) so students who already left by the time analysis
+   * finishes (it can take minutes) are still included.
+   */
+  private async createClipForVideo(video: ReferenceVideo): Promise<Clip> {
+    const title = `Analyzed Clip — ${video.createdAt.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    })}`;
+
+    const clip = this.clipRepo.create({
+      id: uuidv4(),
+      sessionId: video.sessionId,
+      createdBy: video.uploadedByUserId,
+      startMs: 0,
+      endMs: video.durationMs ?? 0,
+      title,
+      s3Key: video.videoKey,
+      clipType: 'reference',
+      referenceVideoId: video.id,
+    });
+    await this.clipRepo.save(clip);
+
+    const participants = await this.participantRepo.find({
+      where: { sessionId: video.sessionId, roleInSession: 'student', status: 'approved' },
+    });
+    if (participants.length > 0) {
+      const shares = participants.map((p) =>
+        this.clipShareRepo.create({ clipId: clip.id, sharedWithUserId: p.userId }),
+      );
+      await this.clipShareRepo.save(shares);
+    }
+
+    this.logger.log(
+      `Auto-saved reference video ${video.id} as Clip ${clip.id}, shared with ${participants.length} students`,
+    );
+    return clip;
   }
 
   async getForSession(sessionId: string, refId: string): Promise<ReferenceVideo> {
@@ -221,37 +284,33 @@ export class ReferenceService {
   }
 
   /**
-   * Coach saves the analyzed clip (the reference video itself, not the pose
-   * detections) plus whatever they drew on it as a real, shareable Clip —
-   * reuses the existing Clip/ClipShare/Annotation tables and the coach/
-   * student clips dashboards, rather than a parallel storage path.
+   * Syncs the coach's live drawings into the already auto-saved/shared Clip
+   * for this reference video (see createClipForVideo/completeProcessing) —
+   * replaces its annotations wholesale with the current frame-indexed
+   * strokes, since the client always sends its full authoritative state,
+   * not a delta. Falls back to creating the clip here if analysis somehow
+   * finished without one (e.g. a prior server restart mid-callback).
    */
-  async saveAsClip(
+  async syncAnnotations(
     sessionId: string,
     refId: string,
     coachId: string,
     role: string,
-    dto: { title: string; studentIds?: string[]; strokesByFrame: Record<string, ReferenceStroke[]> },
+    strokesByFrame: Record<string, ReferenceStroke[]>,
   ): Promise<{ clipId: string }> {
     await this.assertCoach(sessionId, coachId, role);
     const video = await this.getForSession(sessionId, refId);
 
-    const clip = this.clipRepo.create({
-      id: uuidv4(),
-      sessionId,
-      createdBy: coachId,
-      startMs: 0,
-      endMs: video.durationMs ?? 0,
-      title: dto.title,
-      s3Key: video.videoKey,
-      clipType: 'reference',
-      referenceVideoId: video.id,
-    });
-    await this.clipRepo.save(clip);
+    let clip = await this.clipRepo.findOne({ where: { referenceVideoId: video.id } });
+    if (!clip) {
+      clip = await this.createClipForVideo(video);
+    }
+
+    await this.annotationRepo.delete({ clipId: clip.id });
 
     const fps = video.fps ?? 30;
     const annotations: Annotation[] = [];
-    for (const [frameIndexStr, strokes] of Object.entries(dto.strokesByFrame ?? {})) {
+    for (const [frameIndexStr, strokes] of Object.entries(strokesByFrame ?? {})) {
       const frameIndex = parseInt(frameIndexStr, 10);
       if (!Number.isFinite(frameIndex) || !Array.isArray(strokes)) continue;
       const frameTimestampMs = Math.round((frameIndex / fps) * 1000);
@@ -276,15 +335,8 @@ export class ReferenceService {
       await this.annotationRepo.save(annotations);
     }
 
-    if (dto.studentIds && dto.studentIds.length > 0) {
-      const shares = dto.studentIds.map((studentId) =>
-        this.clipShareRepo.create({ clipId: clip.id, sharedWithUserId: studentId }),
-      );
-      await this.clipShareRepo.save(shares);
-    }
-
     this.logger.log(
-      `Saved reference video ${refId} as Clip ${clip.id} ("${dto.title}") with ${annotations.length} annotations, shared with ${dto.studentIds?.length ?? 0} students`,
+      `Synced ${annotations.length} annotations into Clip ${clip.id} for reference video ${refId}`,
     );
 
     return { clipId: clip.id };

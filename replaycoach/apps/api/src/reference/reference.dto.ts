@@ -1,4 +1,4 @@
-import { IsArray, IsObject, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class UploadReferenceVideoDto {
   /** Direct video URL, used when the coach pastes a link instead of uploading a file. */
@@ -21,16 +21,13 @@ export interface ReferenceStroke {
   centered?: boolean;
 }
 
-export class SaveReferenceClipDto {
-  @IsString()
-  @MaxLength(255)
-  title!: string;
-
-  @IsOptional()
-  @IsArray()
-  @IsUUID('4', { each: true })
-  studentIds?: string[];
-
+/**
+ * Every analyzed reference video is auto-saved as a shared Clip the moment
+ * pose detection completes (see ReferenceService.createClipForVideo) — the
+ * coach never has to save/share manually. This DTO just carries whatever
+ * the coach drew, to sync into that already-created clip's annotations.
+ */
+export class SyncReferenceAnnotationsDto {
   /** Keyed by frame index (as a string, since it travels through JSON). */
   @IsObject()
   strokesByFrame!: Record<string, ReferenceStroke[]>;

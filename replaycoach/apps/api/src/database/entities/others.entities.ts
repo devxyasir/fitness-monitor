@@ -136,7 +136,7 @@ export class Clip {
   /**
    * 'recording' (default): s3Key is an HLS manifest, signed via CloudFront.
    * 'reference': s3Key is a ReferenceVideo's own storage key (a plain MP4,
-   * signed via ReferenceStorageService) — see ReferenceService.saveAsClip().
+   * signed via ReferenceStorageService) — see ReferenceService.createClipForVideo().
    */
   @Column({ name: 'clip_type', type: 'varchar', length: 20, default: 'recording' })
   clipType!: 'recording' | 'reference';

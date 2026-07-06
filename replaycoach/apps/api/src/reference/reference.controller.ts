@@ -28,7 +28,7 @@ import type { JwtPayload } from '@replaycoach/types';
 
 import { ReferenceService } from './reference.service';
 import { ReferenceStorageService } from './reference-storage.service';
-import { SaveReferenceClipDto, UploadReferenceVideoDto } from './reference.dto';
+import { SyncReferenceAnnotationsDto, UploadReferenceVideoDto } from './reference.dto';
 
 const MAX_UPLOAD_BYTES = 500 * 1024 * 1024; // 500MB
 
@@ -86,15 +86,20 @@ export class ReferenceController {
     return response;
   }
 
-  /** Coach saves the clip + their drawings, shared with the given students. */
-  @Post(':refId/save-clip')
-  async saveClip(
+  /**
+   * Syncs the coach's live drawings into the clip that was already
+   * auto-saved + shared with the session's students when analysis
+   * completed (see ReferenceService.completeProcessing) — there's no
+   * manual "save" step, this just carries forward whatever gets drawn.
+   */
+  @Post(':refId/sync-annotations')
+  async syncAnnotations(
     @Param('id') sessionId: string,
     @Param('refId') refId: string,
     @CurrentUser() user: JwtPayload,
-    @Body() dto: SaveReferenceClipDto,
+    @Body() dto: SyncReferenceAnnotationsDto,
   ) {
-    return this.referenceService.saveAsClip(sessionId, refId, user.sub, user.role, dto);
+    return this.referenceService.syncAnnotations(sessionId, refId, user.sub, user.role, dto.strokesByFrame);
   }
 }
 

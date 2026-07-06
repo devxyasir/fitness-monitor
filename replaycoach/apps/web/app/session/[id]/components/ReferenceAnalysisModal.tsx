@@ -17,7 +17,6 @@ import {
   Trash2,
   Eye,
   EyeOff,
-  Save,
   Play,
   Pause,
   StepBack,
@@ -164,29 +163,16 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
   const pathRef = useRef<[number, number][]>([]);
   const snappedRef = useRef(false);
 
-  const [clipTitle, setClipTitle] = useState('');
-  const [savingClip, setSavingClip] = useState(false);
-  const [savedClipMessage, setSavedClipMessage] = useState<string | null>(null);
-
-  const handleSaveClip = async () => {
-    if (!refId || !clipTitle.trim() || savingClip) return;
-    setSavingClip(true);
-    setSavedClipMessage(null);
-    try {
-      await apiClient.post(`/sessions/${sessionId}/reference/${refId}/save-clip`, {
-        title: clipTitle.trim(),
-        studentIds: targetStudentIds.length > 0 ? targetStudentIds : students.map((s) => s.identity),
-        strokesByFrame,
-      });
-      setSavedClipMessage('Saved — visible in Clips for the selected students.');
-      setClipTitle('');
-    } catch (err) {
-      console.error('[ReferenceAnalysisModal] Failed to save clip:', err);
-      setSavedClipMessage('Failed to save clip. Please try again.');
-    } finally {
-      setSavingClip(false);
-      setTimeout(() => setSavedClipMessage(null), 4000);
-    }
+  // Every analyzed video is auto-saved as a shared Clip the moment analysis
+  // completes (see ReferenceService.completeProcessing on the backend) —
+  // there's no manual save step. This just carries forward whatever the
+  // coach drew into that already-created clip, fired on close so it isn't
+  // lost, without blocking the modal from closing immediately.
+  const syncAnnotations = () => {
+    if (!refId || !isCoach || Object.keys(strokesByFrame).length === 0) return;
+    apiClient
+      .post(`/sessions/${sessionId}/reference/${refId}/sync-annotations`, { strokesByFrame })
+      .catch((err) => console.error('[ReferenceAnalysisModal] Failed to sync annotations:', err));
   };
 
   // Fetch keypoints JSON once ready
@@ -277,7 +263,10 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
   };
 
   const handleClose = () => {
-    if (isCoach) emitClose();
+    if (isCoach) {
+      syncAnnotations();
+      emitClose();
+    }
     close();
   };
 
@@ -626,25 +615,8 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
                 </button>
               </div>
 
-              <div className="flex flex-col gap-1.5 pt-2 border-t border-slate-900">
-                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Save & Share</div>
-                <input
-                  type="text"
-                  value={clipTitle}
-                  onChange={(e) => setClipTitle(e.target.value)}
-                  placeholder="Clip title…"
-                  className="text-xs bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-600"
-                />
-                <button
-                  onClick={handleSaveClip}
-                  disabled={!clipTitle.trim() || savingClip}
-                  className="text-xs font-semibold px-2 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 disabled:opacity-40 disabled:cursor-not-allowed text-white transition inline-flex items-center justify-center gap-1.5"
-                >
-                  {savingClip ? 'Saving…' : (<><Save className="w-3.5 h-3.5" /> Save Clip</>)}
-                </button>
-                {savedClipMessage && (
-                  <div className="text-[10px] text-slate-400 leading-snug">{savedClipMessage}</div>
-                )}
+              <div className="pt-2 border-t border-slate-900 text-[10px] text-slate-500 leading-snug">
+                Automatically saved and shared with students in this session once analysis finishes.
               </div>
             </div>
           )}
