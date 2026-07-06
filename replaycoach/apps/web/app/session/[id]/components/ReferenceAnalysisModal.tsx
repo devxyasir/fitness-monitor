@@ -22,6 +22,7 @@ import {
   Pause,
   StepBack,
   StepForward,
+  Loader2,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -471,13 +472,17 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
               </span>
             )}
           </div>
-          <button
-            onClick={handleClose}
-            className="text-slate-400 hover:text-white leading-none px-2"
-            aria-label="Close reference analysis"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          {/* Students can't dismiss this — it stays synced to whatever the
+              coach is presenting until the coach closes it. */}
+          {isCoach && (
+            <button
+              onClick={handleClose}
+              className="text-slate-400 hover:text-white leading-none px-2"
+              aria-label="Close reference analysis"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
         {/* Body: video + tools */}
@@ -499,6 +504,18 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
             />
+            {/* Covers the raw video until pose detection finishes — the video
+                still loads/buffers underneath so it's ready to reveal
+                instantly, but nobody sees it un-analyzed. A failed analysis
+                still reveals the raw video (just without a skeleton) rather
+                than blocking the feature entirely. */}
+            {status === 'processing' && (
+              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-slate-950">
+                <Loader2 className="w-8 h-8 text-amber-400 animate-spin" />
+                <p className="text-sm font-semibold text-slate-300">Analyzing video…</p>
+                <p className="text-xs text-slate-500">The video will appear once pose detection finishes.</p>
+              </div>
+            )}
           </div>
 
           {/* Draw tools side panel — coach only */}
@@ -631,41 +648,44 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
           )}
         </div>
 
-        {/* Frame bar */}
+        {/* Frame bar — playback controls are coach-only; students just watch
+            in sync with whatever the coach does. */}
         <div className="border-t border-slate-900 bg-slate-900 px-5 py-3 flex flex-col gap-2">
-          <input
-            type="range"
-            min={0}
-            max={Math.max(frameCount - 1, 0)}
-            step={1}
-            value={frameIndex}
-            disabled={!isCoach}
-            onChange={(e) => seekToFrame(parseInt(e.target.value, 10))}
-            className="w-full accent-amber-500 h-1.5 cursor-pointer disabled:cursor-default disabled:opacity-60"
-          />
+          {isCoach && (
+            <input
+              type="range"
+              min={0}
+              max={Math.max(frameCount - 1, 0)}
+              step={1}
+              value={frameIndex}
+              onChange={(e) => seekToFrame(parseInt(e.target.value, 10))}
+              className="w-full accent-amber-500 h-1.5 cursor-pointer"
+            />
+          )}
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <button
-                disabled={!isCoach}
-                onClick={() => seekToFrame(frameIndex - 1)}
-                className="bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-white text-xs px-2.5 py-1.5 rounded-md transition"
-              >
-                <StepBack className="w-3.5 h-3.5 fill-current" />
-              </button>
-              <button
-                disabled={!isCoach}
-                onClick={togglePlay}
-                className="bg-amber-600 hover:bg-amber-700 disabled:opacity-40 text-white text-xs font-semibold px-3 py-1.5 rounded-md transition inline-flex items-center gap-1.5"
-              >
-                {playing ? (<><Pause className="w-3.5 h-3.5 fill-current" /> Pause</>) : (<><Play className="w-3.5 h-3.5 fill-current" /> Play</>)}
-              </button>
-              <button
-                disabled={!isCoach}
-                onClick={() => seekToFrame(frameIndex + 1)}
-                className="bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-white text-xs px-2.5 py-1.5 rounded-md transition"
-              >
-                <StepForward className="w-3.5 h-3.5 fill-current" />
-              </button>
+              {isCoach && (
+                <>
+                  <button
+                    onClick={() => seekToFrame(frameIndex - 1)}
+                    className="bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-white text-xs px-2.5 py-1.5 rounded-md transition"
+                  >
+                    <StepBack className="w-3.5 h-3.5 fill-current" />
+                  </button>
+                  <button
+                    onClick={togglePlay}
+                    className="bg-amber-600 hover:bg-amber-700 disabled:opacity-40 text-white text-xs font-semibold px-3 py-1.5 rounded-md transition inline-flex items-center gap-1.5"
+                  >
+                    {playing ? (<><Pause className="w-3.5 h-3.5 fill-current" /> Pause</>) : (<><Play className="w-3.5 h-3.5 fill-current" /> Play</>)}
+                  </button>
+                  <button
+                    onClick={() => seekToFrame(frameIndex + 1)}
+                    className="bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-white text-xs px-2.5 py-1.5 rounded-md transition"
+                  >
+                    <StepForward className="w-3.5 h-3.5 fill-current" />
+                  </button>
+                </>
+              )}
               <span className="text-slate-400 text-xs font-mono tabular-nums ml-2">
                 {formatTime(frameIndex / fps)} / {formatTime(frameCount / fps)} · f{frameIndex}
               </span>
