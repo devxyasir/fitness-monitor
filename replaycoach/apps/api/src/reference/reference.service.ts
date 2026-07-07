@@ -159,13 +159,14 @@ export class ReferenceService {
     const baseUrl = this.configService.get<string>('POSE_SERVICE_URL', 'http://localhost:8100');
     const videoUrl = await this.storage.getPlaybackUrl(video.videoKey);
     const callbackUrl = `${this.storage.apiPublicBaseUrl}/api/v1/reference/${video.id}/complete`;
+    const overlayUploadUrl = `${this.storage.apiPublicBaseUrl}/api/v1/reference/${video.id}/overlay`;
     const callbackToken = this.storage.callbackToken(video.id);
 
     try {
       const res = await fetch(`${baseUrl}/reference/process`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refId: video.id, videoUrl, callbackUrl, callbackToken }),
+        body: JSON.stringify({ refId: video.id, videoUrl, callbackUrl, overlayUploadUrl, callbackToken }),
       });
       if (!res.ok) {
         this.logger.warn(`pose-service rejected reference process request: ${res.status}`);
@@ -183,6 +184,22 @@ export class ReferenceService {
 
   verifyCallbackToken(refId: string, token: string): boolean {
     return this.storage.verifyCallbackToken(refId, token);
+  }
+
+  /**
+   * Saves the skeleton-burned-in video the pose-service produces (see
+   * reference_processor.py) — called before the completion callback, so by
+   * the time completeProcessing() flips status to 'ready' and auto-creates
+   * the shared Clip, overlayVideoKey is already set and that Clip points at
+   * the annotated video rather than the raw one.
+   */
+  async saveOverlayVideo(id: string, buffer: Buffer): Promise<void> {
+    const video = await this.repo.findOne({ where: { id } });
+    if (!video) throw new NotFoundException(`Reference video ${id} not found`);
+
+    const overlayVideoKey = `sessions/${video.sessionId}/reference/${id}/overlay.mp4`;
+    await this.storage.saveBuffer(overlayVideoKey, buffer);
+    await this.repo.update({ id }, { overlayVideoKey });
   }
 
   /**
@@ -244,7 +261,9 @@ export class ReferenceService {
       startMs: 0,
       endMs: video.durationMs ?? 0,
       title,
-      s3Key: video.videoKey,
+      // Prefer the skeleton-burned-in overlay video — falls back to the raw
+      // video only if overlay generation/upload failed (non-fatal).
+      s3Key: video.overlayVideoKey ?? video.videoKey,
       clipType: 'reference',
       referenceVideoId: video.id,
     });
@@ -346,9 +365,10 @@ export class ReferenceService {
   }
 
   async toResponse(video: ReferenceVideo): Promise<ReferenceVideoResponse> {
-    const [videoUrl, keypointsUrl] = await Promise.all([
+    const [videoUrl, keypointsUrl, overlayVideoUrl] = await Promise.all([
       this.storage.getPlaybackUrl(video.videoKey),
       video.keypointsKey ? this.storage.getPlaybackUrl(video.keypointsKey) : Promise.resolve(null),
+      video.overlayVideoKey ? this.storage.getPlaybackUrl(video.overlayVideoKey) : Promise.resolve(null),
     ]);
     return {
       id: video.id,
@@ -356,6 +376,7 @@ export class ReferenceService {
       status: video.status,
       videoUrl,
       keypointsUrl,
+      overlayVideoUrl,
       fps: video.fps,
       frameCount: video.frameCount,
       width: video.width,

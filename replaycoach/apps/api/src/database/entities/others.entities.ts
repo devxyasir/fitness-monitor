@@ -264,6 +264,17 @@ export class ReferenceVideo {
   @Column({ name: 'keypoints_key', type: 'varchar', length: 1024, nullable: true })
   keypointsKey!: string | null;
 
+  /**
+   * Skeleton burned directly onto the video's own pixels by the pose-service
+   * (see reference_processor.py's draw_skeleton() call + ffmpeg encode) —
+   * the frontend plays this instead of `videoKey` once it exists, rather
+   * than drawing a separate canvas overlay. Null if analysis hasn't
+   * finished yet, or if overlay generation/upload failed (non-fatal — the
+   * raw video is still presentable without a skeleton).
+   */
+  @Column({ name: 'overlay_video_key', type: 'varchar', length: 1024, nullable: true })
+  overlayVideoKey!: string | null;
+
   @Column({ type: 'double precision', nullable: true })
   fps!: number | null;
 

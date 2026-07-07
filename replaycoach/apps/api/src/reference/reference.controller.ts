@@ -156,6 +156,28 @@ export class ReferenceMediaController {
     return { success: true };
   }
 
+  /**
+   * Pose-service uploads the skeleton-burned-in video here, before posting
+   * /complete — see reference_processor.py. Same callback-token auth as
+   * /complete, since this is also pose-service-only, never client-facing.
+   */
+  @Post(':refId/overlay')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_BYTES } }))
+  async overlay(
+    @Param('refId') refId: string,
+    @Headers('x-callback-token') token: string | undefined,
+    @UploadedFile() file: Express.Multer.File | undefined,
+  ) {
+    if (!token || !this.referenceService.verifyCallbackToken(refId, token)) {
+      throw new UnauthorizedException('Invalid callback token');
+    }
+    if (!file) {
+      throw new BadRequestException('Missing overlay video file');
+    }
+    await this.referenceService.saveOverlayVideo(refId, file.buffer);
+    return { success: true };
+  }
+
   @Get('media/*')
   async streamMedia(
     @Req() req: Request,

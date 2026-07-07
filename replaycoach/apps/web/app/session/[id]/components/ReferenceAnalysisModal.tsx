@@ -5,7 +5,7 @@ import { useParticipants } from '@livekit/components-react';
 import { apiClient } from '../../../../lib/api-client';
 import { useReferenceStore, type Stroke, type ReferenceTool } from '../../../../stores/reference-store';
 import { useReferenceEmitters } from '../hooks/useReferenceSocket';
-import { drawSkeleton, findNearestJoint } from './skeletonGeometry';
+import { findNearestJoint } from './skeletonGeometry';
 import {
   Pencil,
   Minus,
@@ -15,8 +15,6 @@ import {
   X,
   Undo2,
   Trash2,
-  Eye,
-  EyeOff,
   Play,
   Pause,
   StepBack,
@@ -121,19 +119,17 @@ function drawStroke(ctx: CanvasRenderingContext2D, stroke: Stroke, width: number
 export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysisModalProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const drawCanvasRef = useRef<HTMLCanvasElement>(null);
-  const skeletonCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const lastEmitRef = useRef(0);
 
   const {
-    refId, videoUrl, keypointsUrl, status, fps, frameCount,
-    keypointsByFrame, showSkeleton, playing, frameIndex,
+    refId, videoUrl, overlayVideoUrl, keypointsUrl, status, fps, frameCount,
+    keypointsByFrame, playing, frameIndex,
     strokesByFrame, activeTool, activeColor, activeWidth, targetStudentIds,
   } = useReferenceStore();
   const setKeypoints = useReferenceStore((s) => s.setKeypoints);
   const setFrameIndex = useReferenceStore((s) => s.setFrameIndex);
   const setPlaying = useReferenceStore((s) => s.setPlaying);
-  const toggleSkeleton = useReferenceStore((s) => s.toggleSkeleton);
   const setActiveTool = useReferenceStore((s) => s.setActiveTool);
   const setActiveColor = useReferenceStore((s) => s.setActiveColor);
   const setActiveWidth = useReferenceStore((s) => s.setActiveWidth);
@@ -323,14 +319,12 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
       canvas.width = videoRect.width;
       canvas.height = videoRect.height;
     }
-    const skeletonCanvas = skeletonCanvasRef.current;
-    if (skeletonCanvas) {
-      skeletonCanvas.width = videoRect.width;
-      skeletonCanvas.height = videoRect.height;
-    }
   }, [containerDims, videoIntrinsic]);
 
   // ── Draw canvas: render committed strokes for the current frame ──────────
+  // The skeleton itself is no longer drawn here — it's burned directly onto
+  // the video's own pixels by the pose-service (see reference_processor.py),
+  // so this canvas only ever holds the coach's own pen/arrow/circle marks.
   useEffect(() => {
     const canvas = drawCanvasRef.current;
     if (!canvas) return;
@@ -340,25 +334,6 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
     const strokes = strokesByFrame[frameIndex] ?? [];
     for (const s of strokes) drawStroke(ctx, s, videoRect.width, videoRect.height);
   }, [strokesByFrame, frameIndex, containerDims, videoIntrinsic]);
-
-  // ── Skeleton canvas: render keypoints for the current frame ──────────────
-  useEffect(() => {
-    const canvas = skeletonCanvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.clearRect(0, 0, videoRect.width, videoRect.height);
-    if (!showSkeleton) return;
-
-    const frame = keypointsByFrame[frameIndex];
-    if (!frame) return;
-
-    // Direct port of process_1mp4.py's draw_skeleton() — real detected
-    // keypoints only, hard confidence cutoff (not a fade), see
-    // skeletonGeometry.ts for why the prior derived-point/fade approach
-    // produced visibly worse results on fast/occluded motion.
-    drawSkeleton(ctx, frame.keypoints, videoRect.width, videoRect.height);
-  }, [keypointsByFrame, frameIndex, containerDims, videoIntrinsic, showSkeleton]);
 
   // ── Drawing interaction (coach only) ──────────────────────────────────────
   const toNorm = (e: React.PointerEvent<HTMLCanvasElement>): [number, number] => {
@@ -376,7 +351,7 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
     // the coach precisely circle/point-at a specific joint instead of
     // eyeballing it. Ellipse snaps become a circle centered on the joint;
     // line/arrow snap their start point onto it.
-    if ((activeTool === 'ellipse' || activeTool === 'line' || activeTool === 'arrow') && showSkeleton) {
+    if (activeTool === 'ellipse' || activeTool === 'line' || activeTool === 'arrow') {
       const frame = keypointsByFrame[frameIndex];
       if (frame) {
         const rect = drawCanvasRef.current!.getBoundingClientRect();
@@ -491,9 +466,13 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
             of the screen instead of being squeezed beside a fixed sidebar */}
         <div className="flex-1 flex flex-col sm:flex-row min-h-0">
           <div ref={containerRef} className="flex-1 relative bg-black">
+            {/* Once analysis finishes, this plays the skeleton-burned-in
+                video the pose-service produced instead of the raw upload —
+                see reference_processor.py. Falls back to the raw video if
+                overlay generation/upload failed (non-fatal). */}
             <video
               ref={videoRef}
-              src={videoUrl}
+              src={overlayVideoUrl ?? videoUrl}
               className="w-full h-full object-contain"
               playsInline
               onLoadedMetadata={() => {
@@ -505,12 +484,9 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
             />
             {/* Positioned/sized to videoRect, not the full container — the
                 video is letterboxed by object-contain, so its actual visible
-                box is very often smaller than the container. */}
-            <canvas
-              ref={skeletonCanvasRef}
-              className="absolute pointer-events-none"
-              style={{ left: videoRect.left, top: videoRect.top, width: videoRect.width, height: videoRect.height }}
-            />
+                box is very often smaller than the container. Coach's own
+                pen/arrow/circle drawings only — the skeleton itself is
+                already part of the video's pixels above. */}
             <canvas
               ref={drawCanvasRef}
               className={`absolute ${isCoach ? 'cursor-crosshair touch-none' : 'pointer-events-none'}`}
@@ -634,9 +610,6 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
                 </button>
                 <button onClick={handleClear} className="text-xs text-left px-2 py-1.5 rounded-lg text-red-400 hover:bg-red-950/20 hover:text-red-300 transition inline-flex items-center gap-1.5">
                   <Trash2 className="w-3.5 h-3.5" /> Clear Frame
-                </button>
-                <button onClick={toggleSkeleton} className="text-xs text-left px-2 py-1.5 rounded-lg text-slate-300 hover:bg-slate-900 hover:text-white transition inline-flex items-center gap-1.5">
-                  {showSkeleton ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />} {showSkeleton ? 'Hide Skeleton' : 'Show Skeleton'}
                 </button>
               </div>
 

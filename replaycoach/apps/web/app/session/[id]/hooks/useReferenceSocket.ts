@@ -7,6 +7,7 @@ import { useReferenceStore, type Stroke } from '../../../../stores/reference-sto
 interface ReferenceOpenPayload {
   id: string;
   videoUrl: string;
+  overlayVideoUrl: string | null;
   keypointsUrl: string | null;
   fps: number;
   frameCount: number;
@@ -36,6 +37,7 @@ export function useReferenceSocketListeners(sessionId: string) {
       open({
         refId: payload.id,
         videoUrl: payload.videoUrl,
+        overlayVideoUrl: payload.overlayVideoUrl,
         keypointsUrl: payload.keypointsUrl,
         fps: payload.fps,
         frameCount: payload.frameCount,
@@ -46,11 +48,16 @@ export function useReferenceSocketListeners(sessionId: string) {
     const handleReady = (payload: ReferenceOpenPayload) => {
       // If the modal is already open (the common case — the coach presents
       // the video immediately after upload, while it's still processing),
-      // we must carry keypointsUrl/fps/frameCount too, not just the status,
-      // or the skeleton never has data to fetch. Otherwise treat it like a
-      // fresh open.
+      // we must carry overlayVideoUrl/keypointsUrl/fps/frameCount too, not
+      // just the status, or the modal keeps playing the raw video.
+      // Otherwise treat it like a fresh open.
       if (useReferenceStore.getState().isOpen) {
-        setReady({ keypointsUrl: payload.keypointsUrl, fps: payload.fps, frameCount: payload.frameCount });
+        setReady({
+          overlayVideoUrl: payload.overlayVideoUrl,
+          keypointsUrl: payload.keypointsUrl,
+          fps: payload.fps,
+          frameCount: payload.frameCount,
+        });
       } else {
         handleOpen(payload);
       }

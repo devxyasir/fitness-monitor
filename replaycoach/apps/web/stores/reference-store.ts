@@ -35,13 +35,18 @@ interface ReferenceState {
   isOpen: boolean;
   refId: string | null;
   videoUrl: string | null;
+  /** Skeleton burned directly onto the video by the pose-service — played
+   * instead of `videoUrl` once it exists (see ReferenceAnalysisModal). Null
+   * until analysis finishes, or if overlay generation/upload failed. */
+  overlayVideoUrl: string | null;
   keypointsUrl: string | null;
   status: ReferenceStatus;
 
   fps: number;
   frameCount: number;
+  /** Kept for the "snap to joint" draw-tool convenience feature only — the
+   * skeleton itself is no longer drawn from this on a canvas. */
   keypointsByFrame: Record<number, ReferenceFrameKeypoints>;
-  showSkeleton: boolean;
 
   playing: boolean;
   frameIndex: number;
@@ -56,13 +61,12 @@ interface ReferenceState {
   targetStudentIds: string[];
   setTargetStudentIds: (ids: string[]) => void;
 
-  open: (payload: { refId: string; videoUrl: string; keypointsUrl?: string | null; fps: number; frameCount: number; status: ReferenceStatus }) => void;
+  open: (payload: { refId: string; videoUrl: string; overlayVideoUrl?: string | null; keypointsUrl?: string | null; fps: number; frameCount: number; status: ReferenceStatus }) => void;
   setKeypoints: (data: ReferenceKeypointsData) => void;
-  setReady: (payload: { keypointsUrl: string | null; fps: number; frameCount: number }) => void;
+  setReady: (payload: { overlayVideoUrl: string | null; keypointsUrl: string | null; fps: number; frameCount: number }) => void;
   close: () => void;
   setPlaying: (playing: boolean) => void;
   setFrameIndex: (frameIndex: number) => void;
-  toggleSkeleton: () => void;
   setActiveTool: (tool: ReferenceTool) => void;
   setActiveColor: (color: string) => void;
   setActiveWidth: (width: number) => void;
@@ -78,12 +82,12 @@ const initial = {
   isOpen: false,
   refId: null as string | null,
   videoUrl: null as string | null,
+  overlayVideoUrl: null as string | null,
   keypointsUrl: null as string | null,
   status: 'processing' as ReferenceStatus,
   fps: 30,
   frameCount: 0,
   keypointsByFrame: {} as Record<number, ReferenceFrameKeypoints>,
-  showSkeleton: true,
   playing: false,
   frameIndex: 0,
   strokesByFrame: {} as Record<number, Stroke[]>,
@@ -99,12 +103,13 @@ export const useReferenceStore = create<ReferenceState>((set, get) => ({
 
   setTargetStudentIds: (ids) => set({ targetStudentIds: ids }),
 
-  open: ({ refId, videoUrl, keypointsUrl, fps, frameCount, status }) =>
+  open: ({ refId, videoUrl, overlayVideoUrl, keypointsUrl, fps, frameCount, status }) =>
     set({
       ...initial,
       isOpen: true,
       refId,
       videoUrl,
+      overlayVideoUrl: overlayVideoUrl ?? null,
       keypointsUrl: keypointsUrl ?? null,
       fps,
       frameCount,
@@ -118,12 +123,13 @@ export const useReferenceStore = create<ReferenceState>((set, get) => ({
   },
 
   // Called when 'reference:ready' arrives for an already-open modal — must
-  // carry keypointsUrl/fps/frameCount too, not just flip the status, or the
-  // keypoints-fetch effect (gated on `status === 'ready' && keypointsUrl`)
-  // never fires and the skeleton never renders even though analysis finished.
+  // carry overlayVideoUrl/keypointsUrl/fps/frameCount too, not just flip the
+  // status, or the modal keeps playing the raw (un-annotated) video and the
+  // keypoints-fetch effect never fires.
   setReady: (payload) =>
     set((s) => ({
       status: 'ready',
+      overlayVideoUrl: payload.overlayVideoUrl,
       keypointsUrl: payload.keypointsUrl,
       fps: payload.fps || s.fps,
       frameCount: payload.frameCount || s.frameCount,
@@ -133,7 +139,6 @@ export const useReferenceStore = create<ReferenceState>((set, get) => ({
 
   setPlaying: (playing) => set({ playing }),
   setFrameIndex: (frameIndex) => set({ frameIndex: Math.max(0, frameIndex) }),
-  toggleSkeleton: () => set((s) => ({ showSkeleton: !s.showSkeleton })),
 
   setActiveTool: (tool) => set({ activeTool: tool }),
   setActiveColor: (color) => set({ activeColor: color }),

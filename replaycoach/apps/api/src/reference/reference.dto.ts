@@ -39,6 +39,9 @@ export interface ReferenceVideoResponse {
   status: 'uploading' | 'processing' | 'ready' | 'failed';
   videoUrl: string;
   keypointsUrl: string | null;
+  /** Skeleton burned directly onto the video by the pose-service — the
+   * frontend plays this instead of `videoUrl` once it exists. */
+  overlayVideoUrl: string | null;
   fps: number | null;
   frameCount: number | null;
   width: number | null;

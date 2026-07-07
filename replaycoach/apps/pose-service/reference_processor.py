@@ -1,7 +1,10 @@
 """
 Reference video analysis — downloads an externally-hosted (or buffered-clip)
 video, runs the same RTMPose pipeline used for live tracks frame-by-frame,
-and reports a keypoints-per-frame JSON back to the API via callback.
+burns the detected skeleton directly onto the video (matching
+process_1mp4.py's visualization exactly — see skeleton_drawing.py), and
+reports both the annotated video and the raw per-frame keypoints JSON back
+to the API via callback/upload.
 
 Runs as a FastAPI background task; failures are reported via the callback so
 the API can mark the video 'failed' and still let the coach present the raw
@@ -13,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import os
+import subprocess
 import tempfile
 import time
 from pathlib import Path
@@ -21,6 +25,7 @@ import cv2
 import requests
 
 from inference import PoseModelAdapter
+from skeleton_drawing import draw_skeleton
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +42,8 @@ MAX_FRAMES = 1800  # bounds processing time (e.g. 60s @ 30fps, 120s @ 15fps)
 MAX_PROCESSING_SECONDS = 480
 DOWNLOAD_TIMEOUT_S = 60
 CALLBACK_TIMEOUT_S = 30
+OVERLAY_UPLOAD_TIMEOUT_S = 120
+FFMPEG_EXIT_TIMEOUT_S = 60
 
 
 def _download_video(video_url: str) -> str:
@@ -53,10 +60,30 @@ def _download_video(video_url: str) -> str:
     return path
 
 
+def _start_ffmpeg_writer(output_path: str, width: int, height: int, fps: float) -> subprocess.Popen:
+    """
+    Pipes raw annotated BGR frames into ffmpeg for H.264 encoding. OpenCV's
+    own VideoWriter can't be relied on here — its default MP4 codec
+    (mp4v / MPEG-4 Part 2) is not supported by any major browser, so a video
+    written that way would silently fail to play in the reference-analysis
+    modal. ffmpeg + libx264 with +faststart produces a real, streamable,
+    browser-playable MP4.
+    """
+    cmd = [
+        "ffmpeg", "-y", "-loglevel", "error",
+        "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{width}x{height}", "-r", str(fps or 30.0),
+        "-i", "-",
+        "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
+        output_path,
+    ]
+    return subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
 def process_reference_video(
     ref_id: str,
     video_url: str,
     callback_url: str,
+    overlay_upload_url: str,
     callback_token: str,
     model: PoseModelAdapter,
 ) -> None:
@@ -66,6 +93,7 @@ def process_reference_video(
     live pose worker pool / command consumer keep running normally).
     """
     local_path: str | None = None
+    overlay_path: str | None = None
     payload: dict
 
     try:
@@ -85,37 +113,78 @@ def process_reference_video(
             ref_id, fps, width, height, frame_count_hint,
         )
 
+        overlay_fd, overlay_path = tempfile.mkstemp(suffix=".mp4")
+        os.close(overlay_fd)
+        ffmpeg_proc = _start_ffmpeg_writer(overlay_path, width, height, fps)
+
         frames: list[dict] = []
         frame_index = 0
         start_time = time.monotonic()
-        while True:
-            ok, frame = cap.read()
-            if not ok:
-                break
-            if frame_index >= MAX_FRAMES:
-                logger.warning("Reference %s: hit MAX_FRAMES cap (%d), truncating", ref_id, MAX_FRAMES)
-                break
-            if time.monotonic() - start_time > MAX_PROCESSING_SECONDS:
-                logger.warning(
-                    "Reference %s: hit wall-clock budget (%ds) at frame %d, truncating",
-                    ref_id, MAX_PROCESSING_SECONDS, frame_index,
-                )
-                break
+        try:
+            while True:
+                ok, frame = cap.read()
+                if not ok:
+                    break
+                if frame_index >= MAX_FRAMES:
+                    logger.warning("Reference %s: hit MAX_FRAMES cap (%d), truncating", ref_id, MAX_FRAMES)
+                    break
+                if time.monotonic() - start_time > MAX_PROCESSING_SECONDS:
+                    logger.warning(
+                        "Reference %s: hit wall-clock budget (%ds) at frame %d, truncating",
+                        ref_id, MAX_PROCESSING_SECONDS, frame_index,
+                    )
+                    break
 
-            result = model.infer(frame, track_id=ref_id)
-            frames.append({
-                "frameIndex": frame_index,
-                "timestampMs": round((frame_index / fps) * 1000),
-                "keypoints": [
-                    {"name": kp.name, "x": kp.x, "y": kp.y, "score": kp.score}
-                    for kp in result.keypoints
-                ],
-            })
-            frame_index += 1
+                result = model.infer(frame, track_id=ref_id)
+                kp_by_name = {kp.name: {"x": kp.x, "y": kp.y, "score": kp.score} for kp in result.keypoints}
 
-        cap.release()
+                # Burns the skeleton directly onto the frame pixels (in
+                # place) before it's piped to ffmpeg — this is the actual
+                # video the coach/students see, not a separately-drawn
+                # overlay layer that has to stay coordinate-aligned with it.
+                draw_skeleton(frame, kp_by_name, width, height)
+                ffmpeg_proc.stdin.write(frame.tobytes())
+
+                frames.append({
+                    "frameIndex": frame_index,
+                    "timestampMs": round((frame_index / fps) * 1000),
+                    "keypoints": [
+                        {"name": kp.name, "x": kp.x, "y": kp.y, "score": kp.score}
+                        for kp in result.keypoints
+                    ],
+                })
+                frame_index += 1
+        finally:
+            cap.release()
+            if ffmpeg_proc.stdin:
+                ffmpeg_proc.stdin.close()
+            try:
+                ffmpeg_proc.wait(timeout=FFMPEG_EXIT_TIMEOUT_S)
+            except subprocess.TimeoutExpired:
+                logger.warning("Reference %s: ffmpeg did not exit in time, killing", ref_id)
+                ffmpeg_proc.kill()
 
         duration_ms = round((frame_index / fps) * 1000) if fps else 0
+
+        # Upload the annotated overlay video — non-fatal on its own: if this
+        # fails, the coach still gets keypoints + the raw video rather than
+        # the whole analysis failing (see ReferenceService.completeProcessing,
+        # which falls back to the raw video when overlayVideoKey is absent).
+        overlay_uploaded = False
+        if frame_index > 0 and os.path.exists(overlay_path) and os.path.getsize(overlay_path) > 0:
+            try:
+                with open(overlay_path, "rb") as f:
+                    up_resp = requests.post(
+                        overlay_upload_url,
+                        files={"file": ("overlay.mp4", f, "video/mp4")},
+                        headers={"X-Callback-Token": callback_token},
+                        timeout=OVERLAY_UPLOAD_TIMEOUT_S,
+                    )
+                up_resp.raise_for_status()
+                overlay_uploaded = True
+            except Exception:
+                logger.exception("Reference %s: failed to upload overlay video", ref_id)
+
         payload = {
             "status": "ready",
             "keypoints": {
@@ -130,8 +199,12 @@ def process_reference_video(
             "width": width,
             "height": height,
             "durationMs": duration_ms,
+            "overlayUploaded": overlay_uploaded,
         }
-        logger.info("Reference %s: processed %d frames, posting callback", ref_id, frame_index)
+        logger.info(
+            "Reference %s: processed %d frames (overlay_uploaded=%s), posting callback",
+            ref_id, frame_index, overlay_uploaded,
+        )
 
     except Exception as exc:  # noqa: BLE001 - report failure, never raise into the caller
         logger.exception("Reference %s: processing failed", ref_id)
@@ -144,6 +217,11 @@ def process_reference_video(
         if local_path and os.path.exists(local_path):
             try:
                 os.remove(local_path)
+            except OSError:
+                pass
+        if overlay_path and os.path.exists(overlay_path):
+            try:
+                os.remove(overlay_path)
             except OSError:
                 pass
 

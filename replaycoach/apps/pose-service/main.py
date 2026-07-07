@@ -245,6 +245,7 @@ class ReferenceProcessRequest(BaseModel):
     refId: str
     videoUrl: str
     callbackUrl: str
+    overlayUploadUrl: str
     callbackToken: str
 
 
@@ -269,6 +270,7 @@ async def process_reference(
         req.refId,
         req.videoUrl,
         req.callbackUrl,
+        req.overlayUploadUrl,
         req.callbackToken,
         _reference_model,
     )
