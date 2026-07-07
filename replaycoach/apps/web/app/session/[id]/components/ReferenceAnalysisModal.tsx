@@ -157,7 +157,20 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
   };
 
   const [playbackRate, setPlaybackRate] = useState(1);
-  const [dims, setDims] = useState({ width: 0, height: 0 });
+  // Raw container box (from ResizeObserver) and the video's own intrinsic
+  // pixel size — combined below into videoRect, the actual rendered content
+  // box. The <video> uses object-contain, which letterboxes/pillarboxes to
+  // preserve aspect ratio, so the visible video is very often SMALLER than
+  // the container (e.g. a portrait 1080x1920 clip inside a wide modal gets
+  // large black bars on both sides). The skeleton/draw canvases must be
+  // sized and positioned to that actual visible box, not the full
+  // container — otherwise a keypoint at normalized x=0.1 (near the video's
+  // real left edge) gets multiplied by the full container width instead of
+  // the much narrower visible video width, landing out in the black-bar
+  // area. That's what "checkpoints too wide, not fitting the body" actually
+  // was — a canvas-positioning bug, not a detection-quality issue.
+  const [containerDims, setContainerDims] = useState({ width: 0, height: 0 });
+  const [videoIntrinsic, setVideoIntrinsic] = useState({ width: 0, height: 0 });
   const isDrawingRef = useRef(false);
   const startRef = useRef<[number, number] | null>(null);
   const pathRef = useRef<[number, number][]>([]);
@@ -196,18 +209,42 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
     };
   }, [status, keypointsUrl, setKeypoints]);
 
-  // Resize observer for the draw/skeleton canvases
+  // Resize observer for the outer container (not yet the visible video box —
+  // see videoRect below, which accounts for object-contain letterboxing).
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const ro = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        setDims({ width: Math.round(entry.contentRect.width), height: Math.round(entry.contentRect.height) });
+        setContainerDims({ width: Math.round(entry.contentRect.width), height: Math.round(entry.contentRect.height) });
       }
     });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  // The actual on-screen box the video occupies inside the container, given
+  // object-contain letterboxing — this is what the canvases must match
+  // (both size and position) for keypoint coordinates to land correctly.
+  // Falls back to the full container before video metadata has loaded.
+  const videoRect = (() => {
+    const { width: cw, height: ch } = containerDims;
+    const { width: vw, height: vh } = videoIntrinsic;
+    if (!vw || !vh || !cw || !ch) {
+      return { width: cw, height: ch, left: 0, top: 0 };
+    }
+    const containerAspect = cw / ch;
+    const videoAspect = vw / vh;
+    let width: number, height: number;
+    if (containerAspect > videoAspect) {
+      height = ch;
+      width = height * videoAspect;
+    } else {
+      width = cw;
+      height = width / videoAspect;
+    }
+    return { width, height, left: (cw - width) / 2, top: (ch - height) / 2 };
+  })();
 
   // Video <-> frameIndex sync — driven by requestAnimationFrame rather than
   // the native `timeupdate` event, which only fires a handful of times per
@@ -283,15 +320,15 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
   useEffect(() => {
     const canvas = drawCanvasRef.current;
     if (canvas) {
-      canvas.width = dims.width;
-      canvas.height = dims.height;
+      canvas.width = videoRect.width;
+      canvas.height = videoRect.height;
     }
     const skeletonCanvas = skeletonCanvasRef.current;
     if (skeletonCanvas) {
-      skeletonCanvas.width = dims.width;
-      skeletonCanvas.height = dims.height;
+      skeletonCanvas.width = videoRect.width;
+      skeletonCanvas.height = videoRect.height;
     }
-  }, [dims]);
+  }, [containerDims, videoIntrinsic]);
 
   // ── Draw canvas: render committed strokes for the current frame ──────────
   useEffect(() => {
@@ -299,10 +336,10 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    ctx.clearRect(0, 0, dims.width, dims.height);
+    ctx.clearRect(0, 0, videoRect.width, videoRect.height);
     const strokes = strokesByFrame[frameIndex] ?? [];
-    for (const s of strokes) drawStroke(ctx, s, dims.width, dims.height);
-  }, [strokesByFrame, frameIndex, dims]);
+    for (const s of strokes) drawStroke(ctx, s, videoRect.width, videoRect.height);
+  }, [strokesByFrame, frameIndex, containerDims, videoIntrinsic]);
 
   // ── Skeleton canvas: render keypoints for the current frame ──────────────
   useEffect(() => {
@@ -310,7 +347,7 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    ctx.clearRect(0, 0, dims.width, dims.height);
+    ctx.clearRect(0, 0, videoRect.width, videoRect.height);
     if (!showSkeleton) return;
 
     const frame = keypointsByFrame[frameIndex];
@@ -320,8 +357,8 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
     // keypoints only, hard confidence cutoff (not a fade), see
     // skeletonGeometry.ts for why the prior derived-point/fade approach
     // produced visibly worse results on fast/occluded motion.
-    drawSkeleton(ctx, frame.keypoints, dims.width, dims.height);
-  }, [keypointsByFrame, frameIndex, dims, showSkeleton]);
+    drawSkeleton(ctx, frame.keypoints, videoRect.width, videoRect.height);
+  }, [keypointsByFrame, frameIndex, containerDims, videoIntrinsic, showSkeleton]);
 
   // ── Drawing interaction (coach only) ──────────────────────────────────────
   const toNorm = (e: React.PointerEvent<HTMLCanvasElement>): [number, number] => {
@@ -347,8 +384,8 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
           frame.keypoints,
           e.clientX - rect.left,
           e.clientY - rect.top,
-          dims.width,
-          dims.height,
+          videoRect.width,
+          videoRect.height,
           JOINT_SNAP_PX,
         );
         if (hit) {
@@ -369,15 +406,15 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
 
-    ctx.clearRect(0, 0, dims.width, dims.height);
-    for (const s of strokesByFrame[frameIndex] ?? []) drawStroke(ctx, s, dims.width, dims.height);
+    ctx.clearRect(0, 0, videoRect.width, videoRect.height);
+    for (const s of strokesByFrame[frameIndex] ?? []) drawStroke(ctx, s, videoRect.width, videoRect.height);
 
     if (activeTool === 'freehand') {
       pathRef.current.push(cur);
-      drawStroke(ctx, { tool: 'freehand', color: activeColor, width: activeWidth, points: pathRef.current }, dims.width, dims.height);
+      drawStroke(ctx, { tool: 'freehand', color: activeColor, width: activeWidth, points: pathRef.current }, videoRect.width, videoRect.height);
     } else {
       const centered = activeTool === 'ellipse' && snappedRef.current;
-      drawStroke(ctx, { tool: activeTool, color: activeColor, width: activeWidth, from: startRef.current, to: cur, centered }, dims.width, dims.height);
+      drawStroke(ctx, { tool: activeTool, color: activeColor, width: activeWidth, from: startRef.current, to: cur, centered }, videoRect.width, videoRect.height);
     }
   };
 
@@ -459,13 +496,25 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
               src={videoUrl}
               className="w-full h-full object-contain"
               playsInline
+              onLoadedMetadata={() => {
+                const v = videoRef.current;
+                if (v) setVideoIntrinsic({ width: v.videoWidth, height: v.videoHeight });
+              }}
               onPlay={() => isCoach && setPlaying(true)}
               onPause={() => isCoach && setPlaying(false)}
             />
-            <canvas ref={skeletonCanvasRef} className="absolute inset-0 pointer-events-none" />
+            {/* Positioned/sized to videoRect, not the full container — the
+                video is letterboxed by object-contain, so its actual visible
+                box is very often smaller than the container. */}
+            <canvas
+              ref={skeletonCanvasRef}
+              className="absolute pointer-events-none"
+              style={{ left: videoRect.left, top: videoRect.top, width: videoRect.width, height: videoRect.height }}
+            />
             <canvas
               ref={drawCanvasRef}
-              className={`absolute inset-0 ${isCoach ? 'cursor-crosshair touch-none' : 'pointer-events-none'}`}
+              className={`absolute ${isCoach ? 'cursor-crosshair touch-none' : 'pointer-events-none'}`}
+              style={{ left: videoRect.left, top: videoRect.top, width: videoRect.width, height: videoRect.height }}
               onPointerDown={handlePointerDown}
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
