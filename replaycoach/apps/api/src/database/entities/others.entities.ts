@@ -339,7 +339,7 @@ export class TrackedAnnotation {
   referenceVideoId!: string;
 
   @Column({ name: 'shape_type', type: 'varchar', length: 20, default: 'line' })
-  shapeType!: 'line' | 'arrow' | 'angle' | 'point';
+  shapeType!: 'line' | 'arrow' | 'angle' | 'point' | 'circle';
 
   @Column({ name: 'start_joint', type: 'varchar', length: 40 })
   startJoint!: string;

@@ -76,17 +76,80 @@ def _draw_annotation(frame: np.ndarray, ann: dict, kp_by_name: dict, w: int, h: 
     shape = ann.get("shapeType", "line")
 
     a = _pt(kp_by_name.get(ann.get("startJoint")), w, h)
+    
+    # Draw Label text note if present
+    label = ann.get("label")
+    if label and a:
+        cv2.putText(
+            frame,
+            label,
+            (a[0] + 12, a[1] - 12),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.45,
+            (15, 23, 42), # dark backdrop outline
+            thickness + 2,
+            cv2.LINE_AA
+        )
+        cv2.putText(
+            frame,
+            label,
+            (a[0] + 12, a[1] - 12),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.45,
+            color,
+            thickness,
+            cv2.LINE_AA
+        )
+
     if shape == "point":
         if a:
             cv2.circle(frame, a, thickness * 3, color, thickness, cv2.LINE_AA)
         return
 
     b = _pt(kp_by_name.get(ann.get("endJoint")), w, h)
+
+    if shape == "circle":
+        if a and b:
+            r = int(math.hypot(b[0] - a[0], b[1] - a[1]))
+            cv2.circle(frame, a, r, color, thickness, cv2.LINE_AA)
+        return
+
     if shape == "angle":
         mid = _pt(kp_by_name.get(ann.get("midJoint")), w, h)
         if a and mid and b:
             cv2.line(frame, mid, a, color, thickness, cv2.LINE_AA)
             cv2.line(frame, mid, b, color, thickness, cv2.LINE_AA)
+            
+            # Math for degrees arc & label
+            v1 = (a[0] - mid[0], a[1] - mid[1])
+            v2 = (b[0] - mid[0], b[1] - mid[1])
+            a1 = math.atan2(v1[1], v1[0])
+            a2 = math.atan2(v2[1], v2[0])
+            diff = a2 - a1
+            diff = math.atan2(math.sin(diff), math.cos(diff))
+            deg = round(abs(diff) * 180 / math.pi)
+
+            # Draw visual arc at vertex
+            start_deg = int(math.degrees(a1))
+            cv2.ellipse(
+                frame,
+                mid,
+                (22, 22),
+                0,
+                start_deg,
+                start_deg + int(math.degrees(diff)),
+                color,
+                1,
+                cv2.LINE_AA
+            )
+
+            # Degree label placement along the bisector
+            bisector = a1 + diff / 2
+            tx = int(mid[0] + 36 * math.cos(bisector))
+            ty = int(mid[1] + 36 * math.sin(bisector))
+            
+            cv2.putText(frame, f"{deg}o", (tx - 10, ty + 4), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (15, 23, 42), thickness + 2, cv2.LINE_AA)
+            cv2.putText(frame, f"{deg}o", (tx - 10, ty + 4), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, thickness, cv2.LINE_AA)
         return
 
     if not a or not b:

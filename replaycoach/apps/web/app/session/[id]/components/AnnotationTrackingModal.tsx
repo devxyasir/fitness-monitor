@@ -7,6 +7,7 @@ import { skeletonConnectionsFor, keypointNamesFor, type TrackedAnnotation, type 
 import {
   X, Play, Pause, StepBack, StepForward, Loader2, Download,
   Minus, ArrowUpRight, Circle as CircleIcon, Trash2, Undo2, Redo2, Eye, EyeOff, MousePointer2,
+  ChevronRight,
 } from 'lucide-react';
 
 interface Props {
@@ -16,9 +17,11 @@ interface Props {
 
 const COLORS = ['#EF4444', '#F59E0B', '#34D399', '#60A5FA', '#A78BFA', '#FFFFFF'];
 const THICKNESSES = [2, 4, 6];
-const SHAPES: { id: TrackedAnnotationShape; label: string; icon: typeof Minus }[] = [
+const SHAPES: { id: TrackedAnnotationShape; label: string; icon: any }[] = [
   { id: 'line', label: 'Line', icon: Minus },
   { id: 'arrow', label: 'Arrow', icon: ArrowUpRight },
+  { id: 'circle', label: 'Circle', icon: CircleIcon },
+  { id: 'angle', label: 'Angle', icon: ChevronRight },
   { id: 'point', label: 'Point', icon: CircleIcon },
 ];
 const JOINT_SNAP_PX = 22;
@@ -46,6 +49,8 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
   const [exporting, setExporting] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [hoveredJoint, setHoveredJoint] = useState<string | null>(null);
+  const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
 
   // Actual on-screen video box (object-contain letterboxing) — canvases and
   // joint hit-testing must use this, not the raw container, or coordinates
@@ -129,28 +134,57 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
     const ctx = c.getContext('2d');
     if (!ctx) return;
     ctx.clearRect(0, 0, videoRect.width, videoRect.height);
-    if (!showSkeleton || !frameKp) return;
+    if (!frameKp) return;
     const map = kpByName();
     const names = keypointNamesFor(keypointFormat);
     const ordered = names.map((n) => map[n]);
-    ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.strokeStyle = '#FFA500';
-    for (const [a, b] of skeletonConnectionsFor(keypointFormat)) {
-      const ka = ordered[a], kb = ordered[b];
-      if (!ka || !kb || ka.score < MIN_SCORE || kb.score < MIN_SCORE) continue;
-      ctx.beginPath();
-      ctx.moveTo(ka.x * videoRect.width, ka.y * videoRect.height);
-      ctx.lineTo(kb.x * videoRect.width, kb.y * videoRect.height);
-      ctx.stroke();
+
+    const getActiveJoints = (): Set<string> => {
+      const active = new Set<string>();
+      for (const a of annotations) {
+        if (frameIndex < a.fromFrame || (a.untilFrame != null && frameIndex > a.untilFrame)) continue;
+        if (a.startJoint) active.add(a.startJoint);
+        if (a.endJoint) active.add(a.endJoint);
+        if (a.midJoint) active.add(a.midJoint);
+      }
+      for (const j of pendingJoints) active.add(j);
+      if (hoveredJoint) active.add(hoveredJoint);
+      return active;
+    };
+
+    if (showSkeleton) {
+      ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.strokeStyle = '#FFA500';
+      for (const [a, b] of skeletonConnectionsFor(keypointFormat)) {
+        const ka = ordered[a], kb = ordered[b];
+        if (!ka || !kb || ka.score < MIN_SCORE || kb.score < MIN_SCORE) continue;
+        ctx.beginPath();
+        ctx.moveTo(ka.x * videoRect.width, ka.y * videoRect.height);
+        ctx.lineTo(kb.x * videoRect.width, kb.y * videoRect.height);
+        ctx.stroke();
+      }
+      for (const k of ordered) {
+        if (!k || k.score < MIN_SCORE) continue;
+        const px = k.x * videoRect.width, py = k.y * videoRect.height;
+        ctx.lineWidth = 1.25; ctx.strokeStyle = 'rgba(15,23,42,0.85)';
+        ctx.beginPath(); ctx.arc(px, py, 6, 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.beginPath(); ctx.arc(px, py, 5, 0, Math.PI * 2); ctx.stroke();
+      }
+    } else {
+      // Skeleton hidden: ONLY show active/annotated/pending/hovered joints
+      const active = getActiveJoints();
+      for (let i = 0; i < names.length; i++) {
+        const name = names[i]!;
+        const k = ordered[i];
+        if (!k || k.score < MIN_SCORE || !active.has(name)) continue;
+        const px = k.x * videoRect.width, py = k.y * videoRect.height;
+        ctx.lineWidth = 1.25; ctx.strokeStyle = 'rgba(15, 23, 42, 0.85)';
+        ctx.beginPath(); ctx.arc(px, py, 6, 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.beginPath(); ctx.arc(px, py, 5, 0, Math.PI * 2); ctx.stroke();
+      }
     }
-    for (const k of ordered) {
-      if (!k || k.score < MIN_SCORE) continue;
-      const px = k.x * videoRect.width, py = k.y * videoRect.height;
-      ctx.lineWidth = 1.25; ctx.strokeStyle = 'rgba(15,23,42,0.85)';
-      ctx.beginPath(); ctx.arc(px, py, 6, 0, Math.PI * 2); ctx.stroke();
-      ctx.strokeStyle = '#FFFFFF';
-      ctx.beginPath(); ctx.arc(px, py, 5, 0, Math.PI * 2); ctx.stroke();
-    }
-  }, [frameKp, showSkeleton, keypointFormat, videoRect.width, videoRect.height]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [frameKp, showSkeleton, keypointFormat, videoRect.width, videoRect.height, annotations, pendingJoints, hoveredJoint]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Draw annotation layer — resolve each annotation's joints for this frame.
   useEffect(() => {
@@ -167,26 +201,89 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
       if (!k || k.score < MIN_SCORE) return null;
       return { x: k.x * W, y: k.y * H };
     };
+
     for (const a of annotations) {
       if (frameIndex < a.fromFrame || (a.untilFrame != null && frameIndex > a.untilFrame)) continue;
       const isSel = a.id === selectedId;
       ctx.strokeStyle = a.color; ctx.fillStyle = a.color;
       ctx.lineWidth = a.thickness + (isSel ? 2 : 0); ctx.lineCap = 'round';
       const p1 = pt(a.startJoint);
+
+      // Render Label / Text Note
+      if (a.label && p1) {
+        ctx.save();
+        ctx.font = 'bold 11px Inter, system-ui, sans-serif';
+        ctx.fillStyle = a.color;
+        ctx.textAlign = 'left';
+        ctx.strokeStyle = 'rgba(15, 23, 42, 0.8)';
+        ctx.lineWidth = 3;
+        ctx.strokeText(a.label, p1.x + 12, p1.y - 12);
+        ctx.fillText(a.label, p1.x + 12, p1.y - 12);
+        ctx.restore();
+      }
+
       if (a.shapeType === 'point') {
         if (p1) { ctx.beginPath(); ctx.arc(p1.x, p1.y, a.thickness * 3, 0, Math.PI * 2); ctx.stroke(); }
         continue;
       }
+
       const p2 = pt(a.endJoint);
+
+      if (a.shapeType === 'circle') {
+        if (p1 && p2) {
+          const r = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+          ctx.beginPath(); ctx.arc(p1.x, p1.y, r, 0, Math.PI * 2); ctx.stroke();
+        }
+        if (isSel && p1 && p2) {
+          ctx.fillStyle = a.color;
+          for (const p of [p1, p2]) { ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill(); }
+        }
+        continue;
+      }
+
       if (a.shapeType === 'angle') {
         const pm = pt(a.midJoint);
         if (p1 && pm && p2) {
           ctx.beginPath(); ctx.moveTo(pm.x, pm.y); ctx.lineTo(p1.x, p1.y); ctx.moveTo(pm.x, pm.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+          
+          // Math for degrees arc & label
+          const v1 = { x: p1.x - pm.x, y: p1.y - pm.y };
+          const v2 = { x: p2.x - pm.x, y: p2.y - pm.y };
+          const a1 = Math.atan2(v1.y, v1.x);
+          const a2 = Math.atan2(v2.y, v2.x);
+          let diff = a2 - a1;
+          diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+          const deg = Math.round(Math.abs(diff) * 180 / Math.PI);
+
+          ctx.save();
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(pm.x, pm.y, 22, a1, a2, diff < 0);
+          ctx.stroke();
+          ctx.restore();
+
+          const bisector = a1 + diff / 2;
+          const tx = pm.x + 36 * Math.cos(bisector);
+          const ty = pm.y + 36 * Math.sin(bisector);
+          ctx.save();
+          ctx.font = 'bold 11px Inter, system-ui, sans-serif';
+          ctx.fillStyle = a.color;
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.strokeStyle = 'rgba(15, 23, 42, 0.8)'; ctx.lineWidth = 3;
+          ctx.strokeText(`${deg}°`, tx, ty);
+          ctx.fillText(`${deg}°`, tx, ty);
+          ctx.restore();
+        }
+        if (isSel && p1 && pm && p2) {
+          ctx.fillStyle = a.color;
+          for (const p of [p1, pm, p2]) { ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill(); }
         }
         continue;
       }
+
       if (!p1 || !p2) continue;
       ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+
       if (a.shapeType === 'arrow') {
         const ang = Math.atan2(p2.y - p1.y, p2.x - p1.x), head = 12 + a.thickness * 2;
         ctx.beginPath();
@@ -196,12 +293,79 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
       }
       if (isSel) { ctx.fillStyle = a.color; for (const p of [p1, p2]) { ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill(); } }
     }
+
+    // Highlight hovered joint
+    if (hoveredJoint) {
+      const p = pt(hoveredJoint);
+      if (p) {
+        ctx.save();
+        ctx.strokeStyle = color; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(p.x, p.y, 14, 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(p.x, p.y, 18, 0, Math.PI * 2); ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    // Draw ghost preview during multi-point placement
+    if (pendingJoints.length > 0 && mousePos) {
+      ctx.save();
+      ctx.strokeStyle = color; ctx.fillStyle = color;
+      ctx.lineWidth = thickness; ctx.globalAlpha = 0.5;
+      ctx.setLineDash([5, 5]);
+
+      const p1 = pt(pendingJoints[0] ?? null);
+
+      if (shapeType === 'line' && p1) {
+        ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(mousePos.x, mousePos.y); ctx.stroke();
+      } else if (shapeType === 'arrow' && p1) {
+        ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(mousePos.x, mousePos.y); ctx.stroke();
+        const ang = Math.atan2(mousePos.y - p1.y, mousePos.x - p1.x), head = 12;
+        ctx.beginPath(); ctx.moveTo(mousePos.x, mousePos.y);
+        ctx.lineTo(mousePos.x - head * Math.cos(ang - Math.PI / 6), mousePos.y - head * Math.sin(ang - Math.PI / 6));
+        ctx.moveTo(mousePos.x, mousePos.y);
+        ctx.lineTo(mousePos.x - head * Math.cos(ang + Math.PI / 6), mousePos.y - head * Math.sin(ang + Math.PI / 6));
+        ctx.stroke();
+      } else if (shapeType === 'circle' && p1) {
+        const r = Math.hypot(mousePos.x - p1.x, mousePos.y - p1.y);
+        ctx.beginPath(); ctx.arc(p1.x, p1.y, r, 0, Math.PI * 2); ctx.stroke();
+      } else if (shapeType === 'angle' && p1) {
+        if (pendingJoints.length === 1) {
+          ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(mousePos.x, mousePos.y); ctx.stroke();
+        } else if (pendingJoints.length === 2) {
+          const pm = pt(pendingJoints[1] ?? null);
+          if (pm) {
+            ctx.setLineDash([]);
+            ctx.beginPath(); ctx.moveTo(pm.x, pm.y); ctx.lineTo(p1.x, p1.y); ctx.stroke();
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath(); ctx.moveTo(pm.x, pm.y); ctx.lineTo(mousePos.x, mousePos.y); ctx.stroke();
+            
+            const v1 = { x: p1.x - pm.x, y: p1.y - pm.y };
+            const v2 = { x: mousePos.x - pm.x, y: mousePos.y - pm.y };
+            const a1 = Math.atan2(v1.y, v1.x);
+            const a2 = Math.atan2(v2.y, v2.x);
+            let diff = a2 - a1;
+            diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+            const deg = Math.round(Math.abs(diff) * 180 / Math.PI);
+            ctx.font = '11px Inter, sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText(`${deg}°`, pm.x + 20, pm.y - 20);
+          }
+        }
+      }
+      ctx.restore();
+    }
+
     // Highlight pending joints being picked.
     for (const jn of pendingJoints) {
       const p = pt(jn);
-      if (p) { ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(p.x, p.y, 10, 0, Math.PI * 2); ctx.stroke(); }
+      if (p) {
+        ctx.save();
+        ctx.strokeStyle = color; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(p.x, p.y, 10, 0, Math.PI * 2); ctx.stroke();
+        ctx.restore();
+      }
     }
-  }, [annotations, selectedId, frameIndex, frameKp, pendingJoints, color, videoRect.width, videoRect.height]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [annotations, selectedId, frameIndex, frameKp, pendingJoints, color, hoveredJoint, mousePos, videoRect.width, videoRect.height]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const nearestJoint = (px: number, py: number): string | null => {
     const map = kpByName();
@@ -279,6 +443,53 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
     }
   };
 
+  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isCoach || !refId) return;
+    const rect = annCanvasRef.current!.getBoundingClientRect();
+    const px = ((e.clientX - rect.left) / rect.width) * videoRect.width;
+    const py = ((e.clientY - rect.top) / rect.height) * videoRect.height;
+    setMousePos({ x: px, y: py });
+
+    const joint = nearestJoint(px, py);
+    if (joint !== hoveredJoint) {
+      setHoveredJoint(joint);
+    }
+  };
+
+  const handlePointerLeave = () => {
+    setHoveredJoint(null);
+    setMousePos(null);
+  };
+
+  // Keyboard shortcuts and Escape key handler
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if currently typing in an input element
+      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+
+      if (e.key === 'Escape') {
+        s.clearPending();
+        s.select(null);
+      }
+
+      const key = e.key.toLowerCase();
+      if (key === 'l') { s.setShape('line'); s.clearPending(); }
+      else if (key === 'c') { s.setShape('circle'); s.clearPending(); }
+      else if (key === 'a') { s.setShape('angle'); s.clearPending(); }
+      else if (key === 'p') { s.setShape('point'); s.clearPending(); }
+      else if (key === 't') {
+        if (selectedId) {
+          const inp = document.getElementById('annotation-label-input');
+          inp?.focus();
+        } else {
+          s.setShape('line'); s.clearPending(); s.select(null);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const deleteSelected = async () => {
     if (!refId || !selectedId) return;
     const ann = annotations.find((a) => a.id === selectedId);
@@ -349,6 +560,24 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
       const upd = await apiClient.patch<{ thickness: number }, TrackedAnnotation>(`/sessions/${sessionId}/reference/${refId}/annotations/${selectedId}`, { thickness: t });
       s.applyRemoteUpdate(upd);
     } catch (e) { console.error(e); }
+  };
+
+  const changeSelectedLabel = async (lbl: string) => {
+    if (!refId || !selectedId) return;
+    const ann = annotations.find((a) => a.id === selectedId);
+    if (!ann) return;
+
+    s.applyRemoteUpdate({ ...ann, label: lbl || null });
+
+    try {
+      const upd = await apiClient.patch<{ label: string | null }, TrackedAnnotation>(
+        `/sessions/${sessionId}/reference/${refId}/annotations/${selectedId}`,
+        { label: lbl || null }
+      );
+      s.applyRemoteUpdate(upd);
+    } catch (e) {
+      console.error('[AnnotationTracking] failed to update label', e);
+    }
   };
 
   const togglePlay = () => {
@@ -438,6 +667,8 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
               className={`absolute ${isCoach ? 'cursor-crosshair touch-none' : 'pointer-events-none'}`}
               style={{ left: videoRect.left, top: videoRect.top, width: videoRect.width, height: videoRect.height }}
               onPointerDown={handleCanvasClick}
+              onPointerMove={handlePointerMove}
+              onPointerLeave={handlePointerLeave}
             />
             {status === 'processing' && (
               <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-slate-950">
@@ -447,10 +678,21 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
               </div>
             )}
             {isCoach && status === 'ready' && (
-              <div className="absolute top-3 left-3 z-10 bg-slate-950/85 border border-slate-800 rounded-lg px-3 py-1.5 text-[11px] text-slate-300">
-                {pendingJoints.length > 0
-                  ? `Click ${jointsNeeded(shapeType) - pendingJoints.length} more joint(s)…`
-                  : shapeType === 'point' ? 'Click a joint to mark it' : 'Click two joints to connect them'}
+              <div className="absolute top-3 left-3 z-10 bg-slate-950/85 border border-slate-800 rounded-lg px-3 py-1.5 text-[11px] text-slate-300 flex flex-col gap-1">
+                <div>
+                  {pendingJoints.length > 0
+                    ? `Click ${jointsNeeded(shapeType) - pendingJoints.length} more joint(s) to complete`
+                    : shapeType === 'point'
+                      ? 'Click a joint to mark it'
+                      : shapeType === 'angle'
+                        ? 'Click three joints to draw angle'
+                        : 'Click two joints to connect them'}
+                </div>
+                {pendingJoints.length > 0 && (
+                  <div className="text-[10px] text-indigo-400 font-mono">
+                    Selected: {pendingJoints.join(' → ')}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -495,6 +737,19 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
               </div>
 
               <div className="flex flex-col gap-1.5 pt-2 border-t border-slate-900">
+                {selectedId && (
+                  <div className="mb-2">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Text Note / Label</div>
+                    <input
+                      id="annotation-label-input"
+                      type="text"
+                      value={annotations.find((a) => a.id === selectedId)?.label ?? ''}
+                      onChange={(e) => changeSelectedLabel(e.target.value)}
+                      placeholder="e.g. Keep elbow high"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                )}
                 <button onClick={deleteSelected} disabled={!selectedId || busy} className="text-xs text-left px-2 py-1.5 rounded-lg text-red-400 hover:bg-red-950/20 disabled:opacity-40 inline-flex items-center gap-1.5"><Trash2 className="w-3.5 h-3.5" /> Delete selected</button>
                 <div className="flex gap-1.5">
                   <button onClick={undo} disabled={s.undoStack.length === 0} className="flex-1 text-xs px-2 py-1.5 rounded-lg text-slate-300 hover:bg-slate-800 disabled:opacity-40 inline-flex items-center justify-center gap-1.5"><Undo2 className="w-3.5 h-3.5" /> Undo</button>

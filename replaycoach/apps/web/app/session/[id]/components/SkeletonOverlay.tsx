@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { usePoseStore } from '../../../../stores/pose-store';
-import { COCO_SKELETON_CONNECTIONS } from '@replaycoach/types';
+import { keypointNamesFor, skeletonConnectionsFor, type KeypointFormat } from '@replaycoach/types';
 
 // Limb color palette for visual distinction
 const LIMB_COLORS: Record<string, string> = {
@@ -14,16 +14,22 @@ const LIMB_COLORS: Record<string, string> = {
   rightLeg: '#FB923C',   // orange
 };
 
-function getLimbColor(i: number): string {
-  if (i <= 1) return LIMB_COLORS['face']!;
-  if (i <= 3) return LIMB_COLORS['face']!;
-  if (i === 4) return LIMB_COLORS['torso']!;
-  if (i <= 6) return LIMB_COLORS['leftArm']!;
-  if (i <= 8) return LIMB_COLORS['rightArm']!;
-  if (i <= 10) return LIMB_COLORS['torso']!;
-  if (i === 11) return LIMB_COLORS['torso']!;
-  if (i <= 13) return LIMB_COLORS['leftLeg']!;
-  return LIMB_COLORS['rightLeg']!;
+function getLimbColorByName(nameA: string, nameB: string): string {
+  const isLeft = (n: string) => n.startsWith('left_') || n.includes('_left');
+  const isFace = (n: string) => ['nose', 'left_eye', 'right_eye', 'left_ear', 'right_ear', 'head', 'neck'].includes(n);
+  
+  if (isFace(nameA) || isFace(nameB)) return LIMB_COLORS['face']!;
+  if (nameA === 'neck' || nameA === 'pelvis' || nameB === 'neck' || nameB === 'pelvis') return LIMB_COLORS['torso']!;
+  if (nameA.includes('shoulder') && nameB.includes('shoulder')) return LIMB_COLORS['torso']!;
+  if (nameA.includes('hip') && nameB.includes('hip')) return LIMB_COLORS['torso']!;
+  
+  if (nameA.includes('shoulder') || nameA.includes('elbow') || nameA.includes('wrist')) {
+    return isLeft(nameA) ? LIMB_COLORS['leftArm']! : LIMB_COLORS['rightArm']!;
+  }
+  if (nameA.includes('hip') || nameA.includes('knee') || nameA.includes('ankle') || nameA.includes('toe') || nameA.includes('heel')) {
+    return isLeft(nameA) ? LIMB_COLORS['leftLeg']! : LIMB_COLORS['rightLeg']!;
+  }
+  return LIMB_COLORS['torso']!;
 }
 
 interface SkeletonOverlayProps {
@@ -38,7 +44,7 @@ interface SkeletonOverlayProps {
 }
 
 /**
- * SkeletonOverlay — draws RTMPose COCO-17 keypoints and skeleton
+ * SkeletonOverlay — draws RTMPose COCO-17 or Halpe-26 keypoints and skeleton
  * connections on a transparent canvas layer positioned over a video tile.
  *
  * Renders imperatively for performance (no React reconciliation per frame).
@@ -81,29 +87,29 @@ export function SkeletonOverlay({
       kpMap.set(kp.name, { x: kp.x, y: kp.y, score: kp.score });
     }
 
-    // Build an ordered array for connection indexing (COCO-17 order)
-    const COCO_NAMES = [
-      'nose', 'left_eye', 'right_eye', 'left_ear', 'right_ear',
-      'left_shoulder', 'right_shoulder', 'left_elbow', 'right_elbow',
-      'left_wrist', 'right_wrist', 'left_hip', 'right_hip',
-      'left_knee', 'right_knee', 'left_ankle', 'right_ankle',
-    ];
+    // Determine format dynamically based on frame keypoints length or names
+    const isHalpe = keypoints.length === 26 || keypoints.some(kp => ['head', 'left_heel'].includes(kp.name));
+    const format: KeypointFormat = isHalpe ? 'halpe26' : 'coco17';
+    const names = keypointNamesFor(format);
+    const connections = skeletonConnectionsFor(format);
 
-    const orderedKps = COCO_NAMES.map((name) => kpMap.get(name));
+    const orderedKps = names.map((name) => kpMap.get(name));
 
     // Draw skeleton connections (limbs) — clean, thin lines.
     ctx.lineWidth = 2;
     ctx.lineCap = 'round';
 
-    for (let i = 0; i < COCO_SKELETON_CONNECTIONS.length; i++) {
-      const conn = COCO_SKELETON_CONNECTIONS[i]!;
+    for (let i = 0; i < connections.length; i++) {
+      const conn = connections[i]!;
       const kpA = orderedKps[conn[0]];
       const kpB = orderedKps[conn[1]];
 
       if (!kpA || !kpB) continue;
       if (kpA.score < 0.3 || kpB.score < 0.3) continue;
 
-      ctx.strokeStyle = getLimbColor(i);
+      const nameA = names[conn[0]]!;
+      const nameB = names[conn[1]]!;
+      ctx.strokeStyle = getLimbColorByName(nameA, nameB);
       ctx.globalAlpha = Math.min(kpA.score, kpB.score);
       ctx.beginPath();
       ctx.moveTo(kpA.x * width, kpA.y * height);

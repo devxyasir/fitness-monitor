@@ -16,8 +16,8 @@ export class UploadReferenceVideoDto {
 
 /** Create a joint-attached (tracked) annotation. */
 export class CreateTrackedAnnotationDto {
-  @IsIn(['line', 'arrow', 'angle', 'point'])
-  shapeType!: 'line' | 'arrow' | 'angle' | 'point';
+  @IsIn(['line', 'arrow', 'angle', 'point', 'circle'])
+  shapeType!: 'line' | 'arrow' | 'angle' | 'point' | 'circle';
 
   @IsString()
   @MaxLength(40)
