@@ -13,9 +13,15 @@ function getAuthHeaders(): Record<string, string> {
   return headers;
 }
 
-/** Helper to fetch with an absolute timeout limit */
+/**
+ * Helper to fetch with an absolute timeout limit. Default raised from 5s to
+ * 15s — 5s was tripping during real (if brief) server load spikes (e.g. a
+ * CPU-heavy reference-video analysis job running on this shared box), which
+ * surfaced as a raw "signal is aborted without reason" DOMException message
+ * straight in the login form instead of a real error.
+ */
 async function fetchWithTimeout(url: string, options: RequestInit & { timeout?: number }): Promise<Response> {
-  const { timeout = 5000, ...fetchOptions } = options;
+  const { timeout = 15000, ...fetchOptions } = options;
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeout);
 
@@ -25,6 +31,11 @@ async function fetchWithTimeout(url: string, options: RequestInit & { timeout?: 
       signal: controller.signal,
     });
     return response;
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error('The server is taking longer than usual to respond. Please try again.');
+    }
+    throw err;
   } finally {
     clearTimeout(id);
   }
@@ -39,7 +50,7 @@ async function fetchUserProfile(accessToken: string): Promise<UserDto> {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${accessToken}`,
     },
-    timeout: 5000,
+    timeout: 15000,
   });
   if (!res.ok) throw new Error('Failed to retrieve user profile');
   return res.json() as Promise<UserDto>;
@@ -54,7 +65,7 @@ async function login(payload: LoginRequest): Promise<UserDto> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
     credentials: 'include', // essential to receive httpOnly cookies
-    timeout: 5000,
+    timeout: 15000,
   });
 
   if (!res.ok) {
@@ -77,7 +88,7 @@ async function register(payload: RegisterRequest): Promise<UserDto> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
     credentials: 'include',
-    timeout: 5000,
+    timeout: 15000,
   });
 
   if (!res.ok) {
@@ -117,7 +128,7 @@ async function doRefresh(): Promise<UserDto> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    timeout: 5000,
+    timeout: 15000,
   });
 
   if (!res.ok) {
@@ -154,7 +165,7 @@ async function logout(): Promise<void> {
     method: 'POST',
     headers: getAuthHeaders(),
     credentials: 'include',
-    timeout: 5000,
+    timeout: 15000,
   });
 
   useAuthStore.getState().clearAuth();
