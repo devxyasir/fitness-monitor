@@ -18,7 +18,7 @@ import {
 } from '../database/entities/others.entities';
 import { CloudFrontSigner } from '../media/cloudfront-signer';
 import { ReferenceStorageService } from '../reference/reference-storage.service';
-import { CreateClipDto } from './clips.dto';
+import { CreateClipDto, ClipListItem } from './clips.dto';
 
 @Injectable()
 export class ClipsService {
@@ -128,42 +128,108 @@ export class ClipsService {
     return clip;
   }
 
+  /** First name only from a display name — never emails, never the full name. */
+  private firstName(displayName: string | null | undefined): string {
+    const first = (displayName ?? '').trim().split(/\s+/)[0];
+    return first || 'User';
+  }
+
+  private meetingStartedAt(session: Session | null | undefined, fallback: Date): string {
+    return (session?.startedAt ?? session?.scheduledAt ?? fallback).toISOString();
+  }
+
   /**
-   * Retrieves list of clips accessible by the user.
-   * Coach role: returns all clips created by the coach.
-   * Student role: returns only clips shared with the student.
+   * Retrieves list of clips accessible by the user, enriched with the
+   * meeting context the Clips page groups by. Coach: all clips they created,
+   * with the session's student(s) as the "other participant". Student: clips
+   * shared with them, with the session's coach as the "other participant".
    */
   async getClips(
     userId: string,
     role: string,
     sessionId?: string,
-  ): Promise<Clip[]> {
-    if (role === 'coach') {
+  ): Promise<ClipListItem[]> {
+    let clips: Clip[];
+
+    if (role === 'coach' || role === 'platform_admin') {
       const where: any = { createdBy: userId };
       if (sessionId) where.sessionId = sessionId;
-      return this.clipRepository.find({
+      clips = await this.clipRepository.find({
         where,
         order: { createdAt: 'DESC' },
-        relations: ['session'],
+        relations: ['session', 'session.participants', 'session.participants.user'],
       });
     } else {
-      // Find shared clips
       const shares = await this.clipShareRepository.find({
         where: { sharedWithUserId: userId },
-        relations: ['clip', 'clip.session'],
+        relations: ['clip', 'clip.session', 'clip.session.coach'],
       });
+      clips = shares.map((s) => s.clip).filter((c): c is Clip => !!c);
+      if (sessionId) clips = clips.filter((c) => c.sessionId === sessionId);
+      clips.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    }
 
-      let clips = shares.map((s) => s.clip);
+    // Batch share counts for the coach's share button (avoids N queries).
+    const sharesByClip = new Map<string, number>();
+    if ((role === 'coach' || role === 'platform_admin') && clips.length > 0) {
+      const allShares = await this.clipShareRepository.find({
+        where: clips.map((c) => ({ clipId: c.id })),
+      });
+      for (const s of allShares) {
+        sharesByClip.set(s.clipId, (sharesByClip.get(s.clipId) ?? 0) + 1);
+      }
+    }
 
-      if (sessionId) {
-        clips = clips.filter((c) => c.sessionId === sessionId);
+    // Pre-sign single-file video URLs for reference clips (for the preview
+    // thumbnail + download). Recording clips are HLS — no single-file URL.
+    const videoUrlByClip = new Map<string, string>();
+    await Promise.all(
+      clips
+        .filter((c) => c.clipType === 'reference')
+        .map(async (c) => {
+          videoUrlByClip.set(c.id, await this.referenceStorage.getPlaybackUrl(c.s3Key));
+        }),
+    );
+
+    return clips.map((clip) => {
+      let otherParticipantName: string;
+      if (role === 'student') {
+        // Student sees the coach's first name.
+        otherParticipantName = this.firstName(clip.session?.coach?.displayName);
+      } else {
+        // Coach sees the session's student(s). One-on-one → that student;
+        // group → first student + "+N".
+        const students = (clip.session?.participants ?? []).filter(
+          (p) => p.roleInSession === 'student' && p.user,
+        );
+        if (students.length === 0) {
+          otherParticipantName = 'Student';
+        } else {
+          const firstStudent = this.firstName(students[0]!.user?.displayName);
+          otherParticipantName =
+            students.length > 1 ? `${firstStudent} +${students.length - 1}` : firstStudent;
+        }
       }
 
-      // Sort programmatically by creation date descending
-      return clips.sort(
-        (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
-      );
-    }
+      return {
+        id: clip.id,
+        title: clip.title,
+        startMs: clip.startMs,
+        endMs: clip.endMs,
+        sessionId: clip.sessionId,
+        createdBy: clip.createdBy,
+        createdAt: clip.createdAt.toISOString(),
+        clipType: clip.clipType,
+        videoUrl: videoUrlByClip.get(clip.id) ?? null,
+        downloadable: clip.clipType === 'reference',
+        sharesCount: sharesByClip.get(clip.id) ?? 0,
+        meeting: {
+          sessionId: clip.sessionId,
+          startedAt: this.meetingStartedAt(clip.session, clip.createdAt),
+          otherParticipantName,
+        },
+      } satisfies ClipListItem;
+    });
   }
 
   /**

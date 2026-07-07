@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Force the local self-view camera to true (un-mirrored) orientation —
+   what remote participants actually see — regardless of any library/runtime
+   mirror. !important so it beats an inline transform if one is ever set.
+   Applied only to the local camera tile (see VideoGrid.tsx). */
+.local-camera-unmirror {
+  transform: scaleX(1) !important;
+}
+
 @layer base {
   ::selection {
     background: rgba(99, 102, 241, 0.35);

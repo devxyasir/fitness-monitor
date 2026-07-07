@@ -4,19 +4,9 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { apiClient } from '../../../../lib/api-client';
 import { ClipPlaybackModal } from '../../components/ClipPlaybackModal';
-import { RefreshCw, Clapperboard, Play, Video, Share2, X } from 'lucide-react';
-
-interface Clip {
-  id: string;
-  title: string;
-  startMs: number;
-  endMs: number;
-  sessionId: string;
-  createdBy: string;
-  createdAt: string;
-  clipType?: 'recording' | 'reference';
-  shares?: { sharedWithUserId: string }[];
-}
+import { MeetingGroups } from '../../components/MeetingGroups';
+import type { ClipItem } from '../../components/clipsShared';
+import { RefreshCw, Clapperboard, X } from 'lucide-react';
 
 interface User {
   id: string;
@@ -38,17 +28,17 @@ interface SessionDetails {
 }
 
 export default function CoachClipsPage() {
-  const [clips, setClips] = useState<Clip[]>([]);
+  const [clips, setClips] = useState<ClipItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Playback Modal state
-  const [playingClip, setPlayingClip] = useState<Clip | null>(null);
+  const [playingClip, setPlayingClip] = useState<ClipItem | null>(null);
   const [playData, setPlayData] = useState<{ playUrl: string; annotations: any[] } | null>(null);
   const [loadingPlay, setLoadingPlay] = useState(false);
 
   // Sharing Modal state
-  const [sharingClip, setSharingClip] = useState<Clip | null>(null);
+  const [sharingClip, setSharingClip] = useState<ClipItem | null>(null);
   const [sessionStudents, setSessionStudents] = useState<User[]>([]);
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [loadingShareOptions, setLoadingShareOptions] = useState(false);
@@ -61,7 +51,7 @@ export default function CoachClipsPage() {
   const fetchClips = async () => {
     try {
       setLoading(true);
-      const data = await apiClient.get<Clip[]>('/clips');
+      const data = await apiClient.get<ClipItem[]>('/clips');
       setClips(data);
       setError(null);
     } catch (err: any) {
@@ -72,11 +62,10 @@ export default function CoachClipsPage() {
     }
   };
 
-  const handleOpenPlay = async (clip: Clip) => {
+  const handleOpenPlay = async (clip: ClipItem) => {
     try {
       setLoadingPlay(true);
       setPlayingClip(clip);
-      // Fetch HLS stream and annotations
       const data = await apiClient.get<{ playUrl: string; annotations: any[] }>(`/clips/${clip.id}`);
       setPlayData(data);
     } catch (err: any) {
@@ -88,7 +77,7 @@ export default function CoachClipsPage() {
     }
   };
 
-  const handleOpenShare = async (clip: Clip) => {
+  const handleOpenShare = async (clip: ClipItem) => {
     try {
       setSharingClip(clip);
       setLoadingShareOptions(true);
@@ -101,9 +90,10 @@ export default function CoachClipsPage() {
       
       setSessionStudents(students);
 
-      // Pre-populate checked students based on existing clip shares
-      // Note: we can also fetch fresh clip detail to double check shares
-      const clipDetail = await apiClient.get<{ clip: Clip }>(`/clips/${clip.id}`);
+      // Pre-populate checked students based on existing clip shares.
+      const clipDetail = await apiClient.get<{ clip: { shares?: { sharedWithUserId: string }[] } }>(
+        `/clips/${clip.id}`,
+      );
       const sharedWithIds = (clipDetail.clip.shares || []).map((s) => s.sharedWithUserId);
       setSelectedStudentIds(sharedWithIds);
     } catch (err: any) {
@@ -139,13 +129,6 @@ export default function CoachClipsPage() {
     } finally {
       setSavingShare(false);
     }
-  };
-
-  const formatDuration = (startMs: number, endMs: number) => {
-    const totalSecs = Math.max(0, Math.floor((endMs - startMs) / 1000));
-    const mins = Math.floor(totalSecs / 60);
-    const secs = totalSecs % 60;
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
   return (
@@ -216,57 +199,7 @@ export default function CoachClipsPage() {
               </Link>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {clips.map((clip) => (
-                <div
-                  key={clip.id}
-                  className="bg-slate-900/60 border border-slate-900 rounded-3xl p-5 flex flex-col justify-between hover:border-slate-800 transition group shadow-md"
-                >
-                  <div>
-                    {/* Media Mock Card Header */}
-                    <div className="aspect-video w-full rounded-2xl mb-4 bg-gradient-to-tr from-slate-950 to-indigo-950/30 flex items-center justify-center relative border border-slate-950 overflow-hidden">
-                      <div className="absolute inset-0 bg-slate-900/20 opacity-0 group-hover:opacity-100 transition flex items-center justify-center backdrop-blur-[2px]">
-                        <button
-                          onClick={() => handleOpenPlay(clip)}
-                          className="bg-indigo-600 hover:bg-indigo-700 text-white p-3 rounded-full shadow-lg transform scale-90 group-hover:scale-100 transition duration-300"
-                        >
-                          <Play className="w-5 h-5 fill-current" />
-                        </button>
-                      </div>
-                      <Video className="w-6 h-6 opacity-60" />
-                      <span className="absolute bottom-2 right-2 bg-slate-950/80 px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold text-slate-300 tracking-wider">
-                        {formatDuration(clip.startMs, clip.endMs)}
-                      </span>
-                    </div>
-
-                    <h3 className="text-sm font-bold text-white group-hover:text-indigo-400 transition truncate">
-                      {clip.title}
-                    </h3>
-                    <p className="text-[10px] text-slate-400 mt-1 font-mono">
-                      Session: {clip.sessionId.substring(0, 8)}...
-                    </p>
-                    <p className="text-[10px] text-slate-500 mt-0.5">
-                      Created: {new Date(clip.createdAt).toLocaleDateString()}
-                    </p>
-                  </div>
-
-                  <div className="flex gap-2.5 mt-5">
-                    <button
-                      onClick={() => handleOpenPlay(clip)}
-                      className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold tracking-wide transition border border-slate-700 inline-flex items-center justify-center gap-1.5"
-                    >
-                      <Play className="w-3.5 h-3.5 fill-current" /> Play
-                    </button>
-                    <button
-                      onClick={() => handleOpenShare(clip)}
-                      className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold tracking-wide transition inline-flex items-center justify-center gap-1.5"
-                    >
-                      <Share2 className="w-3.5 h-3.5" /> Share ({clip.shares?.length || 0})
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <MeetingGroups clips={clips} onPlay={handleOpenPlay} onShare={handleOpenShare} />
           )}
         </div>
       </div>
@@ -340,7 +273,6 @@ export default function CoachClipsPage() {
                       >
                         <div className="flex flex-col select-none">
                           <span className="text-xs font-bold">{student.displayName}</span>
-                          <span className="text-[10px] text-slate-400 font-mono mt-0.5">{student.email}</span>
                         </div>
                         <input
                           type="checkbox"

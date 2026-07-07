@@ -91,8 +91,8 @@ export function SkeletonOverlay({
 
     const orderedKps = COCO_NAMES.map((name) => kpMap.get(name));
 
-    // Draw skeleton connections (limbs)
-    ctx.lineWidth = 3;
+    // Draw skeleton connections (limbs) — clean, thin lines.
+    ctx.lineWidth = 2;
     ctx.lineCap = 'round';
 
     for (let i = 0; i < COCO_SKELETON_CONNECTIONS.length; i++) {
@@ -111,28 +111,30 @@ export function SkeletonOverlay({
       ctx.stroke();
     }
 
-    // Draw keypoint dots
+    // Draw keypoints as thin OUTLINED circles (not filled dots) — a
+    // consistent size across the whole skeleton, professional replay look.
+    // A subtle dark ring under the colored ring gives contrast on any
+    // background without the heaviness of a filled dot.
     ctx.globalAlpha = 1.0;
-    for (const kp of keypoints) {
-      if (kp.score < 0.3) continue;
+    const JOINT_RADIUS = 4;
+    for (let i = 0; i < orderedKps.length; i++) {
+      const kp = orderedKps[i];
+      if (!kp || kp.score < 0.3) continue;
 
       const px = kp.x * width;
       const py = kp.y * height;
-      const radius = 4;
 
-      // Outer ring
-      ctx.fillStyle = '#FFFFFF';
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(15, 23, 42, 0.85)'; // slate-900 contrast ring
       ctx.beginPath();
-      ctx.arc(px, py, radius + 1.5, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.arc(px, py, JOINT_RADIUS + 1, 0, Math.PI * 2);
+      ctx.stroke();
 
-      // Inner dot
-      ctx.fillStyle = '#10B981'; // emerald-500
-      ctx.globalAlpha = kp.score;
+      // Single consistent joint color reads cleaner over the colored limbs.
+      ctx.strokeStyle = '#FFFFFF';
       ctx.beginPath();
-      ctx.arc(px, py, radius, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1.0;
+      ctx.arc(px, py, JOINT_RADIUS, 0, Math.PI * 2);
+      ctx.stroke();
     }
   }, [frame, width, height]);
 

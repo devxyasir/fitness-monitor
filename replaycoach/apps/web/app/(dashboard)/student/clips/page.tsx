@@ -4,26 +4,17 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { apiClient } from '../../../../lib/api-client';
 import { ClipPlaybackModal } from '../../components/ClipPlaybackModal';
-import { RefreshCw, Clapperboard, Play, Video } from 'lucide-react';
-
-interface Clip {
-  id: string;
-  title: string;
-  startMs: number;
-  endMs: number;
-  sessionId: string;
-  createdBy: string;
-  createdAt: string;
-  clipType?: 'recording' | 'reference';
-}
+import { MeetingGroups } from '../../components/MeetingGroups';
+import type { ClipItem } from '../../components/clipsShared';
+import { RefreshCw, Clapperboard } from 'lucide-react';
 
 export default function StudentClipsPage() {
-  const [clips, setClips] = useState<Clip[]>([]);
+  const [clips, setClips] = useState<ClipItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Playback Modal state
-  const [playingClip, setPlayingClip] = useState<Clip | null>(null);
+  const [playingClip, setPlayingClip] = useState<ClipItem | null>(null);
   const [playData, setPlayData] = useState<{ playUrl: string; annotations: any[] } | null>(null);
   const [loadingPlay, setLoadingPlay] = useState(false);
 
@@ -34,7 +25,7 @@ export default function StudentClipsPage() {
   const fetchClips = async () => {
     try {
       setLoading(true);
-      const data = await apiClient.get<Clip[]>('/clips');
+      const data = await apiClient.get<ClipItem[]>('/clips');
       setClips(data);
       setError(null);
     } catch (err: any) {
@@ -45,11 +36,10 @@ export default function StudentClipsPage() {
     }
   };
 
-  const handleOpenPlay = async (clip: Clip) => {
+  const handleOpenPlay = async (clip: ClipItem) => {
     try {
       setLoadingPlay(true);
       setPlayingClip(clip);
-      // Fetch HLS stream and annotations
       const data = await apiClient.get<{ playUrl: string; annotations: any[] }>(`/clips/${clip.id}`);
       setPlayData(data);
     } catch (err: any) {
@@ -59,13 +49,6 @@ export default function StudentClipsPage() {
     } finally {
       setLoadingPlay(false);
     }
-  };
-
-  const formatDuration = (startMs: number, endMs: number) => {
-    const totalSecs = Math.max(0, Math.floor((endMs - startMs) / 1000));
-    const mins = Math.floor(totalSecs / 60);
-    const secs = totalSecs % 60;
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
   return (
@@ -126,55 +109,11 @@ export default function StudentClipsPage() {
               <Clapperboard className="w-10 h-10 mb-4 mx-auto text-slate-500" />
               <h3 className="text-base font-bold text-white mb-2">No clips shared yet</h3>
               <p className="text-xs text-slate-400 leading-relaxed max-w-sm mx-auto">
-                Once a coach extracts and shares a particular highlight range with you, it will appear here for toggleable playback review.
+                Once a coach analyzes and shares a clip with you, it will appear here, grouped by meeting.
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {clips.map((clip) => (
-                <div
-                  key={clip.id}
-                  className="bg-slate-900/60 border border-slate-900 rounded-3xl p-5 flex flex-col justify-between hover:border-slate-800 transition group shadow-md"
-                >
-                  <div>
-                    {/* Media Mock Card Header */}
-                    <div className="aspect-video w-full rounded-2xl mb-4 bg-gradient-to-tr from-slate-950 to-indigo-950/20 flex items-center justify-center relative border border-slate-800 overflow-hidden">
-                      <div className="absolute inset-0 bg-slate-900/25 opacity-0 group-hover:opacity-100 transition flex items-center justify-center backdrop-blur-[2px]">
-                        <button
-                          onClick={() => handleOpenPlay(clip)}
-                          className="bg-indigo-600 hover:bg-indigo-700 text-white p-3 rounded-full shadow-lg transform scale-90 group-hover:scale-100 transition duration-300"
-                        >
-                          <Play className="w-5 h-5 fill-current" />
-                        </button>
-                      </div>
-                      <Video className="w-6 h-6 opacity-60" />
-                      <span className="absolute bottom-2 right-2 bg-slate-950/80 px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold text-slate-300 tracking-wider">
-                        {formatDuration(clip.startMs, clip.endMs)}
-                      </span>
-                    </div>
-
-                    <h3 className="text-sm font-bold text-white group-hover:text-indigo-400 transition truncate">
-                      {clip.title}
-                    </h3>
-                    <p className="text-[10px] text-slate-400 mt-1 font-mono">
-                      Session: {clip.sessionId.substring(0, 8)}...
-                    </p>
-                    <p className="text-[10px] text-slate-500 mt-0.5">
-                      Shared: {new Date(clip.createdAt).toLocaleDateString()}
-                    </p>
-                  </div>
-
-                  <div className="mt-5">
-                    <button
-                      onClick={() => handleOpenPlay(clip)}
-                      className="w-full py-2 bg-indigo-600 hover:bg-indigo-705 text-white rounded-xl text-xs font-semibold tracking-wide transition shadow inline-flex items-center justify-center gap-1.5"
-                    >
-                      <Play className="w-3.5 h-3.5 fill-current" /> Play Clip
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <MeetingGroups clips={clips} onPlay={handleOpenPlay} />
           )}
         </div>
       </div>

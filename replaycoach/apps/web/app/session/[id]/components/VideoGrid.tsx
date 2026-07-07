@@ -229,10 +229,21 @@ export function ParticipantVideoTile({
     }
   };
 
+  // Only the local camera should ever be un-mirror-forced — remote tracks
+  // already arrive in true orientation, and screen-share must never be
+  // flipped. `local-camera-unmirror` (globals.css) forces true orientation
+  // with !important so it wins even if a runtime/library mirror is applied,
+  // matching Zoom/Meet's "what others see" self-view. Keeping it true also
+  // keeps the pose skeleton (drawn from true-orientation keypoints) aligned.
+  const isLocalCamera = trackRef.participant.isLocal && trackRef.source === Track.Source.Camera;
+
   return (
     <div ref={containerRef} className="w-full h-full relative flex items-center justify-center">
       {/* Video stream rendering */}
-      <VideoTrack trackRef={trackRef} className="w-full h-full object-cover" />
+      <VideoTrack
+        trackRef={trackRef}
+        className={`w-full h-full object-cover${isLocalCamera ? ' local-camera-unmirror' : ''}`}
+      />
 
       {/* Real-time skeleton overlay layer */}
       <SkeletonOverlay

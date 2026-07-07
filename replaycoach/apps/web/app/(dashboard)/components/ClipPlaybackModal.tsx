@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
 import type { ClientAnnotation } from '../../../stores/annotation-store';
 import { getVisibleAnnotations } from '../../../stores/annotation-store';
-import { X, Play, Pause, Palette } from 'lucide-react';
+import { X, Play, Pause, Palette, Download } from 'lucide-react';
+import { downloadClipVideo } from './downloadClip';
 
 interface ClipPlaybackModalProps {
   clip: {
@@ -14,6 +15,8 @@ interface ClipPlaybackModalProps {
     endMs: number;
     sessionId: string;
     clipType?: 'recording' | 'reference';
+    downloadable?: boolean;
+    meeting?: { startedAt: string };
   };
   playUrl: string;
   annotations: ClientAnnotation[];
@@ -21,6 +24,21 @@ interface ClipPlaybackModalProps {
 }
 
 export function ClipPlaybackModal({ clip, playUrl, annotations, onClose }: ClipPlaybackModalProps) {
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownload = async () => {
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      // Reuse the already-authorized playUrl the modal is streaming.
+      await downloadClipVideo({ clipId: clip.id, startedAt: clip.meeting?.startedAt, playUrl });
+    } catch (err) {
+      console.error('[ClipPlaybackModal] Download failed:', err);
+      alert('Download failed. Please try again.');
+    } finally {
+      setDownloading(false);
+    }
+  };
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -239,12 +257,27 @@ export function ClipPlaybackModal({ clip, playUrl, annotations, onClose }: ClipP
               {clip.sessionId.substring(0, 8)}
             </p>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Download the processed AI video exactly as displayed (skeleton
+                burned in). Only for reference/overlay clips — recording clips
+                are HLS-segmented and have no single downloadable file. */}
+            {clip.downloadable && (
+              <button
+                onClick={handleDownload}
+                disabled={downloading}
+                className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold transition inline-flex items-center gap-1.5"
+                title="Download this video"
+              >
+                <Download className="w-4 h-4" /> {downloading ? 'Preparing…' : 'Download'}
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Video Player + Canvas Box */}

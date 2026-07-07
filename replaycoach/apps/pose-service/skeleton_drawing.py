@@ -27,6 +27,13 @@ SKELETON_CONNECTIONS = [
 MIN_SCORE = 0.3
 
 
+AMBER = (0, 165, 255)  # BGR
+DARK = (40, 40, 40)     # BGR — thin contrast outline so joints read on any background
+LINE_THICKNESS = 2
+JOINT_RADIUS = 5        # consistent across every joint
+JOINT_THICKNESS = 2     # >0 = outlined (hollow) circle, not a filled dot
+
+
 def draw_skeleton(frame: np.ndarray, keypoints_by_name: dict, width: int, height: int) -> None:
     """Draws directly onto `frame` in place (BGR, as read by cv2.VideoCapture)."""
     ordered = [keypoints_by_name.get(name) for name in COCO_KEYPOINT_NAMES]
@@ -37,11 +44,14 @@ def draw_skeleton(frame: np.ndarray, keypoints_by_name: dict, width: int, height
             continue
         pa = (int(kp_a["x"] * width), int(kp_a["y"] * height))
         pb = (int(kp_b["x"] * width), int(kp_b["y"] * height))
-        cv2.line(frame, pa, pb, (0, 165, 255), 3, cv2.LINE_AA)  # amber (BGR)
+        cv2.line(frame, pa, pb, AMBER, LINE_THICKNESS, cv2.LINE_AA)
 
+    # Thin outlined (hollow) circles of a consistent size — professional
+    # sports-replay look rather than heavy filled dots. A subtle dark ring
+    # underneath the amber gives contrast without visual weight.
     for kp in ordered:
         if not kp or kp["score"] < MIN_SCORE:
             continue
         p = (int(kp["x"] * width), int(kp["y"] * height))
-        cv2.circle(frame, p, 5, (255, 255, 255), -1, cv2.LINE_AA)
-        cv2.circle(frame, p, 3, (0, 165, 255), -1, cv2.LINE_AA)
+        cv2.circle(frame, p, JOINT_RADIUS + 1, DARK, JOINT_THICKNESS, cv2.LINE_AA)
+        cv2.circle(frame, p, JOINT_RADIUS, AMBER, JOINT_THICKNESS, cv2.LINE_AA)
