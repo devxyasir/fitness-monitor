@@ -43,27 +43,15 @@ class Settings(BaseSettings):
     # onnx_model_path (auto-downloaded if missing).
     detector_model_path: str = "./models/yolo11n-pose.onnx"
 
-    # Reference-video (uploaded-video) analysis has no real-time deadline,
-    # unlike live per-participant tracking — a one-off upload can afford a
-    # much larger/more accurate model. This was never actually wired to its
-    # own model before: both paths shared the single `model_size`-driven
-    # instance, so when live tracking got downgraded to 'small' for CPU
-    # reasons, reference analysis silently inherited that too, producing
-    # skeletons that visibly drifted off the body on fast/acrobatic motion
-    # (e.g. pole-dance spins) — a stale/low-res crop, not a code bug.
-    # Defaults to 'large' — this is the exact setting process_1mp4.py uses
-    # locally: that script calls plain create_model_adapter() with zero
-    # overrides, so it's governed by this machine's own pose-service .env,
-    # which has POSE_MODEL_SIZE=large. An earlier revision of this default
-    # ('medium') was based on an incorrect assumption that the script used
-    # config.py's code-level default rather than the local .env override —
-    # 'large' is genuinely a better-quality tier (384x288 input + a bigger
-    # detector/pose model), not a placebo. Its extra CPU cost did cause
-    # Socket.IO ping timeouts on the shared box during a live session while
-    # a reference video was processing — if that recurs, the fix should be
-    # elsewhere (e.g. giving pose-service a dedicated CPU budget), not
-    # silently downgrading this and losing quality again.
-    reference_model_size: str = "large"
+    # Reference-video (uploaded-video) analysis model tier. Set to 'medium'
+    # (256x192 rtmpose-m + yolo11s detector): 'large' (384x288 rtmpose-l +
+    # yolo11l) is genuinely higher-res, but on this 2-vCPU box it ran at
+    # only ~0.3-0.4 fps, so real clips truncated at the wall-clock budget
+    # (returning a partial, shortened overlay video) AND its CPU cost
+    # starved the API enough to abort login requests mid-flight during a
+    # session. 'medium' is ~3-4x faster, completes full clips, and keeps the
+    # box responsive — the right speed/quality balance for this hardware.
+    reference_model_size: str = "medium"
     reference_onnx_model_path: str | None = None
     reference_detector_model_path: str | None = None
     # No override here on purpose — confirmed via local testing
