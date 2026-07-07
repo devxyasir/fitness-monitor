@@ -9,7 +9,12 @@
  */
 
 /** Shape an annotation draws between (or on) its joint(s). */
-export type TrackedAnnotationShape = 'line' | 'arrow' | 'angle' | 'point';
+export type TrackedAnnotationShape =
+  | 'line'
+  | 'arrow'
+  | 'circle'
+  | 'angle'
+  | 'point';
 
 export interface TrackedAnnotation {
   id: string;
