@@ -111,12 +111,12 @@ export function SkeletonOverlay({
       ctx.stroke();
     }
 
-    // Draw keypoints as thin OUTLINED circles (not filled dots) — a
-    // consistent size across the whole skeleton, professional replay look.
-    // A subtle dark ring under the colored ring gives contrast on any
-    // background without the heaviness of a filled dot.
+    // Draw keypoints as thin HOLLOW rings — a real open circle with clear
+    // space inside (radius well above the 1.25px stroke), consistent size
+    // across the skeleton. A thin dark ring just outside gives contrast on
+    // any background while the interior stays empty.
     ctx.globalAlpha = 1.0;
-    const JOINT_RADIUS = 4;
+    const JOINT_RADIUS = 6;
     for (let i = 0; i < orderedKps.length; i++) {
       const kp = orderedKps[i];
       if (!kp || kp.score < 0.3) continue;
@@ -124,7 +124,7 @@ export function SkeletonOverlay({
       const px = kp.x * width;
       const py = kp.y * height;
 
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 1.25;
       ctx.strokeStyle = 'rgba(15, 23, 42, 0.85)'; // slate-900 contrast ring
       ctx.beginPath();
       ctx.arc(px, py, JOINT_RADIUS + 1, 0, Math.PI * 2);

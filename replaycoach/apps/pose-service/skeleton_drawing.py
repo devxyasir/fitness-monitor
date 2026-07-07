@@ -30,8 +30,10 @@ MIN_SCORE = 0.3
 AMBER = (0, 165, 255)  # BGR
 DARK = (40, 40, 40)     # BGR — thin contrast outline so joints read on any background
 LINE_THICKNESS = 2
-JOINT_RADIUS = 5        # consistent across every joint
-JOINT_THICKNESS = 2     # >0 = outlined (hollow) circle, not a filled dot
+# A genuine thin ring with clearly open space inside — radius is much larger
+# than the 1px stroke, so the joint reads as a hollow circle, not a dot/bullet.
+JOINT_RADIUS = 7        # consistent across every joint
+JOINT_THICKNESS = 1     # 1px stroke = thin outline, hollow center
 
 
 def draw_skeleton(frame: np.ndarray, keypoints_by_name: dict, width: int, height: int) -> None:
@@ -46,9 +48,9 @@ def draw_skeleton(frame: np.ndarray, keypoints_by_name: dict, width: int, height
         pb = (int(kp_b["x"] * width), int(kp_b["y"] * height))
         cv2.line(frame, pa, pb, AMBER, LINE_THICKNESS, cv2.LINE_AA)
 
-    # Thin outlined (hollow) circles of a consistent size — professional
-    # sports-replay look rather than heavy filled dots. A subtle dark ring
-    # underneath the amber gives contrast without visual weight.
+    # Thin hollow ring of a consistent size — a real open circle, not a filled
+    # dot. A 1px dark ring just outside the amber gives contrast on any
+    # background while keeping the interior clearly empty.
     for kp in ordered:
         if not kp or kp["score"] < MIN_SCORE:
             continue

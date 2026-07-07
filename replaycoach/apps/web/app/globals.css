@@ -2,12 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Force the local self-view camera to true (un-mirrored) orientation —
-   what remote participants actually see — regardless of any library/runtime
-   mirror. !important so it beats an inline transform if one is ever set.
-   Applied only to the local camera tile (see VideoGrid.tsx). */
+/* The local self-view arrives mirrored (front-camera default); flip it back
+   to true orientation — what remote participants actually see, like Zoom/
+   Meet. Applied only to the local camera <video> (see VideoGrid.tsx); the
+   pose keypoints are already in true orientation, so flipping only the video
+   (not its skeleton canvas) leaves the two aligned. !important so it wins
+   over any inline transform. */
 .local-camera-unmirror {
-  transform: scaleX(1) !important;
+  transform: scaleX(-1) !important;
 }
 
 @layer base {

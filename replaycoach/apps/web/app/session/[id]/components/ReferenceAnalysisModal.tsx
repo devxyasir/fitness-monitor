@@ -20,6 +20,7 @@ import {
   StepBack,
   StepForward,
   Loader2,
+  Download,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -188,6 +189,34 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
     apiClient
       .post(`/sessions/${sessionId}/reference/${refId}/sync-annotations`, { strokesByFrame })
       .catch((err) => console.error('[ReferenceAnalysisModal] Failed to sync annotations:', err));
+  };
+
+  // Download the analyzed video exactly as shown (skeleton burned in). The
+  // same MP4 the modal is playing (overlayVideoUrl, or the raw video if
+  // overlay generation failed). Available to coach and students alike.
+  const [downloadingVideo, setDownloadingVideo] = useState(false);
+  const handleDownloadVideo = async () => {
+    const url = overlayVideoUrl ?? videoUrl;
+    if (!url || downloadingVideo) return;
+    setDownloadingVideo(true);
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Download failed (${res.status})`);
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = `replay-${new Date().toISOString().slice(0, 10)}.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (err) {
+      console.error('[ReferenceAnalysisModal] Video download failed:', err);
+      alert('Download failed. Please try again.');
+    } finally {
+      setDownloadingVideo(false);
+    }
   };
 
   // Fetch keypoints JSON once ready
@@ -449,17 +478,31 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
               </span>
             )}
           </div>
-          {/* Students can't dismiss this — it stays synced to whatever the
-              coach is presenting until the coach closes it. */}
-          {isCoach && (
-            <button
-              onClick={handleClose}
-              className="text-slate-400 hover:text-white leading-none px-2"
-              aria-label="Close reference analysis"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {/* Download the analyzed video (skeleton burned in) — available to
+                coach and students once analysis has produced a video. */}
+            {status === 'ready' && (overlayVideoUrl || videoUrl) && (
+              <button
+                onClick={handleDownloadVideo}
+                disabled={downloadingVideo}
+                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold transition inline-flex items-center gap-1.5"
+                title="Download this video"
+              >
+                <Download className="w-3.5 h-3.5" /> {downloadingVideo ? 'Preparing…' : 'Download'}
+              </button>
+            )}
+            {/* Students can't dismiss this — it stays synced to whatever the
+                coach is presenting until the coach closes it. */}
+            {isCoach && (
+              <button
+                onClick={handleClose}
+                className="text-slate-400 hover:text-white leading-none px-2"
+                aria-label="Close reference analysis"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Body: video + tools — stacked on mobile so the video keeps most
