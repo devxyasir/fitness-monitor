@@ -5,7 +5,7 @@ import { useParticipants } from '@livekit/components-react';
 import { apiClient } from '../../../../lib/api-client';
 import { useReferenceStore, type Stroke, type ReferenceTool } from '../../../../stores/reference-store';
 import { useReferenceEmitters } from '../hooks/useReferenceSocket';
-import { buildExtendedKeypoints, findNearestJoint, jointColor, jointRadius, SKELETON_SEGMENTS } from './skeletonGeometry';
+import { drawSkeleton, findNearestJoint } from './skeletonGeometry';
 import {
   Pencil,
   Minus,
@@ -316,40 +316,11 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
     const frame = keypointsByFrame[frameIndex];
     if (!frame) return;
 
-    // Real detected points plus derived neck/spine/mid-hip points, for a
-    // fuller, per-region-colored skeleton (see skeletonGeometry.ts).
-    const extended = buildExtendedKeypoints(frame.keypoints);
-
-    ctx.lineWidth = 2; // thin, precise lines rather than a thick blob
-    ctx.lineCap = 'round';
-    for (const seg of SKELETON_SEGMENTS) {
-      const kpA = extended.get(seg.a);
-      const kpB = extended.get(seg.b);
-      if (!kpA || !kpB) continue;
-      ctx.strokeStyle = seg.color;
-      ctx.globalAlpha = Math.min(kpA.score, kpB.score);
-      ctx.beginPath();
-      ctx.moveTo(kpA.x * dims.width, kpA.y * dims.height);
-      ctx.lineTo(kpB.x * dims.width, kpB.y * dims.height);
-      ctx.stroke();
-    }
-
-    ctx.globalAlpha = 1;
-    for (const [name, kp] of extended) {
-      const r = jointRadius(name);
-      // White halo first so the colored dot reads clearly against any
-      // background — and gives each joint a bigger, easier-to-click target.
-      ctx.fillStyle = '#FFFFFF';
-      ctx.beginPath();
-      ctx.arc(kp.x * dims.width, kp.y * dims.height, r + 1.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = jointColor(name);
-      ctx.globalAlpha = kp.score;
-      ctx.beginPath();
-      ctx.arc(kp.x * dims.width, kp.y * dims.height, r, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-    }
+    // Direct port of process_1mp4.py's draw_skeleton() — real detected
+    // keypoints only, hard confidence cutoff (not a fade), see
+    // skeletonGeometry.ts for why the prior derived-point/fade approach
+    // produced visibly worse results on fast/occluded motion.
+    drawSkeleton(ctx, frame.keypoints, dims.width, dims.height);
   }, [keypointsByFrame, frameIndex, dims, showSkeleton]);
 
   // ── Drawing interaction (coach only) ──────────────────────────────────────
@@ -371,10 +342,9 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
     if ((activeTool === 'ellipse' || activeTool === 'line' || activeTool === 'arrow') && showSkeleton) {
       const frame = keypointsByFrame[frameIndex];
       if (frame) {
-        const extended = buildExtendedKeypoints(frame.keypoints);
         const rect = drawCanvasRef.current!.getBoundingClientRect();
         const hit = findNearestJoint(
-          extended,
+          frame.keypoints,
           e.clientX - rect.left,
           e.clientY - rect.top,
           dims.width,
