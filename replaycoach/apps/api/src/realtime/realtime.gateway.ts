@@ -449,6 +449,25 @@ export class RealtimeGateway implements OnGatewayConnection {
     this.server.to(room).emit('reference:ready', payload);
   }
 
+  // ── Tracked (joint-attached) annotations — live sync to the room ─────────
+  emitReferenceAnnotationCreate(sessionId: string, refId: string, annotation: any) {
+    this.server.to(`session:${sessionId}`).emit('reference:annotation-create', { refId, annotation });
+  }
+
+  emitReferenceAnnotationUpdate(sessionId: string, refId: string, annotation: any) {
+    this.server.to(`session:${sessionId}`).emit('reference:annotation-update', { refId, annotation });
+  }
+
+  emitReferenceAnnotationDelete(sessionId: string, refId: string, annotationId: string) {
+    this.server.to(`session:${sessionId}`).emit('reference:annotation-delete', { refId, annotationId });
+  }
+
+  /** Export finished — clients can refresh to expose the download. Broadcast
+   * to all rooms since export runs outside a specific socket context. */
+  emitReferenceExportReady(refId: string) {
+    this.server.emit('reference:export-ready', { refId });
+  }
+
   private async assertCoach(sessionId: string, user: JwtPayload): Promise<Session> {
     const session = await this.sessionRepository.findOne({ where: { id: sessionId } });
     if (!session) throw new Error('Session not found');

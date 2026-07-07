@@ -2,11 +2,13 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Head,
   Headers,
   NotFoundException,
   Param,
+  Patch,
   Post,
   Query,
   Req,
@@ -28,7 +30,12 @@ import type { JwtPayload } from '@replaycoach/types';
 
 import { ReferenceService } from './reference.service';
 import { ReferenceStorageService } from './reference-storage.service';
-import { SyncReferenceAnnotationsDto, UploadReferenceVideoDto } from './reference.dto';
+import {
+  CreateTrackedAnnotationDto,
+  SyncReferenceAnnotationsDto,
+  UpdateTrackedAnnotationDto,
+  UploadReferenceVideoDto,
+} from './reference.dto';
 
 const MAX_UPLOAD_BYTES = 500 * 1024 * 1024; // 500MB
 
@@ -57,6 +64,7 @@ export class ReferenceController {
         ? { buffer: file.buffer, originalname: file.originalname, mimetype: file.mimetype, size: file.size }
         : undefined,
       dto.url,
+      dto.mode ?? 'full_body',
     );
   }
 
@@ -101,6 +109,62 @@ export class ReferenceController {
   ) {
     return this.referenceService.syncAnnotations(sessionId, refId, user.sub, user.role, dto.strokesByFrame);
   }
+
+  // ── Tracked (joint-attached) annotations — the new coaching feature ──────
+
+  /** List joint-attached annotations for a video (coach + shared students). */
+  @Get(':refId/annotations')
+  async listAnnotations(@Param('id') sessionId: string, @Param('refId') refId: string) {
+    return this.referenceService.listAnnotations(sessionId, refId);
+  }
+
+  /** Coach creates a joint-attached annotation; broadcast to the room. */
+  @Post(':refId/annotations')
+  async createAnnotation(
+    @Param('id') sessionId: string,
+    @Param('refId') refId: string,
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: CreateTrackedAnnotationDto,
+  ) {
+    const ann = await this.referenceService.createAnnotation(sessionId, refId, user.sub, user.role, dto);
+    this.realtimeGateway.emitReferenceAnnotationCreate(sessionId, refId, ann);
+    return ann;
+  }
+
+  @Patch(':refId/annotations/:annId')
+  async updateAnnotation(
+    @Param('id') sessionId: string,
+    @Param('refId') refId: string,
+    @Param('annId') annId: string,
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: UpdateTrackedAnnotationDto,
+  ) {
+    const ann = await this.referenceService.updateAnnotation(sessionId, refId, annId, user.sub, user.role, dto);
+    this.realtimeGateway.emitReferenceAnnotationUpdate(sessionId, refId, ann);
+    return ann;
+  }
+
+  @Delete(':refId/annotations/:annId')
+  async deleteAnnotation(
+    @Param('id') sessionId: string,
+    @Param('refId') refId: string,
+    @Param('annId') annId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    const res = await this.referenceService.deleteAnnotation(sessionId, refId, annId, user.sub, user.role);
+    this.realtimeGateway.emitReferenceAnnotationDelete(sessionId, refId, annId);
+    return res;
+  }
+
+  /** Coach exports the video with skeleton + tracked annotations burned in. */
+  @Post(':refId/export')
+  async export(
+    @Param('id') sessionId: string,
+    @Param('refId') refId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.referenceService.startExport(sessionId, refId, user.sub, user.role);
+  }
 }
 
 /**
@@ -132,6 +196,7 @@ export class ReferenceMediaController {
       width?: number;
       height?: number;
       durationMs?: number;
+      keypointFormat?: 'coco17' | 'halpe26';
     },
   ) {
     if (!token || !this.referenceService.verifyCallbackToken(refId, token)) {
@@ -149,6 +214,7 @@ export class ReferenceMediaController {
       width: body.width ?? 0,
       height: body.height ?? 0,
       durationMs: body.durationMs ?? 0,
+      keypointFormat: body.keypointFormat ?? 'coco17',
     });
 
     const response = await this.referenceService.toResponse(video);
@@ -175,6 +241,26 @@ export class ReferenceMediaController {
       throw new BadRequestException('Missing overlay video file');
     }
     await this.referenceService.saveOverlayVideo(refId, file.buffer);
+    return { success: true };
+  }
+
+  /** Pose-service uploads the rendered export (video + skeleton + tracked
+   * annotations) here after /reference/export. Callback-token auth. */
+  @Post(':refId/export-upload')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_BYTES } }))
+  async exportUpload(
+    @Param('refId') refId: string,
+    @Headers('x-callback-token') token: string | undefined,
+    @UploadedFile() file: Express.Multer.File | undefined,
+  ) {
+    if (!token || !this.referenceService.verifyCallbackToken(refId, token)) {
+      throw new UnauthorizedException('Invalid callback token');
+    }
+    if (!file) {
+      throw new BadRequestException('Missing export video file');
+    }
+    await this.referenceService.saveExportVideo(refId, file.buffer);
+    this.realtimeGateway.emitReferenceExportReady(refId);
     return { success: true };
   }
 

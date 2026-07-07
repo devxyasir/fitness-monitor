@@ -19,10 +19,13 @@ import { RecordingStatusIndicator } from './components/RecordingStatusIndicator'
 import { TrackBufferManager } from './components/TrackBufferManager';
 import { Roster } from './components/Roster';
 import { ReferenceAnalysisModal } from './components/ReferenceAnalysisModal';
+import { AnnotationTrackingModal } from './components/AnnotationTrackingModal';
 import { useReferenceSocketListeners } from './hooks/useReferenceSocket';
+import { useAnnotationTrackingSocket } from './hooks/useAnnotationTrackingSocket';
 import { useSessionRoom } from './hooks/useSessionRoom';
 import { ReferenceVideoQueue } from './components/ReferenceVideoQueue';
 import { useReferenceStore } from '../../../stores/reference-store';
+import { useAnnotationTrackingStore } from '../../../stores/annotation-tracking-store';
 import {
   AlertTriangle,
   Flag,
@@ -58,7 +61,9 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
   usePoseOverlay(sessionId);
   useReplaySocket(sessionId);
   useReferenceSocketListeners(sessionId);
+  useAnnotationTrackingSocket(sessionId);
   const isReferenceModalOpen = useReferenceStore((s) => s.isOpen);
+  const isAnnotationModalOpen = useAnnotationTrackingStore((s) => s.isOpen);
 
   // If the socket is dropped for an auth reason, refresh the token and reconnect
   // rather than leaving the session stuck on a dead connection.
@@ -422,6 +427,9 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
         {isReferenceModalOpen && (
           <ReferenceAnalysisModal sessionId={sessionId} isCoach={isCoach} />
         )}
+        {isAnnotationModalOpen && (
+          <AnnotationTrackingModal sessionId={sessionId} isCoach={isCoach} />
+        )}
         {isCoach && <ReferenceVideoQueue sessionId={sessionId} refreshToken={uploadRefreshToken} />}
       </LiveKitRoom>
 
@@ -575,6 +583,7 @@ function ControlsArea({
   const { isMicrophoneEnabled, isCameraEnabled, isScreenShareEnabled, localParticipant } =
     useLocalParticipant();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadModeRef = useRef<'annotation_tracking' | 'full_body'>('annotation_tracking');
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<{
@@ -608,6 +617,7 @@ function ControlsArea({
     try {
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('mode', uploadModeRef.current);
 
       const uploaded = await apiClient.postFormWithProgress<{ id: string }>(
         `/sessions/${sessionId}/reference/upload`,
@@ -694,29 +704,42 @@ function ControlsArea({
               className="hidden"
               onChange={handleVideoFileSelected}
             />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploadingVideo}
-              className="flex items-center px-4 py-2 text-xs font-semibold rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Upload a video from your computer to run through pose detection and teach with the draw tools"
-            >
-              {uploadingVideo ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                  Uploading...
-                  {uploadProgress && uploadProgress.total > 0 && (
-                    <span className="ml-1.5 tabular-nums">
-                      {Math.min(100, Math.round((uploadProgress.loaded / uploadProgress.total) * 100))}%
-                    </span>
-                  )}
-                </>
-              ) : (
-                <>
-                  <Upload className="w-3.5 h-3.5 mr-1.5" /> Upload Video
-                </>
-              )}
-            </button>
+            {uploadingVideo ? (
+              <button
+                type="button"
+                disabled
+                className="flex items-center px-4 py-2 text-xs font-semibold rounded-lg bg-slate-800 border border-slate-700 text-slate-300 shadow-sm opacity-70 cursor-not-allowed"
+              >
+                <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                Uploading...
+                {uploadProgress && uploadProgress.total > 0 && (
+                  <span className="ml-1.5 tabular-nums">
+                    {Math.min(100, Math.round((uploadProgress.loaded / uploadProgress.total) * 100))}%
+                  </span>
+                )}
+              </button>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                {/* New primary feature: joint-attached annotations that track the body. */}
+                <button
+                  type="button"
+                  onClick={() => { uploadModeRef.current = 'annotation_tracking'; fileInputRef.current?.click(); }}
+                  className="flex items-center px-4 py-2 text-xs font-semibold rounded-lg bg-indigo-600 border border-indigo-500 hover:bg-indigo-500 text-white transition shadow-sm"
+                  title="Upload a video and draw coaching annotations between joints that follow the body"
+                >
+                  <Upload className="w-3.5 h-3.5 mr-1.5" /> Annotate Video
+                </button>
+                {/* Legacy full-video skeleton analysis, kept as an optional tool. */}
+                <button
+                  type="button"
+                  onClick={() => { uploadModeRef.current = 'full_body'; fileInputRef.current?.click(); }}
+                  className="flex items-center px-3 py-2 text-xs font-semibold rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 transition shadow-sm"
+                  title="Full Body Analysis — process the whole video and replay it with the skeleton drawn in"
+                >
+                  Full Body
+                </button>
+              </div>
+            )}
             {uploadingVideo && uploadProgress && uploadProgress.total > 0 && (
               <div className="absolute bottom-full mb-2 left-0 z-20 w-56 max-w-[calc(100vw-2rem)] bg-slate-900/95 border border-slate-700 text-slate-200 text-xs font-medium px-3 py-2 rounded-lg shadow-xl">
                 <div className="flex justify-between mb-1">

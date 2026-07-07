@@ -22,6 +22,7 @@ from pydantic import BaseModel
 from config import settings
 from inference import PoseModelAdapter, create_model_adapter, create_reference_model_adapter
 from reference_processor import process_reference_video
+from export_renderer import export_annotated_video
 from worker import WorkerPool
 
 logging.basicConfig(
@@ -247,6 +248,10 @@ class ReferenceProcessRequest(BaseModel):
     callbackUrl: str
     overlayUploadUrl: str
     callbackToken: str
+    # 'full_body' (burn skeleton into an overlay MP4, the legacy Full Body
+    # Analysis) or 'annotation_tracking' (produce keypoints JSON only; the
+    # frontend renders skeleton + joint annotations on canvas over raw video).
+    mode: str = "full_body"
 
 
 @app.post("/reference/process")
@@ -273,6 +278,43 @@ async def process_reference(
         req.overlayUploadUrl,
         req.callbackToken,
         _reference_model,
+        req.mode,
+        settings.reference_keypoint_format,
+    )
+    return {"status": "accepted"}
+
+
+class ReferenceExportRequest(BaseModel):
+    refId: str
+    videoUrl: str
+    keypointsUrl: str
+    uploadUrl: str
+    callbackToken: str
+    annotations: list[dict]
+    keypointFormat: str = "halpe26"
+    drawSkeleton: bool = True
+
+
+@app.post("/reference/export")
+async def export_reference(
+    req: ReferenceExportRequest,
+    background_tasks: BackgroundTasks,
+) -> dict[str, str]:
+    """
+    Render raw video + skeleton + tracked joint-attached annotations into an
+    MP4 and upload it (req.uploadUrl). Background task; the API polls/serves
+    the exported file for download once uploaded.
+    """
+    background_tasks.add_task(
+        export_annotated_video,
+        req.refId,
+        req.videoUrl,
+        req.keypointsUrl,
+        req.uploadUrl,
+        req.callbackToken,
+        req.annotations,
+        req.keypointFormat,
+        req.drawSkeleton,
     )
     return {"status": "accepted"}
 

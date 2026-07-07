@@ -4,11 +4,16 @@ import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { v4 as uuidv4 } from 'uuid';
 
-import { Annotation, Clip, ClipShare, ReferenceVideo } from '../database/entities/others.entities';
+import { Annotation, Clip, ClipShare, ReferenceVideo, TrackedAnnotation } from '../database/entities/others.entities';
 import { SessionParticipant } from '../sessions/session-participant.entity';
 import { SessionsService } from '../sessions/sessions.service';
 import { ReferenceStorageService } from './reference-storage.service';
-import type { ReferenceStroke, ReferenceVideoResponse } from './reference.dto';
+import type {
+  CreateTrackedAnnotationDto,
+  ReferenceStroke,
+  ReferenceVideoResponse,
+  UpdateTrackedAnnotationDto,
+} from './reference.dto';
 
 const MAX_UPLOAD_BYTES = 500 * 1024 * 1024; // 500MB
 const ALLOWED_MIME_TYPES = new Set(['video/mp4', 'video/quicktime', 'video/webm', 'video/x-matroska']);
@@ -78,6 +83,8 @@ export class ReferenceService {
     private readonly clipShareRepo: Repository<ClipShare>,
     @InjectRepository(Annotation)
     private readonly annotationRepo: Repository<Annotation>,
+    @InjectRepository(TrackedAnnotation)
+    private readonly trackedRepo: Repository<TrackedAnnotation>,
     @InjectRepository(SessionParticipant)
     private readonly participantRepo: Repository<SessionParticipant>,
     private readonly sessionsService: SessionsService,
@@ -99,6 +106,7 @@ export class ReferenceService {
     role: string,
     file: UploadedVideoFile | undefined,
     url: string | undefined,
+    mode: 'full_body' | 'annotation_tracking' = 'full_body',
   ): Promise<ReferenceVideoResponse> {
     await this.assertCoach(sessionId, userId, role);
 
@@ -144,6 +152,7 @@ export class ReferenceService {
       uploadedByUserId: userId,
       videoKey,
       status: 'processing',
+      analysisMode: mode,
     });
     const saved = await this.repo.save(row);
 
@@ -166,7 +175,14 @@ export class ReferenceService {
       const res = await fetch(`${baseUrl}/reference/process`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refId: video.id, videoUrl, callbackUrl, overlayUploadUrl, callbackToken }),
+        body: JSON.stringify({
+          refId: video.id,
+          videoUrl,
+          callbackUrl,
+          overlayUploadUrl,
+          callbackToken,
+          mode: video.analysisMode,
+        }),
       });
       if (!res.ok) {
         this.logger.warn(`pose-service rejected reference process request: ${res.status}`);
@@ -211,7 +227,14 @@ export class ReferenceService {
   async completeProcessing(
     id: string,
     keypoints: unknown,
-    meta: { fps: number; frameCount: number; width: number; height: number; durationMs: number },
+    meta: {
+      fps: number;
+      frameCount: number;
+      width: number;
+      height: number;
+      durationMs: number;
+      keypointFormat?: 'coco17' | 'halpe26';
+    },
   ): Promise<ReferenceVideo> {
     const video = await this.repo.findOne({ where: { id } });
     if (!video) throw new NotFoundException(`Reference video ${id} not found`);
@@ -219,19 +242,27 @@ export class ReferenceService {
     const keypointsKey = `sessions/${video.sessionId}/reference/${id}/keypoints.json`;
     await this.storage.saveJson(keypointsKey, keypoints);
 
-    await this.repo.update({ id }, { status: 'ready', keypointsKey, ...meta });
+    const { keypointFormat, ...numericMeta } = meta;
+    await this.repo.update(
+      { id },
+      { status: 'ready', keypointsKey, keypointFormat: keypointFormat ?? 'coco17', ...numericMeta },
+    );
     const updated = await this.repo.findOne({ where: { id } });
     if (!updated) throw new NotFoundException(`Reference video ${id} not found`);
 
-    const existingClip = await this.clipRepo.findOne({ where: { referenceVideoId: id } });
-    if (!existingClip) {
-      // Non-fatal: a clip-save hiccup must never block reporting 'ready'
-      // back to the coach's client, which is waiting to reveal the video.
-      await this.createClipForVideo(updated).catch((err) => {
-        this.logger.warn(
-          `Failed to auto-save reference video ${id} as a shared clip: ${err instanceof Error ? err.message : err}`,
-        );
-      });
+    // Full Body Analysis auto-shares its burned-in overlay as a Clip on
+    // ready. Annotation Tracking defers sharing until the coach exports (the
+    // exported MP4 carries the annotations) — sharing the raw video now would
+    // show students a video with no annotations.
+    if (updated.analysisMode === 'full_body') {
+      const existingClip = await this.clipRepo.findOne({ where: { referenceVideoId: id } });
+      if (!existingClip) {
+        await this.createClipForVideo(updated).catch((err) => {
+          this.logger.warn(
+            `Failed to auto-save reference video ${id} as a shared clip: ${err instanceof Error ? err.message : err}`,
+          );
+        });
+      }
     }
 
     return updated;
@@ -365,10 +396,11 @@ export class ReferenceService {
   }
 
   async toResponse(video: ReferenceVideo): Promise<ReferenceVideoResponse> {
-    const [videoUrl, keypointsUrl, overlayVideoUrl] = await Promise.all([
+    const [videoUrl, keypointsUrl, overlayVideoUrl, exportVideoUrl] = await Promise.all([
       this.storage.getPlaybackUrl(video.videoKey),
       video.keypointsKey ? this.storage.getPlaybackUrl(video.keypointsKey) : Promise.resolve(null),
       video.overlayVideoKey ? this.storage.getPlaybackUrl(video.overlayVideoKey) : Promise.resolve(null),
+      video.exportVideoKey ? this.storage.getPlaybackUrl(video.exportVideoKey) : Promise.resolve(null),
     ]);
     return {
       id: video.id,
@@ -377,6 +409,9 @@ export class ReferenceService {
       videoUrl,
       keypointsUrl,
       overlayVideoUrl,
+      exportVideoUrl,
+      analysisMode: video.analysisMode,
+      keypointFormat: video.keypointFormat,
       fps: video.fps,
       frameCount: video.frameCount,
       width: video.width,
@@ -384,5 +419,152 @@ export class ReferenceService {
       durationMs: video.durationMs,
       failureReason: video.failureReason,
     };
+  }
+
+  // ── Tracked (joint-attached) annotations ────────────────────────────────
+
+  private toTrackedResponse(a: TrackedAnnotation) {
+    return {
+      id: a.id,
+      referenceVideoId: a.referenceVideoId,
+      shapeType: a.shapeType,
+      startJoint: a.startJoint,
+      endJoint: a.endJoint,
+      midJoint: a.midJoint,
+      color: a.color,
+      thickness: a.thickness,
+      label: a.label,
+      fromFrame: a.fromFrame,
+      untilFrame: a.untilFrame,
+      createdBy: a.createdBy,
+      createdAt: a.createdAt.toISOString(),
+    };
+  }
+
+  async listAnnotations(sessionId: string, refId: string) {
+    await this.getForSession(sessionId, refId);
+    const rows = await this.trackedRepo.find({
+      where: { referenceVideoId: refId },
+      order: { createdAt: 'ASC' },
+    });
+    return rows.map((r) => this.toTrackedResponse(r));
+  }
+
+  async createAnnotation(
+    sessionId: string,
+    refId: string,
+    coachId: string,
+    role: string,
+    dto: CreateTrackedAnnotationDto,
+  ) {
+    await this.assertCoach(sessionId, coachId, role);
+    await this.getForSession(sessionId, refId);
+    const row = this.trackedRepo.create({
+      id: uuidv4(),
+      referenceVideoId: refId,
+      shapeType: dto.shapeType,
+      startJoint: dto.startJoint,
+      endJoint: dto.endJoint ?? null,
+      midJoint: dto.midJoint ?? null,
+      color: dto.color,
+      thickness: dto.thickness,
+      label: dto.label ?? null,
+      fromFrame: dto.fromFrame,
+      untilFrame: dto.untilFrame ?? null,
+      createdBy: coachId,
+    });
+    const saved = await this.trackedRepo.save(row);
+    return this.toTrackedResponse(saved);
+  }
+
+  async updateAnnotation(
+    sessionId: string,
+    refId: string,
+    annId: string,
+    coachId: string,
+    role: string,
+    dto: UpdateTrackedAnnotationDto,
+  ) {
+    await this.assertCoach(sessionId, coachId, role);
+    const row = await this.trackedRepo.findOne({ where: { id: annId, referenceVideoId: refId } });
+    if (!row) throw new NotFoundException(`Annotation ${annId} not found`);
+    if (dto.color !== undefined) row.color = dto.color;
+    if (dto.thickness !== undefined) row.thickness = dto.thickness;
+    if (dto.label !== undefined) row.label = dto.label;
+    if (dto.untilFrame !== undefined) row.untilFrame = dto.untilFrame;
+    const saved = await this.trackedRepo.save(row);
+    return this.toTrackedResponse(saved);
+  }
+
+  async deleteAnnotation(sessionId: string, refId: string, annId: string, coachId: string, role: string) {
+    await this.assertCoach(sessionId, coachId, role);
+    await this.trackedRepo.delete({ id: annId, referenceVideoId: refId });
+    return { success: true };
+  }
+
+  // ── Export (raw + skeleton + tracked annotations → MP4) ──────────────────
+
+  /** Stores the pose-service-rendered export MP4 and (re)shares it as a Clip. */
+  async saveExportVideo(id: string, buffer: Buffer): Promise<void> {
+    const video = await this.repo.findOne({ where: { id } });
+    if (!video) throw new NotFoundException(`Reference video ${id} not found`);
+    const exportVideoKey = `sessions/${video.sessionId}/reference/${id}/export.mp4`;
+    await this.storage.saveBuffer(exportVideoKey, buffer);
+    await this.repo.update({ id }, { exportVideoKey });
+
+    // Make the annotated export available to the session's students, reusing
+    // the same auto-clip mechanism (updates the clip's video to the export).
+    const updated = await this.repo.findOne({ where: { id } });
+    if (updated) {
+      const clip = await this.clipRepo.findOne({ where: { referenceVideoId: id } });
+      if (clip) {
+        clip.s3Key = exportVideoKey;
+        await this.clipRepo.save(clip);
+      } else {
+        await this.createClipForVideo({ ...updated, overlayVideoKey: exportVideoKey } as ReferenceVideo).catch(
+          (err) => this.logger.warn(`Export clip share failed for ${id}: ${err instanceof Error ? err.message : err}`),
+        );
+      }
+    }
+  }
+
+  /** Kicks off a server-side export render on the pose-service (background). */
+  async startExport(sessionId: string, refId: string, coachId: string, role: string): Promise<{ status: string }> {
+    await this.assertCoach(sessionId, coachId, role);
+    const video = await this.getForSession(sessionId, refId);
+    if (!video.keypointsKey) throw new BadRequestException('Video has no keypoints to export');
+
+    const annotations = await this.trackedRepo.find({ where: { referenceVideoId: refId } });
+    const baseUrl = this.configService.get<string>('POSE_SERVICE_URL', 'http://localhost:8100');
+    const videoUrl = await this.storage.getPlaybackUrl(video.videoKey);
+    const keypointsUrl = await this.storage.getPlaybackUrl(video.keypointsKey);
+    const uploadUrl = `${this.storage.apiPublicBaseUrl}/api/v1/reference/${refId}/export-upload`;
+    const callbackToken = this.storage.callbackToken(refId);
+
+    const res = await fetch(`${baseUrl}/reference/export`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        refId,
+        videoUrl,
+        keypointsUrl,
+        uploadUrl,
+        callbackToken,
+        keypointFormat: video.keypointFormat,
+        drawSkeleton: true,
+        annotations: annotations.map((a) => ({
+          shapeType: a.shapeType,
+          startJoint: a.startJoint,
+          endJoint: a.endJoint,
+          midJoint: a.midJoint,
+          color: a.color,
+          thickness: a.thickness,
+          fromFrame: a.fromFrame,
+          untilFrame: a.untilFrame,
+        })),
+      }),
+    });
+    if (!res.ok) throw new BadRequestException(`pose-service export rejected (${res.status})`);
+    return { status: 'accepted' };
   }
 }

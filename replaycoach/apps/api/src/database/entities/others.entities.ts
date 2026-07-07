@@ -275,6 +275,23 @@ export class ReferenceVideo {
   @Column({ name: 'overlay_video_key', type: 'varchar', length: 1024, nullable: true })
   overlayVideoKey!: string | null;
 
+  /**
+   * 'full_body' (legacy Full Body Analysis — skeleton burned into an overlay
+   * MP4) or 'annotation_tracking' (new primary — keypoints JSON only; the
+   * frontend renders skeleton + joint-attached annotations over the raw video).
+   */
+  @Column({ name: 'analysis_mode', type: 'varchar', length: 30, default: 'full_body' })
+  analysisMode!: 'full_body' | 'annotation_tracking';
+
+  /** Which keypoint format the JSON/skeleton was produced with. */
+  @Column({ name: 'keypoint_format', type: 'varchar', length: 20, default: 'coco17' })
+  keypointFormat!: 'coco17' | 'halpe26';
+
+  /** Rendered export (raw video + skeleton + tracked annotations burned in),
+   * produced on demand for Annotation Tracking downloads. */
+  @Column({ name: 'export_video_key', type: 'varchar', length: 1024, nullable: true })
+  exportVideoKey!: string | null;
+
   @Column({ type: 'double precision', nullable: true })
   fps!: number | null;
 
@@ -306,6 +323,57 @@ export class ReferenceVideo {
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'uploaded_by_user_id' })
   uploadedBy!: User;
+}
+
+// 9b. TrackedAnnotation Entity — joint-attached coaching annotation.
+// Stores WHICH joints it connects (by keypoint name), never pixel coords, so
+// it follows the body across frames by resolving joints from the keypoints
+// JSON. Distinct from the legacy pixel/per-frame `Annotation`.
+@Entity('tracked_annotations')
+@Index('IDX_tracked_annotations_ref', ['referenceVideoId'])
+export class TrackedAnnotation {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Column({ name: 'reference_video_id', type: 'uuid' })
+  referenceVideoId!: string;
+
+  @Column({ name: 'shape_type', type: 'varchar', length: 20, default: 'line' })
+  shapeType!: 'line' | 'arrow' | 'angle' | 'point';
+
+  @Column({ name: 'start_joint', type: 'varchar', length: 40 })
+  startJoint!: string;
+
+  @Column({ name: 'end_joint', type: 'varchar', length: 40, nullable: true })
+  endJoint!: string | null;
+
+  @Column({ name: 'mid_joint', type: 'varchar', length: 40, nullable: true })
+  midJoint!: string | null;
+
+  @Column({ type: 'varchar', length: 20, default: '#EF4444' })
+  color!: string;
+
+  @Column({ type: 'int', default: 3 })
+  thickness!: number;
+
+  @Column({ type: 'text', nullable: true })
+  label!: string | null;
+
+  @Column({ name: 'from_frame', type: 'int', default: 0 })
+  fromFrame!: number;
+
+  @Column({ name: 'until_frame', type: 'int', nullable: true })
+  untilFrame!: number | null;
+
+  @Column({ name: 'created_by', type: 'uuid' })
+  createdBy!: string;
+
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt!: Date;
+
+  @ManyToOne(() => ReferenceVideo, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'reference_video_id' })
+  referenceVideo!: ReferenceVideo;
 }
 
 // 10. AuditLog Entity

@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     # separate "l"), so 'large'/'xlarge' both resolve to their biggest
     # export (rtmpose-x, 384x288, "performance" tier).
     model_size: str = "medium"
+    # Keypoint format for the LIVE per-participant model. 'halpe26' adds
+    # head/neck/pelvis + full feet (heel + toes) on top of COCO-17 — the
+    # joints dance analysis needs. Same backbone/input as COCO, negligible
+    # extra CPU cost. Set to 'coco17' to revert.
+    keypoint_format: str = "halpe26"
     # Sentinel default — create_model_adapter() remaps this to the correct
     # sized file under ./models/ (auto-downloaded there on first run if
     # missing, see model_downloader.py). Override to pin an exact path.
@@ -52,6 +57,9 @@ class Settings(BaseSettings):
     # session. 'medium' is ~3-4x faster, completes full clips, and keeps the
     # box responsive — the right speed/quality balance for this hardware.
     reference_model_size: str = "medium"
+    # Keypoint format for reference-video (uploaded/example) analysis —
+    # 'halpe26' for the full body + feet skeleton the coaching feature needs.
+    reference_keypoint_format: str = "halpe26"
     reference_onnx_model_path: str | None = None
     reference_detector_model_path: str | None = None
     # No override here on purpose — confirmed via local testing

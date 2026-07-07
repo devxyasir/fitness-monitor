@@ -87,6 +87,15 @@ async function patch<TBody, TResponse>(path: string, body: TBody): Promise<TResp
   return res.json() as Promise<TResponse>;
 }
 
+async function del<TResponse = unknown>(path: string): Promise<TResponse> {
+  const formattedPath = formatPath(path);
+  const res = await fetchWithAuth(formattedPath, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`API error ${res.status}: ${formattedPath}`);
+  // DELETE responses may be empty; tolerate no-body.
+  const text = await res.text();
+  return (text ? JSON.parse(text) : undefined) as TResponse;
+}
+
 /**
  * Multipart form upload (e.g. video files). Cannot reuse fetchWithAuth's
  * getHeaders() — it always forces Content-Type: application/json, which
@@ -174,5 +183,5 @@ function postFormWithProgress<TResponse>(
   })();
 }
 
-export const apiClient = { get, post, patch, postForm, postFormWithProgress };
+export const apiClient = { get, post, patch, del, postForm, postFormWithProgress };
 

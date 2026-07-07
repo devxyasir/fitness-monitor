@@ -53,6 +53,32 @@ RTMPOSE_SOURCES: dict[str, tuple[str, tuple[int, int]]] = {
     ),
 }
 
+# RTMPose body7 halpe26 ONNX SDK packages (26 keypoints: COCO-17 + head/neck/
+# pelvis + feet). All tiers are 256x192. Verified reachable + confirmed to
+# output 26 keypoints. Used when keypoint_format == 'halpe26'.
+RTMPOSE_HALPE26_SOURCES: dict[str, tuple[str, tuple[int, int]]] = {
+    "small": (
+        "https://download.openmmlab.com/mmpose/v1/projects/rtmposev1/onnx_sdk/"
+        "rtmpose-s_simcc-body7_pt-body7-halpe26_700e-256x192-7f134165_20230605.zip",
+        (256, 192),
+    ),
+    "medium": (
+        "https://download.openmmlab.com/mmpose/v1/projects/rtmposev1/onnx_sdk/"
+        "rtmpose-m_simcc-body7_pt-body7-halpe26_700e-256x192-4d3e73dd_20230605.zip",
+        (256, 192),
+    ),
+    "large": (
+        "https://download.openmmlab.com/mmpose/v1/projects/rtmposev1/onnx_sdk/"
+        "rtmpose-l_simcc-body7_pt-body7-halpe26_700e-256x192-2abb7558_20230605.zip",
+        (256, 192),
+    ),
+    "xlarge": (
+        "https://download.openmmlab.com/mmpose/v1/projects/rtmposev1/onnx_sdk/"
+        "rtmpose-l_simcc-body7_pt-body7-halpe26_700e-256x192-2abb7558_20230605.zip",
+        (256, 192),
+    ),
+}
+
 # Ultralytics YOLO11-pose checkpoint tier letters.
 YOLO_POSE_TIERS: dict[str, str] = {
     "small": "n",
@@ -62,20 +88,29 @@ YOLO_POSE_TIERS: dict[str, str] = {
 }
 
 
-def rtmpose_input_size(model_size: str) -> tuple[int, int]:
-    """(H, W) input resolution for a given RTMPose size tier."""
-    return RTMPOSE_SOURCES.get(model_size, RTMPOSE_SOURCES["medium"])[1]
+def _rtmpose_sources_for(keypoint_format: str) -> dict[str, tuple[str, tuple[int, int]]]:
+    return RTMPOSE_HALPE26_SOURCES if keypoint_format == "halpe26" else RTMPOSE_SOURCES
 
 
-def ensure_rtmpose_model(target_path: str, model_size: str) -> None:
-    """Downloads + extracts the RTMPose ONNX SDK package for `model_size`
-    into `target_path`, if not already present on disk."""
+def rtmpose_input_size(model_size: str, keypoint_format: str = "coco17") -> tuple[int, int]:
+    """(H, W) input resolution for a given RTMPose size tier + keypoint format."""
+    sources = _rtmpose_sources_for(keypoint_format)
+    return sources.get(model_size, sources["medium"])[1]
+
+
+def ensure_rtmpose_model(target_path: str, model_size: str, keypoint_format: str = "coco17") -> None:
+    """Downloads + extracts the RTMPose ONNX SDK package for `model_size` and
+    `keypoint_format` into `target_path`, if not already present on disk."""
     dest = Path(target_path)
     if dest.exists():
         return
 
-    url, _ = RTMPOSE_SOURCES.get(model_size, RTMPOSE_SOURCES["medium"])
-    logger.info("RTMPose model missing at %s — downloading (%s size) from %s", target_path, model_size, url)
+    sources = _rtmpose_sources_for(keypoint_format)
+    url, _ = sources.get(model_size, sources["medium"])
+    logger.info(
+        "RTMPose model missing at %s — downloading (%s size, %s) from %s",
+        target_path, model_size, keypoint_format, url,
+    )
     dest.parent.mkdir(parents=True, exist_ok=True)
     _download_and_extract_onnx(url, dest)
     logger.info("RTMPose model ready at %s", target_path)

@@ -63,6 +63,43 @@ COCO_KEYPOINT_NAMES = [
     "right_ankle",
 ]
 
+# Halpe-26 keypoint order (RTMPose body7 halpe26 model). MUST match
+# packages/types/src/pose.ts HALPE26_KEYPOINT_NAMES. First 17 = COCO-17;
+# then head/neck/pelvis and full feet (heel + big toe + small toe per foot).
+HALPE26_KEYPOINT_NAMES = [
+    "nose",            # 0
+    "left_eye",        # 1
+    "right_eye",       # 2
+    "left_ear",        # 3
+    "right_ear",       # 4
+    "left_shoulder",   # 5
+    "right_shoulder",  # 6
+    "left_elbow",      # 7
+    "right_elbow",     # 8
+    "left_wrist",      # 9
+    "right_wrist",     # 10
+    "left_hip",        # 11
+    "right_hip",       # 12
+    "left_knee",       # 13
+    "right_knee",      # 14
+    "left_ankle",      # 15
+    "right_ankle",     # 16
+    "head",            # 17
+    "neck",            # 18
+    "pelvis",          # 19
+    "left_big_toe",    # 20
+    "right_big_toe",   # 21
+    "left_small_toe",  # 22
+    "right_small_toe", # 23
+    "left_heel",       # 24
+    "right_heel",      # 25
+]
+
+
+def keypoint_names_for(keypoint_format: str) -> list[str]:
+    """Canonical keypoint name list for a format ('coco17' | 'halpe26')."""
+    return HALPE26_KEYPOINT_NAMES if keypoint_format == "halpe26" else COCO_KEYPOINT_NAMES
+
 
 @dataclass
 class KeypointResult:
@@ -137,11 +174,18 @@ class RTMPoseAdapter(PoseModelAdapter):
     STD = np.array([58.395, 57.12, 57.375], dtype=np.float32)
     SIMCC_SPLIT_RATIO = 2.0
 
-    def __init__(self, model_path: str | None = None, model_size: str = "medium"):
+    def __init__(
+        self,
+        model_path: str | None = None,
+        model_size: str = "medium",
+        keypoint_format: str = "coco17",
+    ):
         self._model_path = model_path or settings.onnx_model_path
         self._model_size = model_size
+        self._keypoint_format = keypoint_format
+        self._keypoint_names = keypoint_names_for(keypoint_format)
         self._session = None
-        self._input_size = model_downloader.rtmpose_input_size(model_size)  # (H, W)
+        self._input_size = model_downloader.rtmpose_input_size(model_size, keypoint_format)  # (H, W)
 
     def load(self) -> None:
         """Auto-download the model if missing, then load an ONNX Runtime session."""
@@ -150,11 +194,12 @@ class RTMPoseAdapter(PoseModelAdapter):
         model_file = Path(self._model_path)
         if not model_file.exists():
             try:
-                model_downloader.ensure_rtmpose_model(self._model_path, self._model_size)
+                model_downloader.ensure_rtmpose_model(self._model_path, self._model_size, self._keypoint_format)
             except Exception:
                 logger.exception(
-                    "Failed to auto-download RTMPose model (%s) to %s — inference will use stub mode",
+                    "Failed to auto-download RTMPose model (%s, %s) to %s — inference will use stub mode",
                     self._model_size,
+                    self._keypoint_format,
                     self._model_path,
                 )
                 return
@@ -199,7 +244,7 @@ class RTMPoseAdapter(PoseModelAdapter):
         in_h, in_w = self._input_size  # (256, 192)
         keypoints: list[KeypointResult] = []
         kept: list[float] = []
-        for i, name in enumerate(COCO_KEYPOINT_NAMES):
+        for i, name in enumerate(self._keypoint_names):
             score = float(scores[i])
             # normalize to [0,1] in the model input frame
             nx = float(min(max(x_locs[i] / in_w, 0.0), 1.0))
@@ -486,8 +531,9 @@ class TopDownPoseEstimator(PoseModelAdapter):
         model_size: str = "medium",
         detector_size: str = "small",
         detect_interval_frames: int | None = None,
+        keypoint_format: str = "coco17",
     ):
-        self._pose = RTMPoseAdapter(rtmpose_path, model_size=model_size)
+        self._pose = RTMPoseAdapter(rtmpose_path, model_size=model_size, keypoint_format=keypoint_format)
         self._detector = PersonDetector(detector_path, model_size=detector_size)
         self._tracks: dict[str, _TrackState] = {}
         # Derived from the pose model's own input resolution (H, W) — e.g.
@@ -579,10 +625,19 @@ class TopDownPoseEstimator(PoseModelAdapter):
         return PoseResult(keypoints=mapped, confidence_avg=crop_result.confidence_avg)
 
 
+def _rtmpose_model_filename(model_size: str, keypoint_format: str) -> str:
+    """Resolve the on-disk RTMPose ONNX filename for a size + keypoint format.
+    Halpe files carry a -halpe26 suffix so they never collide with COCO ones."""
+    tier = {"small": "s", "medium": "m", "large": "l", "xlarge": "l"}.get(model_size, "m")
+    suffix = "-halpe26" if keypoint_format == "halpe26" else ""
+    return f"./models/rtmpose-{tier}{suffix}.onnx"
+
+
 def create_model_adapter() -> PoseModelAdapter:
     """Factory to create the designated pose model based on configuration."""
     model_type = settings.model_type.lower()
     model_size = settings.model_size.lower()
+    keypoint_format = settings.keypoint_format.lower()
 
     # Determine default paths based on type and size, if not overridden in env
     model_path = settings.onnx_model_path
@@ -594,15 +649,8 @@ def create_model_adapter() -> PoseModelAdapter:
                 model_path = "./models/yolo11l-pose.onnx"
             else:
                 model_path = "./models/yolo11s-pose.onnx"
-        else: # rtmpose
-            if model_size == "small":
-                model_path = "./models/rtmpose-s.onnx"
-            elif model_size == "medium":
-                model_path = "./models/rtmpose-m.onnx"
-            elif model_size in ("large", "xlarge"):
-                model_path = "./models/rtmpose-l.onnx"
-            else:
-                model_path = "./models/rtmpose-m.onnx"
+        else:  # rtmpose
+            model_path = _rtmpose_model_filename(model_size, keypoint_format)
 
     # Inject resolved path back into settings for transparency
     settings.onnx_model_path = model_path
@@ -621,9 +669,10 @@ def create_model_adapter() -> PoseModelAdapter:
         return YOLOPoseAdapter(model_path, model_size=model_size)
     else:
         logger.info(
-            "Initializing top-down RTMPose pipeline (%s size, detector tier=%s): "
+            "Initializing top-down RTMPose pipeline (%s size, %s, detector tier=%s): "
             "person detector -> crop -> RTMPose",
             model_size,
+            keypoint_format,
             detector_tier,
         )
         return TopDownPoseEstimator(
@@ -631,6 +680,7 @@ def create_model_adapter() -> PoseModelAdapter:
             detector_path=detector_path,
             model_size=model_size,
             detector_size=model_size,
+            keypoint_format=keypoint_format,
         )
 
 
@@ -648,15 +698,11 @@ def create_reference_model_adapter() -> PoseModelAdapter:
     interval wasn't actually the difference-maker and only added CPU cost.
     """
     model_size = settings.reference_model_size.lower()
+    keypoint_format = settings.reference_keypoint_format.lower()
 
     model_path = settings.reference_onnx_model_path
     if not model_path:
-        if model_size == "small":
-            model_path = "./models/rtmpose-s.onnx"
-        elif model_size == "medium":
-            model_path = "./models/rtmpose-m.onnx"
-        else:
-            model_path = "./models/rtmpose-l.onnx"
+        model_path = _rtmpose_model_filename(model_size, keypoint_format)
 
     detector_path = settings.reference_detector_model_path
     if not detector_path:
@@ -669,11 +715,13 @@ def create_reference_model_adapter() -> PoseModelAdapter:
         model_size=model_size,
         detector_size=model_size,
         detect_interval_frames=settings.reference_detect_interval_frames,
+        keypoint_format=keypoint_format,
     )
     logger.info(
-        "Initializing reference-video RTMPose pipeline (%s size, detect_interval=%d): "
+        "Initializing reference-video RTMPose pipeline (%s size, %s, detect_interval=%d): "
         "person detector -> crop -> RTMPose",
         model_size,
+        keypoint_format,
         estimator.DETECT_INTERVAL_FRAMES,
     )
     return estimator

@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-import { Annotation, Clip, ClipShare, ReferenceVideo } from '../database/entities/others.entities';
+import { Annotation, Clip, ClipShare, ReferenceVideo, TrackedAnnotation } from '../database/entities/others.entities';
 import { SessionParticipant } from '../sessions/session-participant.entity';
 import { SessionsModule } from '../sessions/sessions.module';
 import { RealtimeModule } from '../realtime/realtime.module';
@@ -12,7 +12,7 @@ import { ReferenceStorageService } from './reference-storage.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([ReferenceVideo, Clip, ClipShare, Annotation, SessionParticipant]),
+    TypeOrmModule.forFeature([ReferenceVideo, Clip, ClipShare, Annotation, TrackedAnnotation, SessionParticipant]),
     SessionsModule,
     RealtimeModule,
   ],

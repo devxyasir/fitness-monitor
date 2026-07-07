@@ -12,6 +12,9 @@ interface ReferenceOpenPayload {
   fps: number;
   frameCount: number;
   status: 'processing' | 'ready' | 'failed';
+  /** Full Body Analysis handles this hook; annotation_tracking is handled by
+   * useAnnotationTrackingSocket, so those opens are ignored here. */
+  analysisMode?: 'full_body' | 'annotation_tracking';
 }
 
 /**
@@ -34,6 +37,7 @@ export function useReferenceSocketListeners(sessionId: string) {
 
   useEffect(() => {
     const handleOpen = (payload: ReferenceOpenPayload) => {
+      if (payload.analysisMode === 'annotation_tracking') return;
       open({
         refId: payload.id,
         videoUrl: payload.videoUrl,
@@ -46,6 +50,7 @@ export function useReferenceSocketListeners(sessionId: string) {
     };
 
     const handleReady = (payload: ReferenceOpenPayload) => {
+      if (payload.analysisMode === 'annotation_tracking') return;
       // If the modal is already open (the common case — the coach presents
       // the video immediately after upload, while it's still processing),
       // we must carry overlayVideoUrl/keypointsUrl/fps/frameCount too, not

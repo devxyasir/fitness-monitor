@@ -86,12 +86,23 @@ def process_reference_video(
     overlay_upload_url: str,
     callback_token: str,
     model: PoseModelAdapter,
+    mode: str = "full_body",
+    keypoint_format: str = "halpe26",
 ) -> None:
     """
     Synchronous and CPU-bound by design — FastAPI's BackgroundTasks runs sync
     callables in a thread pool, so this does not block the event loop (the
     live pose worker pool / command consumer keep running normally).
+
+    mode:
+      - 'full_body' (Full Body Analysis): burns the skeleton into the video
+        pixels and uploads an overlay MP4, as before.
+      - 'annotation_tracking' (new primary): produces the keypoints JSON only
+        and skips the ffmpeg burn-in — the frontend renders the skeleton and
+        joint-attached annotations on canvas layers over the RAW video, so no
+        overlay video is needed (and it's much faster).
     """
+    burn_overlay = mode != "annotation_tracking"
     local_path: str | None = None
     overlay_path: str | None = None
     payload: dict
@@ -113,9 +124,11 @@ def process_reference_video(
             ref_id, fps, width, height, frame_count_hint,
         )
 
-        overlay_fd, overlay_path = tempfile.mkstemp(suffix=".mp4")
-        os.close(overlay_fd)
-        ffmpeg_proc = _start_ffmpeg_writer(overlay_path, width, height, fps)
+        ffmpeg_proc = None
+        if burn_overlay:
+            overlay_fd, overlay_path = tempfile.mkstemp(suffix=".mp4")
+            os.close(overlay_fd)
+            ffmpeg_proc = _start_ffmpeg_writer(overlay_path, width, height, fps)
 
         frames: list[dict] = []
         frame_index = 0
@@ -136,14 +149,14 @@ def process_reference_video(
                     break
 
                 result = model.infer(frame, track_id=ref_id)
-                kp_by_name = {kp.name: {"x": kp.x, "y": kp.y, "score": kp.score} for kp in result.keypoints}
 
-                # Burns the skeleton directly onto the frame pixels (in
-                # place) before it's piped to ffmpeg — this is the actual
-                # video the coach/students see, not a separately-drawn
-                # overlay layer that has to stay coordinate-aligned with it.
-                draw_skeleton(frame, kp_by_name, width, height)
-                ffmpeg_proc.stdin.write(frame.tobytes())
+                # Full Body Analysis: burn the skeleton into the pixels and
+                # pipe to ffmpeg. Annotation Tracking: skip this entirely —
+                # the frontend renders skeleton + annotations from the JSON.
+                if ffmpeg_proc is not None:
+                    kp_by_name = {kp.name: {"x": kp.x, "y": kp.y, "score": kp.score} for kp in result.keypoints}
+                    draw_skeleton(frame, kp_by_name, width, height, keypoint_format)
+                    ffmpeg_proc.stdin.write(frame.tobytes())
 
                 frames.append({
                     "frameIndex": frame_index,
@@ -156,22 +169,23 @@ def process_reference_video(
                 frame_index += 1
         finally:
             cap.release()
-            if ffmpeg_proc.stdin:
-                ffmpeg_proc.stdin.close()
-            try:
-                ffmpeg_proc.wait(timeout=FFMPEG_EXIT_TIMEOUT_S)
-            except subprocess.TimeoutExpired:
-                logger.warning("Reference %s: ffmpeg did not exit in time, killing", ref_id)
-                ffmpeg_proc.kill()
+            if ffmpeg_proc is not None:
+                if ffmpeg_proc.stdin:
+                    ffmpeg_proc.stdin.close()
+                try:
+                    ffmpeg_proc.wait(timeout=FFMPEG_EXIT_TIMEOUT_S)
+                except subprocess.TimeoutExpired:
+                    logger.warning("Reference %s: ffmpeg did not exit in time, killing", ref_id)
+                    ffmpeg_proc.kill()
 
         duration_ms = round((frame_index / fps) * 1000) if fps else 0
 
-        # Upload the annotated overlay video — non-fatal on its own: if this
-        # fails, the coach still gets keypoints + the raw video rather than
-        # the whole analysis failing (see ReferenceService.completeProcessing,
-        # which falls back to the raw video when overlayVideoKey is absent).
+        # Upload the annotated overlay video (Full Body Analysis only) —
+        # non-fatal: if it fails, the coach still gets keypoints + the raw
+        # video (ReferenceService.completeProcessing falls back to the raw
+        # video when overlayVideoKey is absent).
         overlay_uploaded = False
-        if frame_index > 0 and os.path.exists(overlay_path) and os.path.getsize(overlay_path) > 0:
+        if burn_overlay and overlay_path and frame_index > 0 and os.path.exists(overlay_path) and os.path.getsize(overlay_path) > 0:
             try:
                 with open(overlay_path, "rb") as f:
                     up_resp = requests.post(
@@ -192,6 +206,7 @@ def process_reference_video(
                 "frameCount": frame_index,
                 "width": width,
                 "height": height,
+                "keypointFormat": keypoint_format,
                 "frames": frames,
             },
             "fps": fps,
@@ -199,11 +214,12 @@ def process_reference_video(
             "width": width,
             "height": height,
             "durationMs": duration_ms,
+            "keypointFormat": keypoint_format,
             "overlayUploaded": overlay_uploaded,
         }
         logger.info(
-            "Reference %s: processed %d frames (overlay_uploaded=%s), posting callback",
-            ref_id, frame_index, overlay_uploaded,
+            "Reference %s: processed %d frames (mode=%s, overlay_uploaded=%s), posting callback",
+            ref_id, frame_index, mode, overlay_uploaded,
         )
 
     except Exception as exc:  # noqa: BLE001 - report failure, never raise into the caller
