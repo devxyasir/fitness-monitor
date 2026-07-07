@@ -30,10 +30,10 @@ MAX_FRAMES = 1800  # bounds processing time (e.g. 60s @ 30fps, 120s @ 15fps)
 # so a frame-count cap alone can't bound wall-clock time. Without this, a
 # slow-but-not-crashed job just leaves the coach staring at "Analyzing..."
 # indefinitely with no feedback. Truncates and reports whatever was processed
-# so far instead, same as hitting MAX_FRAMES. Raised from 240s: reference
-# analysis now runs a much larger model with a tighter bbox-refresh interval
-# for quality (see create_reference_model_adapter), which takes noticeably
-# longer than the old shared-with-live small/medium model did.
+# so far instead, same as hitting MAX_FRAMES. Raised from 240s as a generous
+# ceiling — reference analysis runs its own model (see
+# create_reference_model_adapter), independent of whatever live tracking is
+# currently sized to.
 MAX_PROCESSING_SECONDS = 480
 DOWNLOAD_TIMEOUT_S = 60
 CALLBACK_TIMEOUT_S = 30

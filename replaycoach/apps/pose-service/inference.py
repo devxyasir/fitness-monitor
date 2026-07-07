@@ -638,10 +638,14 @@ def create_reference_model_adapter() -> PoseModelAdapter:
     """
     Separate factory for one-off reference-video (uploaded-video) analysis —
     deliberately independent of create_model_adapter()/settings.model_size,
-    which is sized for live per-participant tracking's real-time constraint.
-    A reference upload has no such deadline, so it can use a much larger,
-    more accurate model plus a tighter bbox-refresh interval (see
-    settings.reference_detect_interval_frames) without affecting live calls.
+    which is sized for live per-participant tracking's real-time constraint
+    and may be downgraded for CPU reasons. A reference upload has no such
+    deadline, so it can use a larger, more accurate model without affecting
+    live calls. Otherwise mirrors create_model_adapter()/process_1mp4.py
+    exactly (same detect-interval, no extra overrides) — confirmed via local
+    testing that the plain, unmodified settings already produce good
+    results; this codebase's own speculative tightening of the bbox-refresh
+    interval wasn't actually the difference-maker and only added CPU cost.
     """
     model_size = settings.reference_model_size.lower()
 
@@ -659,17 +663,18 @@ def create_reference_model_adapter() -> PoseModelAdapter:
         detector_tier = model_downloader.YOLO_POSE_TIERS.get(model_size, "l")
         detector_path = f"./models/yolo11{detector_tier}-pose.onnx"
 
-    logger.info(
-        "Initializing reference-video RTMPose pipeline (%s size, detect_interval=%d): "
-        "person detector -> crop -> RTMPose",
-        model_size,
-        settings.reference_detect_interval_frames,
-    )
-    return TopDownPoseEstimator(
+    estimator = TopDownPoseEstimator(
         rtmpose_path=model_path,
         detector_path=detector_path,
         model_size=model_size,
         detector_size=model_size,
         detect_interval_frames=settings.reference_detect_interval_frames,
     )
+    logger.info(
+        "Initializing reference-video RTMPose pipeline (%s size, detect_interval=%d): "
+        "person detector -> crop -> RTMPose",
+        model_size,
+        estimator.DETECT_INTERVAL_FRAMES,
+    )
+    return estimator
 

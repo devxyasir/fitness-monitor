@@ -60,12 +60,16 @@ class Settings(BaseSettings):
     reference_model_size: str = "medium"
     reference_onnx_model_path: str | None = None
     reference_detector_model_path: str | None = None
-    # Tighter bbox-refresh interval than live tracking's 16 — a reused stale
-    # box during fast motion sends RTMPose a crop the person has already
-    # moved out of, which produces confidently-wrong keypoints scattered off
-    # the body regardless of model size. Reference analysis isn't
-    # latency-sensitive, so it can afford to re-detect far more often.
-    reference_detect_interval_frames: int = 4
+    # No override here on purpose — confirmed via local testing
+    # (process_1mp4.py, which calls plain create_model_adapter() with zero
+    # overrides) that TopDownPoseEstimator's unmodified class default
+    # (currently 16, see inference.py) already produces good results;
+    # tightening this to re-detect more often was this codebase's own
+    # speculative fix for bbox drift on fast motion, but it wasn't actually
+    # the settings difference that mattered, and it added meaningful extra
+    # CPU cost. Left as None so create_reference_model_adapter() falls back
+    # to the same class default live tracking uses.
+    reference_detect_interval_frames: int | None = None
 
     # Sampling rate (inferences per second per participant)
     sample_hz: int = 10
