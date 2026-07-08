@@ -2,10 +2,11 @@
 Annotation-tracking export renderer.
 
 Takes a raw video + its keypoints JSON + a list of joint-attached
-annotations, and renders a browser-playable MP4 with the skeleton and the
-tracked annotations burned in — resolving each annotation's joints from the
-keypoints per frame (no re-inference, no pixel tracking). This is the export
-path for the new Annotation Tracking feature; editing stays on canvas layers.
+annotations, and renders a browser-playable MP4 with the coach's
+annotations burned in — resolving each annotation's joints from the
+keypoints per frame (no re-inference, no pixel tracking).
+
+Audio from the original video is preserved via FFmpeg two-pass mux.
 """
 
 from __future__ import annotations
@@ -27,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 DOWNLOAD_TIMEOUT_S = 60
 UPLOAD_TIMEOUT_S = 120
-FFMPEG_EXIT_TIMEOUT_S = 60
+FFMPEG_EXIT_TIMEOUT_S = 120
 MIN_SCORE = 0.3
 
 
@@ -53,15 +54,9 @@ def _download(url: str, suffix: str) -> str:
     return path
 
 
-def _start_ffmpeg(output_path: str, width: int, height: int, fps: float) -> subprocess.Popen:
-    cmd = [
-        "ffmpeg", "-y", "-loglevel", "error",
-        "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{width}x{height}", "-r", str(fps or 30.0),
-        "-i", "-",
-        "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
-        output_path,
-    ]
-    return subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+def _start_video_writer(output_path: str, width: int, height: int, fps: float) -> cv2.VideoWriter:
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    return cv2.VideoWriter(output_path, fourcc, fps, (width, height))
 
 
 def _pt(kp: dict | None, w: int, h: int) -> tuple[int, int] | None:
@@ -70,43 +65,36 @@ def _pt(kp: dict | None, w: int, h: int) -> tuple[int, int] | None:
     return (int(kp["x"] * w), int(kp["y"] * h))
 
 
+def _draw_joint_marker(frame: np.ndarray, pt: tuple[int, int], color: tuple[int, int, int], thickness: int) -> None:
+    """Draw a styled joint marker matching the editor: dark outline + white fill."""
+    cv2.circle(frame, pt, 6, (42, 23, 15), 1, cv2.LINE_AA)
+    cv2.circle(frame, pt, 5, (255, 255, 255), cv2.FILLED, cv2.LINE_AA)
+    cv2.circle(frame, pt, 3, color, cv2.FILLED, cv2.LINE_AA)
+
+
 def _draw_annotation(frame: np.ndarray, ann: dict, kp_by_name: dict, w: int, h: int) -> None:
     color = _hex_to_bgr(ann.get("color", "#EF4444"))
     thickness = max(1, int(ann.get("thickness", 3)))
     shape = ann.get("shapeType", "line")
 
     a = _pt(kp_by_name.get(ann.get("startJoint")), w, h)
-    
-    # Draw Label text note if present
+
     label = ann.get("label")
     if label and a:
-        cv2.putText(
-            frame,
-            label,
-            (a[0] + 12, a[1] - 12),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.45,
-            (15, 23, 42), # dark backdrop outline
-            thickness + 2,
-            cv2.LINE_AA
-        )
-        cv2.putText(
-            frame,
-            label,
-            (a[0] + 12, a[1] - 12),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.45,
-            color,
-            thickness,
-            cv2.LINE_AA
-        )
+        cv2.putText(frame, label, (a[0] + 12, a[1] - 12),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (15, 23, 42), thickness + 2, cv2.LINE_AA)
+        cv2.putText(frame, label, (a[0] + 12, a[1] - 12),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, thickness, cv2.LINE_AA)
+
+    if a:
+        _draw_joint_marker(frame, a, color, thickness)
 
     if shape == "point":
-        if a:
-            cv2.circle(frame, a, thickness * 3, color, thickness, cv2.LINE_AA)
         return
 
     b = _pt(kp_by_name.get(ann.get("endJoint")), w, h)
+    if b:
+        _draw_joint_marker(frame, b, color, thickness)
 
     if shape == "circle":
         if a and b:
@@ -116,40 +104,26 @@ def _draw_annotation(frame: np.ndarray, ann: dict, kp_by_name: dict, w: int, h: 
 
     if shape == "angle":
         mid = _pt(kp_by_name.get(ann.get("midJoint")), w, h)
+        if mid:
+            _draw_joint_marker(frame, mid, color, thickness)
         if a and mid and b:
             cv2.line(frame, mid, a, color, thickness, cv2.LINE_AA)
             cv2.line(frame, mid, b, color, thickness, cv2.LINE_AA)
-            
-            # Math for degrees arc & label
-            v1 = (a[0] - mid[0], a[1] - mid[1])
-            v2 = (b[0] - mid[0], b[1] - mid[1])
-            a1 = math.atan2(v1[1], v1[0])
-            a2 = math.atan2(v2[1], v2[0])
+            a1 = math.atan2(a[1] - mid[1], a[0] - mid[0])
+            a2 = math.atan2(b[1] - mid[1], b[0] - mid[0])
             diff = a2 - a1
             diff = math.atan2(math.sin(diff), math.cos(diff))
             deg = round(abs(diff) * 180 / math.pi)
-
-            # Draw visual arc at vertex
-            start_deg = int(math.degrees(a1))
-            cv2.ellipse(
-                frame,
-                mid,
-                (22, 22),
-                0,
-                start_deg,
-                start_deg + int(math.degrees(diff)),
-                color,
-                1,
-                cv2.LINE_AA
-            )
-
-            # Degree label placement along the bisector
+            cv2.ellipse(frame, mid, (22, 22), 0,
+                        int(math.degrees(a1)), int(math.degrees(a1 + diff)),
+                        color, 1, cv2.LINE_AA)
             bisector = a1 + diff / 2
             tx = int(mid[0] + 36 * math.cos(bisector))
             ty = int(mid[1] + 36 * math.sin(bisector))
-            
-            cv2.putText(frame, f"{deg}o", (tx - 10, ty + 4), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (15, 23, 42), thickness + 2, cv2.LINE_AA)
-            cv2.putText(frame, f"{deg}o", (tx - 10, ty + 4), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, thickness, cv2.LINE_AA)
+            cv2.putText(frame, f"{deg}°", (tx - 10, ty + 4),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (15, 23, 42), thickness + 2, cv2.LINE_AA)
+            cv2.putText(frame, f"{deg}°", (tx - 10, ty + 4),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, thickness, cv2.LINE_AA)
         return
 
     if not a or not b:
@@ -164,6 +138,25 @@ def _draw_annotation(frame: np.ndarray, ann: dict, kp_by_name: dict, w: int, h: 
             cv2.line(frame, b, (hx, hy), color, thickness, cv2.LINE_AA)
 
 
+def _mux_audio_video(video_path: str, audio_source_path: str, output_path: str) -> None:
+    """Mux the silent annotated video with audio from the source using FFmpeg."""
+    cmd = [
+        "ffmpeg", "-y", "-loglevel", "error",
+        "-i", video_path,
+        "-i", audio_source_path,
+        "-c:v", "copy",
+        "-c:a", "aac", "-b:a", "128k",
+        "-map", "0:v:0", "-map", "1:a:0",
+        "-shortest",
+        "-movflags", "+faststart",
+        output_path,
+    ]
+    proc = subprocess.run(cmd, capture_output=True, timeout=FFMPEG_EXIT_TIMEOUT_S)
+    if proc.returncode != 0:
+        err = proc.stderr.decode("utf-8", errors="replace")[-500:]
+        raise RuntimeError(f"ffmpeg audio mux failed (exit {proc.returncode}): {err}")
+
+
 def export_annotated_video(
     ref_id: str,
     video_url: str,
@@ -174,10 +167,11 @@ def export_annotated_video(
     keypoint_format: str = "halpe26",
     draw_skeleton_layer: bool = False,
 ) -> None:
-    """Render raw video + skeleton + tracked annotations → MP4, upload it."""
+    """Render raw video + annotations (optional skeleton) → MP4 with audio, upload it."""
     import json
 
     local_path: str | None = None
+    silent_path: str | None = None
     out_path: str | None = None
     try:
         logger.info("Export %s: downloading video + keypoints", ref_id)
@@ -195,57 +189,58 @@ def export_annotated_video(
         if not cap.isOpened():
             raise RuntimeError("Could not open video for export")
         fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        width = int(cap.get(cv2.CAP_PROP_F_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_F_HEIGHT))
 
-        out_fd, out_path = tempfile.mkstemp(suffix=".mp4")
+        out_fd, silent_path = tempfile.mkstemp(suffix=".mp4")
         os.close(out_fd)
-        ffmpeg = _start_ffmpeg(out_path, width, height, fps)
+        writer = _start_video_writer(silent_path, width, height, fps)
 
         idx = 0
-        try:
-            while True:
-                ok, frame = cap.read()
-                if not ok:
-                    break
-                kp_by_name = frames_by_index.get(idx, {})
-                if draw_skeleton_layer and kp_by_name:
-                    draw_skeleton(frame, kp_by_name, width, height, keypoint_format)
-                elif kp_by_name:
-                    active_joints = set()
-                    for ann in annotations:
-                        ff = ann.get("fromFrame", 0)
-                        uf = ann.get("untilFrame")
-                        if idx < ff or (uf is not None and idx > uf):
-                            continue
-                        for jkey in ("startJoint", "endJoint", "midJoint"):
-                            val = ann.get(jkey)
-                            if val:
-                                active_joints.add(val)
-                    for joint_name in active_joints:
-                        pt = _pt(kp_by_name.get(joint_name), width, height)
-                        if pt:
-                            cv2.circle(frame, pt, 6, (42, 23, 15), 1, cv2.LINE_AA)
-                            cv2.circle(frame, pt, 5, (255, 255, 255), 1, cv2.LINE_AA)
+        while True:
+            ok, frame = cap.read()
+            if not ok:
+                break
+            kp_by_name = frames_by_index.get(idx, {})
 
+            if draw_skeleton_layer and kp_by_name:
+                draw_skeleton(frame, kp_by_name, width, height, keypoint_format)
+            elif kp_by_name:
+                active_joints: set[str] = set()
                 for ann in annotations:
                     ff = ann.get("fromFrame", 0)
                     uf = ann.get("untilFrame")
                     if idx < ff or (uf is not None and idx > uf):
                         continue
-                    _draw_annotation(frame, ann, kp_by_name, width, height)
-                ffmpeg.stdin.write(frame.tobytes())
-                idx += 1
-        finally:
-            cap.release()
-            if ffmpeg.stdin:
-                ffmpeg.stdin.close()
-            try:
-                ffmpeg.wait(timeout=FFMPEG_EXIT_TIMEOUT_S)
-            except subprocess.TimeoutExpired:
-                ffmpeg.kill()
+                    for jkey in ("startJoint", "endJoint", "midJoint"):
+                        val = ann.get(jkey)
+                        if val:
+                            active_joints.add(val)
+                for joint_name in active_joints:
+                    jpt = _pt(kp_by_name.get(joint_name), width, height)
+                    if jpt:
+                        cv2.circle(frame, jpt, 6, (42, 23, 15), 1, cv2.LINE_AA)
+                        cv2.circle(frame, jpt, 5, (255, 255, 255), cv2.FILLED, cv2.LINE_AA)
 
-        logger.info("Export %s: rendered %d frames, uploading", ref_id, idx)
+            for ann in annotations:
+                ff = ann.get("fromFrame", 0)
+                uf = ann.get("untilFrame")
+                if idx < ff or (uf is not None and idx > uf):
+                    continue
+                _draw_annotation(frame, ann, kp_by_name, width, height)
+
+            writer.write(frame)
+            idx += 1
+
+        cap.release()
+        writer.release()
+        logger.info("Export %s: rendered %d frames, muxing audio", ref_id, idx)
+
+        out_fd, out_path = tempfile.mkstemp(suffix=".mp4")
+        os.close(out_fd)
+        _mux_audio_video(silent_path, local_path, out_path)
+
+        logger.info("Export %s: upload", ref_id)
         with open(out_path, "rb") as f:
             resp = requests.post(
                 upload_url,
@@ -258,7 +253,7 @@ def export_annotated_video(
     except Exception:
         logger.exception("Export %s: failed", ref_id)
     finally:
-        for p in (local_path, out_path):
+        for p in (local_path, silent_path, out_path):
             if p and os.path.exists(p):
                 try:
                     os.remove(p)
