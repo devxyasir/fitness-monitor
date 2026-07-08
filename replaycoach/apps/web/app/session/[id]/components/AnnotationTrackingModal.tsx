@@ -24,7 +24,7 @@ const SHAPES: { id: TrackedAnnotationShape; label: string; icon: any }[] = [
   { id: 'angle', label: 'Angle', icon: ChevronRight },
   { id: 'point', label: 'Point', icon: CircleIcon },
 ];
-const JOINT_SNAP_PX = 22;
+const JOINT_SNAP_PX = 30;
 const MIN_SCORE = 0.3;
 
 function jointsNeeded(shape: TrackedAnnotationShape): number {
@@ -384,10 +384,17 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
     let best: { id: string; d: number } | null = null;
     for (const a of annotations) {
       if (frameIndex < a.fromFrame || (a.untilFrame != null && frameIndex > a.untilFrame)) continue;
-      const p1 = P(a.startJoint), p2 = P(a.endJoint);
+      const p1 = P(a.startJoint), p2 = P(a.endJoint), pm = P(a.midJoint);
       let d = Infinity;
-      if (a.shapeType === 'point' && p1) d = Math.hypot(p1.x - px, p1.y - py);
-      else if (p1 && p2) {
+      if (a.shapeType === 'point' && p1) {
+        d = Math.hypot(p1.x - px, p1.y - py);
+      } else if (a.shapeType === 'angle' && p1 && pm && p2) {
+        const t1 = Math.max(0, Math.min(1, ((px - p1.x) * (pm.x - p1.x) + (py - p1.y) * (pm.y - p1.y)) / ((pm.x - p1.x) ** 2 + (pm.y - p1.y) ** 2 || 1)));
+        const d1 = Math.hypot(p1.x + t1 * (pm.x - p1.x) - px, p1.y + t1 * (pm.y - p1.y) - py);
+        const t2 = Math.max(0, Math.min(1, ((px - pm.x) * (p2.x - pm.x) + (py - pm.y) * (p2.y - pm.y)) / ((p2.x - pm.x) ** 2 + (p2.y - pm.y) ** 2 || 1)));
+        const d2 = Math.hypot(pm.x + t2 * (p2.x - pm.x) - px, pm.y + t2 * (p2.y - pm.y) - py);
+        d = Math.min(d1, d2);
+      } else if (p1 && p2) {
         const t = Math.max(0, Math.min(1, ((px - p1.x) * (p2.x - p1.x) + (py - p1.y) * (p2.y - p1.y)) / ((p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2 || 1)));
         d = Math.hypot(p1.x + t * (p2.x - p1.x) - px, p1.y + t * (p2.y - p1.y) - py);
       }
@@ -402,9 +409,12 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
     const px = ((e.clientX - rect.left) / rect.width) * videoRect.width;
     const py = ((e.clientY - rect.top) / rect.height) * videoRect.height;
 
-    // Select mode (no shape picking in progress): pick an existing annotation.
     const joint = nearestJoint(px, py);
     if (!joint) {
+      // If we are actively in progress of drawing/picking points, ignore misses on empty space.
+      if (pendingJoints.length > 0) {
+        return;
+      }
       const annId = nearestAnnotation(px, py);
       s.select(annId);
       if (!annId) s.clearPending();
