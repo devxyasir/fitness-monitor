@@ -172,7 +172,7 @@ def export_annotated_video(
     callback_token: str,
     annotations: list[dict],
     keypoint_format: str = "halpe26",
-    draw_skeleton_layer: bool = True,
+    draw_skeleton_layer: bool = False,
 ) -> None:
     """Render raw video + skeleton + tracked annotations → MP4, upload it."""
     import json

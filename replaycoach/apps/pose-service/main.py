@@ -292,7 +292,7 @@ class ReferenceExportRequest(BaseModel):
     callbackToken: str
     annotations: list[dict]
     keypointFormat: str = "halpe26"
-    drawSkeleton: bool = True
+    drawSkeleton: bool = False
 
 
 @app.post("/reference/export")
