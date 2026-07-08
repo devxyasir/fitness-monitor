@@ -211,6 +211,23 @@ def export_annotated_video(
                 kp_by_name = frames_by_index.get(idx, {})
                 if draw_skeleton_layer and kp_by_name:
                     draw_skeleton(frame, kp_by_name, width, height, keypoint_format)
+                elif kp_by_name:
+                    active_joints = set()
+                    for ann in annotations:
+                        ff = ann.get("fromFrame", 0)
+                        uf = ann.get("untilFrame")
+                        if idx < ff or (uf is not None and idx > uf):
+                            continue
+                        for jkey in ("startJoint", "endJoint", "midJoint"):
+                            val = ann.get(jkey)
+                            if val:
+                                active_joints.add(val)
+                    for joint_name in active_joints:
+                        pt = _pt(kp_by_name.get(joint_name), width, height)
+                        if pt:
+                            cv2.circle(frame, pt, 6, (42, 23, 15), 1, cv2.LINE_AA)
+                            cv2.circle(frame, pt, 5, (255, 255, 255), 1, cv2.LINE_AA)
+
                 for ann in annotations:
                     ff = ann.get("fromFrame", 0)
                     uf = ann.get("untilFrame")

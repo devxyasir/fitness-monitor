@@ -551,7 +551,7 @@ export class ReferenceService {
         uploadUrl,
         callbackToken,
         keypointFormat: video.keypointFormat,
-        drawSkeleton: true,
+        drawSkeleton: false,
         annotations: annotations.map((a) => ({
           shapeType: a.shapeType,
           startJoint: a.startJoint,

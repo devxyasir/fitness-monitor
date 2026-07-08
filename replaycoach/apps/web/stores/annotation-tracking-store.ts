@@ -95,7 +95,7 @@ const initial = {
   shapeType: 'line' as TrackedAnnotationShape,
   color: '#EF4444',
   thickness: 4,
-  showSkeleton: true,
+  showSkeleton: false,
   pendingJoints: [] as string[],
   playing: false,
   frameIndex: 0,

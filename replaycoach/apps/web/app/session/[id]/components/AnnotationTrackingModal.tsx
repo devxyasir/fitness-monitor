@@ -171,12 +171,18 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
         ctx.beginPath(); ctx.arc(px, py, 5, 0, Math.PI * 2); ctx.stroke();
       }
     } else {
-      // Skeleton hidden: ONLY show active/annotated/pending/hovered joints
+      // Skeleton hidden: ONLY show active/annotated/pending/hovered joints.
+      // But if the user is hovering over the canvas (mousePos !== null) or picking joints,
+      // show all joint dots (without connecting lines) so they can see what checkpoints are available to connect.
       const active = getActiveJoints();
+      const showAllDots = mousePos !== null || pendingJoints.length > 0;
+
       for (let i = 0; i < names.length; i++) {
         const name = names[i]!;
         const k = ordered[i];
-        if (!k || k.score < MIN_SCORE || !active.has(name)) continue;
+        if (!k || k.score < MIN_SCORE) continue;
+        if (!showAllDots && !active.has(name)) continue;
+
         const px = k.x * videoRect.width, py = k.y * videoRect.height;
         ctx.lineWidth = 1.25; ctx.strokeStyle = 'rgba(15, 23, 42, 0.85)';
         ctx.beginPath(); ctx.arc(px, py, 6, 0, Math.PI * 2); ctx.stroke();
@@ -184,7 +190,7 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
         ctx.beginPath(); ctx.arc(px, py, 5, 0, Math.PI * 2); ctx.stroke();
       }
     }
-  }, [frameKp, showSkeleton, keypointFormat, videoRect.width, videoRect.height, annotations, pendingJoints, hoveredJoint]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [frameKp, showSkeleton, keypointFormat, videoRect.width, videoRect.height, annotations, pendingJoints, hoveredJoint, mousePos]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Draw annotation layer — resolve each annotation's joints for this frame.
   useEffect(() => {
