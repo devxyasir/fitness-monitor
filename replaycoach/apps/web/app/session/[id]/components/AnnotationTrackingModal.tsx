@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { apiClient } from '../../../../lib/api-client';
 import { useAnnotationTrackingStore, type KeypointFrame } from '../../../../stores/annotation-tracking-store';
-import { skeletonConnectionsFor, keypointNamesFor, type TrackedAnnotation, type TrackedAnnotationShape } from '@replaycoach/types';
+import { skeletonConnectionsFor, keypointNamesFor, type TrackedAnnotation, type TrackedAnnotationShape, type KeypointFormat } from '@replaycoach/types';
 import {
   X, Play, Pause, StepBack, StepForward, Loader2, Download,
   Minus, ArrowUpRight, Circle as CircleIcon, Trash2, Undo2, Redo2, Eye, EyeOff, MousePointer2,
@@ -31,6 +31,127 @@ function jointsNeeded(shape: TrackedAnnotationShape): number {
   return shape === 'point' ? 1 : shape === 'angle' ? 3 : 2;
 }
 
+interface DrawCompositeOpts {
+  annotations: TrackedAnnotation[];
+  keypointsByFrame: Partial<Record<number, KeypointFrame>>;
+  keypointFormat: KeypointFormat;
+  showSkeleton: boolean;
+  selectedId: string | null;
+  W: number;
+  H: number;
+}
+
+function drawCompositeFrame(
+  ctx: CanvasRenderingContext2D,
+  video: HTMLVideoElement,
+  frameIdx: number,
+  o: DrawCompositeOpts,
+) {
+  const { annotations, keypointsByFrame, keypointFormat, showSkeleton, selectedId, W, H } = o as DrawCompositeOpts;
+  ctx.drawImage(video, 0, 0, W, H);
+
+  const frameKp = keypointsByFrame[frameIdx];
+  if (!frameKp) return;
+  const kpByName: Record<string, { x: number; y: number; score: number }> = {};
+  for (const k of frameKp.keypoints) kpByName[k.name] = k;
+
+  const pt = (name: string | null) => {
+    if (!name) return null;
+    const k = kpByName[name];
+    if (!k || k.score < MIN_SCORE) return null;
+    return { x: k.x * W, y: k.y * H };
+  };
+
+  if (showSkeleton) {
+    const names = keypointNamesFor(keypointFormat);
+    const ordered = names.map((n) => kpByName[n]);
+    ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.strokeStyle = '#FFA500';
+    for (const [a, b] of skeletonConnectionsFor(keypointFormat)) {
+      const ka = ordered[a], kb = ordered[b];
+      if (!ka || !kb || ka.score < MIN_SCORE || kb.score < MIN_SCORE) continue;
+      ctx.beginPath();
+      ctx.moveTo(ka.x * W, ka.y * H);
+      ctx.lineTo(kb.x * W, kb.y * H);
+      ctx.stroke();
+    }
+    for (const k of ordered) {
+      if (!k || k.score < MIN_SCORE) continue;
+      const px = k.x * W, py = k.y * H;
+      ctx.lineWidth = 1.25; ctx.strokeStyle = 'rgba(15,23,42,0.85)';
+      ctx.beginPath(); ctx.arc(px, py, 6, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.beginPath(); ctx.arc(px, py, 5, 0, Math.PI * 2); ctx.stroke();
+    }
+  }
+
+  for (const a of annotations) {
+    if (frameIdx < a.fromFrame || (a.untilFrame != null && frameIdx > a.untilFrame)) continue;
+    const isSel = a.id === selectedId;
+    ctx.strokeStyle = a.color; ctx.fillStyle = a.color;
+    ctx.lineWidth = a.thickness + (isSel ? 2 : 0); ctx.lineCap = 'round';
+
+    const p1 = pt(a.startJoint);
+    if (a.label && p1) {
+      ctx.save();
+      ctx.font = 'bold 13px Inter, system-ui, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.strokeStyle = 'rgba(15, 23, 42, 0.85)'; ctx.lineWidth = 3;
+      ctx.strokeText(a.label, p1.x + 12, p1.y - 12);
+      ctx.fillStyle = a.color;
+      ctx.fillText(a.label, p1.x + 12, p1.y - 12);
+      ctx.restore();
+    }
+
+    if (a.shapeType === 'point') {
+      if (p1) { ctx.beginPath(); ctx.arc(p1.x, p1.y, a.thickness * 3, 0, Math.PI * 2); ctx.stroke(); }
+      continue;
+    }
+
+    const p2 = pt(a.endJoint);
+    if (a.shapeType === 'circle') {
+      if (p1 && p2) {
+        const r = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        ctx.beginPath(); ctx.arc(p1.x, p1.y, r, 0, Math.PI * 2); ctx.stroke();
+      }
+      if (isSel && p1 && p2) { ctx.fillStyle = a.color; for (const p of [p1, p2]) { ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill(); } }
+      continue;
+    }
+
+    if (a.shapeType === 'angle') {
+      const pm = pt(a.midJoint);
+      if (p1 && pm && p2) {
+        ctx.beginPath(); ctx.moveTo(pm.x, pm.y); ctx.lineTo(p1.x, p1.y);
+        ctx.moveTo(pm.x, pm.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+        const a1 = Math.atan2(p1.y - pm.y, p1.x - pm.x);
+        const a2 = Math.atan2(p2.y - pm.y, p2.x - pm.x);
+        let diff = a2 - a1; diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+        const deg = Math.round(Math.abs(diff) * 180 / Math.PI);
+        ctx.save(); ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(pm.x, pm.y, 22, a1, a2, diff < 0); ctx.stroke();
+        ctx.restore();
+        const bisector = a1 + diff / 2;
+        const tx = pm.x + 36 * Math.cos(bisector), ty = pm.y + 36 * Math.sin(bisector);
+        ctx.save(); ctx.font = 'bold 11px Inter, system-ui, sans-serif';
+        ctx.fillStyle = a.color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.strokeStyle = 'rgba(15, 23, 42, 0.8)'; ctx.lineWidth = 3;
+        ctx.strokeText(`${deg}°`, tx, ty); ctx.fillText(`${deg}°`, tx, ty);
+        ctx.restore();
+      }
+      continue;
+    }
+
+    if (!p1 || !p2) continue;
+    ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+    if (a.shapeType === 'arrow') {
+      const ang = Math.atan2(p2.y - p1.y, p2.x - p1.x), head = 12 + a.thickness * 2;
+      ctx.beginPath();
+      ctx.moveTo(p2.x, p2.y); ctx.lineTo(p2.x - head * Math.cos(ang - Math.PI / 6), p2.y - head * Math.sin(ang - Math.PI / 6));
+      ctx.moveTo(p2.x, p2.y); ctx.lineTo(p2.x - head * Math.cos(ang + Math.PI / 6), p2.y - head * Math.sin(ang + Math.PI / 6));
+      ctx.stroke();
+    }
+  }
+}
+
 export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const skeletonCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -39,7 +160,7 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
 
   const s = useAnnotationTrackingStore();
   const {
-    refId, videoUrl, keypointsUrl, exportVideoUrl, keypointFormat, status, fps, frameCount,
+    refId, videoUrl, keypointsUrl, keypointFormat, status, fps, frameCount,
     keypointsByFrame, annotations, selectedId, shapeType, color, thickness, showSkeleton,
     pendingJoints, playing, frameIndex,
   } = s;
@@ -47,14 +168,10 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
   const [containerDims, setContainerDims] = useState({ width: 0, height: 0 });
   const [videoIntrinsic, setVideoIntrinsic] = useState({ width: 0, height: 0 });
   const [exporting, setExporting] = useState(false);
-  const [downloading, setDownloading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [hoveredJoint, setHoveredJoint] = useState<string | null>(null);
   const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
 
-  // Actual on-screen video box (object-contain letterboxing) — canvases and
-  // joint hit-testing must use this, not the raw container, or coordinates
-  // land in the black bars.
   const videoRect = (() => {
     const { width: cw, height: ch } = containerDims;
     const { width: vw, height: vh } = videoIntrinsic;
@@ -65,7 +182,6 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
     return { width: w, height: h, left: (cw - w) / 2, top: (ch - h) / 2 };
   })();
 
-  // Load keypoints JSON once ready.
   useEffect(() => {
     if (status !== 'ready' || !keypointsUrl) return;
     let cancelled = false;
@@ -77,18 +193,16 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
       })
       .catch((e) => console.error('[AnnotationTracking] keypoints load failed', e));
     return () => { cancelled = true; };
-  }, [status, keypointsUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [status, keypointsUrl]);
 
-  // Load persisted annotations on open.
   useEffect(() => {
     if (!refId) return;
     apiClient
       .get<TrackedAnnotation[]>(`/sessions/${sessionId}/reference/${refId}/annotations`)
       .then((list) => s.setAnnotations(list))
       .catch((e) => console.error('[AnnotationTracking] annotations load failed', e));
-  }, [refId, sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [refId, sessionId]);
 
-  // Container resize observer.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -99,7 +213,6 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
     return () => ro.disconnect();
   }, []);
 
-  // rAF playhead → frameIndex.
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -111,9 +224,8 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [fps]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fps]);
 
-  // Size canvases to the visible video box.
   useEffect(() => {
     for (const c of [skeletonCanvasRef.current, annCanvasRef.current]) {
       if (c) { c.width = videoRect.width; c.height = videoRect.height; }
@@ -127,7 +239,6 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
     return m;
   };
 
-  // Draw skeleton layer.
   useEffect(() => {
     const c = skeletonCanvasRef.current;
     if (!c) return;
@@ -171,9 +282,6 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
         ctx.beginPath(); ctx.arc(px, py, 5, 0, Math.PI * 2); ctx.stroke();
       }
     } else {
-      // Skeleton hidden: ONLY show active/annotated/pending/hovered joints.
-      // But if the user is hovering over the canvas (mousePos !== null) or picking joints,
-      // show all joint dots (without connecting lines) so they can see what checkpoints are available to connect.
       const active = getActiveJoints();
       const showAllDots = mousePos !== null || pendingJoints.length > 0;
 
@@ -190,9 +298,8 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
         ctx.beginPath(); ctx.arc(px, py, 5, 0, Math.PI * 2); ctx.stroke();
       }
     }
-  }, [frameKp, showSkeleton, keypointFormat, videoRect.width, videoRect.height, annotations, pendingJoints, hoveredJoint, mousePos]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [frameKp, showSkeleton, keypointFormat, videoRect.width, videoRect.height, annotations, pendingJoints, hoveredJoint, mousePos]);
 
-  // Draw annotation layer — resolve each annotation's joints for this frame.
   useEffect(() => {
     const c = annCanvasRef.current;
     if (!c) return;
@@ -215,7 +322,6 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
       ctx.lineWidth = a.thickness + (isSel ? 2 : 0); ctx.lineCap = 'round';
       const p1 = pt(a.startJoint);
 
-      // Render Label / Text Note
       if (a.label && p1) {
         ctx.save();
         ctx.font = 'bold 11px Inter, system-ui, sans-serif';
@@ -251,8 +357,6 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
         const pm = pt(a.midJoint);
         if (p1 && pm && p2) {
           ctx.beginPath(); ctx.moveTo(pm.x, pm.y); ctx.lineTo(p1.x, p1.y); ctx.moveTo(pm.x, pm.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
-          
-          // Math for degrees arc & label
           const v1 = { x: p1.x - pm.x, y: p1.y - pm.y };
           const v2 = { x: p2.x - pm.x, y: p2.y - pm.y };
           const a1 = Math.atan2(v1.y, v1.x);
@@ -260,14 +364,12 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
           let diff = a2 - a1;
           diff = Math.atan2(Math.sin(diff), Math.cos(diff));
           const deg = Math.round(Math.abs(diff) * 180 / Math.PI);
-
           ctx.save();
           ctx.lineWidth = 1.5;
           ctx.beginPath();
           ctx.arc(pm.x, pm.y, 22, a1, a2, diff < 0);
           ctx.stroke();
           ctx.restore();
-
           const bisector = a1 + diff / 2;
           const tx = pm.x + 36 * Math.cos(bisector);
           const ty = pm.y + 36 * Math.sin(bisector);
@@ -300,7 +402,6 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
       if (isSel) { ctx.fillStyle = a.color; for (const p of [p1, p2]) { ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill(); } }
     }
 
-    // Highlight hovered joint
     if (hoveredJoint) {
       const p = pt(hoveredJoint);
       if (p) {
@@ -313,15 +414,12 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
       }
     }
 
-    // Draw ghost preview during multi-point placement
     if (pendingJoints.length > 0 && mousePos) {
       ctx.save();
       ctx.strokeStyle = color; ctx.fillStyle = color;
       ctx.lineWidth = thickness; ctx.globalAlpha = 0.5;
       ctx.setLineDash([5, 5]);
-
       const p1 = pt(pendingJoints[0] ?? null);
-
       if (shapeType === 'line' && p1) {
         ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(mousePos.x, mousePos.y); ctx.stroke();
       } else if (shapeType === 'arrow' && p1) {
@@ -345,7 +443,6 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
             ctx.beginPath(); ctx.moveTo(pm.x, pm.y); ctx.lineTo(p1.x, p1.y); ctx.stroke();
             ctx.setLineDash([5, 5]);
             ctx.beginPath(); ctx.moveTo(pm.x, pm.y); ctx.lineTo(mousePos.x, mousePos.y); ctx.stroke();
-            
             const v1 = { x: p1.x - pm.x, y: p1.y - pm.y };
             const v2 = { x: mousePos.x - pm.x, y: mousePos.y - pm.y };
             const a1 = Math.atan2(v1.y, v1.x);
@@ -361,7 +458,6 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
       ctx.restore();
     }
 
-    // Highlight pending joints being picked.
     for (const jn of pendingJoints) {
       const p = pt(jn);
       if (p) {
@@ -371,7 +467,7 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
         ctx.restore();
       }
     }
-  }, [annotations, selectedId, frameIndex, frameKp, pendingJoints, color, hoveredJoint, mousePos, videoRect.width, videoRect.height]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [annotations, selectedId, frameIndex, frameKp, pendingJoints, color, hoveredJoint, mousePos, videoRect.width, videoRect.height]);
 
   const nearestJoint = (px: number, py: number): string | null => {
     const map = kpByName();
@@ -417,10 +513,7 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
 
     const joint = nearestJoint(px, py);
     if (!joint) {
-      // If we are actively in progress of drawing/picking points, ignore misses on empty space.
-      if (pendingJoints.length > 0) {
-        return;
-      }
+      if (pendingJoints.length > 0) return;
       const annId = nearestAnnotation(px, py);
       s.select(annId);
       if (!annId) s.clearPending();
@@ -431,7 +524,6 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
     const need = jointsNeeded(shapeType);
     if (next.length < need) { s.addPendingJoint(joint); return; }
 
-    // Enough joints — create the annotation.
     s.clearPending();
     setBusy(true);
     try {
@@ -465,11 +557,8 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
     const px = ((e.clientX - rect.left) / rect.width) * videoRect.width;
     const py = ((e.clientY - rect.top) / rect.height) * videoRect.height;
     setMousePos({ x: px, y: py });
-
     const joint = nearestJoint(px, py);
-    if (joint !== hoveredJoint) {
-      setHoveredJoint(joint);
-    }
+    if (joint !== hoveredJoint) setHoveredJoint(joint);
   };
 
   const handlePointerLeave = () => {
@@ -477,34 +566,23 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
     setMousePos(null);
   };
 
-  // Keyboard shortcuts and Escape key handler
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if currently typing in an input element
       if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
-
-      if (e.key === 'Escape') {
-        s.clearPending();
-        s.select(null);
-      }
-
+      if (e.key === 'Escape') { s.clearPending(); s.select(null); }
       const key = e.key.toLowerCase();
       if (key === 'l') { s.setShape('line'); s.clearPending(); }
       else if (key === 'c') { s.setShape('circle'); s.clearPending(); }
       else if (key === 'a') { s.setShape('angle'); s.clearPending(); }
       else if (key === 'p') { s.setShape('point'); s.clearPending(); }
       else if (key === 't') {
-        if (selectedId) {
-          const inp = document.getElementById('annotation-label-input');
-          inp?.focus();
-        } else {
-          s.setShape('line'); s.clearPending(); s.select(null);
-        }
+        if (selectedId) { document.getElementById('annotation-label-input')?.focus(); }
+        else { s.setShape('line'); s.clearPending(); s.select(null); }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedId]);
 
   const deleteSelected = async () => {
     if (!refId || !selectedId) return;
@@ -515,11 +593,8 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
       await apiClient.del(`/sessions/${sessionId}/reference/${refId}/annotations/${selectedId}`);
       s.applyRemoteDelete(selectedId);
       s.pushUndo({ type: 'delete', annotation: ann });
-    } catch (e) {
-      console.error('[AnnotationTracking] delete failed', e);
-    } finally {
-      setBusy(false);
-    }
+    } catch (e) { console.error('[AnnotationTracking] delete failed', e); }
+    finally { setBusy(false); }
   };
 
   const undo = async () => {
@@ -582,18 +657,14 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
     if (!refId || !selectedId) return;
     const ann = annotations.find((a) => a.id === selectedId);
     if (!ann) return;
-
     s.applyRemoteUpdate({ ...ann, label: lbl || null });
-
     try {
       const upd = await apiClient.patch<{ label: string | null }, TrackedAnnotation>(
         `/sessions/${sessionId}/reference/${refId}/annotations/${selectedId}`,
         { label: lbl || null }
       );
       s.applyRemoteUpdate(upd);
-    } catch (e) {
-      console.error('[AnnotationTracking] failed to update label', e);
-    }
+    } catch (e) { console.error('[AnnotationTracking] failed to update label', e); }
   };
 
   const togglePlay = () => {
@@ -606,31 +677,68 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
     v.currentTime = clamped / fps; s.setFrameIndex(clamped);
   };
 
-  const startExport = async () => {
-    if (!refId || exporting) return;
+  // Client-side export: captures exactly what is visible on screen
+  // (video + annotations, respecting the showSkeleton toggle).
+  const captureAndExport = async () => {
+    const video = videoRef.current;
+    if (!video || !frameCount || !fps) return;
+    const width = video.videoWidth, height = video.videoHeight;
+    if (!width || !height) return;
+
     setExporting(true);
     try {
-      await apiClient.post(`/sessions/${sessionId}/reference/${refId}/export`, {});
-    } catch (e) {
-      console.error('[AnnotationTracking] export failed', e);
+      const out = document.createElement('canvas');
+      out.width = width; out.height = height;
+      const octx = out.getContext('2d');
+      if (!octx) return;
+
+      const stream = out.captureStream(fps);
+      const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm';
+      const recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 5_000_000 });
+      const chunks: Blob[] = [];
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+
+      const wasPlaying = playing;
+      video.muted = true;
+
+      const renderAtFrame = (frameIdx: number) => new Promise<void>((resolve) => {
+        const onSeeked = () => {
+          video.removeEventListener('seeked', onSeeked);
+          drawCompositeFrame(octx, video, frameIdx, {
+            annotations, keypointsByFrame, keypointFormat,
+            showSkeleton, selectedId, W: width, H: height,
+          });
+          resolve();
+        };
+        video.addEventListener('seeked', onSeeked);
+        video.currentTime = frameIdx / fps;
+      });
+
+      await renderAtFrame(0);
+      recorder.start();
+
+      for (let i = 1; i < frameCount; i++) {
+        await renderAtFrame(i);
+        await new Promise(r => setTimeout(r, 30));
+      }
+
+      recorder.stop();
+      await new Promise<void>((resolve) => { recorder.onstop = () => resolve(); });
+
+      if (wasPlaying) video.play().catch(() => {});
+      video.muted = false;
+
+      const blob = new Blob(chunks, { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `annotated-${new Date().toISOString().slice(0, 10)}.webm`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('[AnnotationTracking] capture export failed', err);
+    } finally {
       setExporting(false);
     }
-  };
-
-  // When the export URL arrives (socket refresh), stop the spinner.
-  useEffect(() => { if (exportVideoUrl) setExporting(false); }, [exportVideoUrl]);
-
-  const downloadExport = async () => {
-    if (!exportVideoUrl || downloading) return;
-    setDownloading(true);
-    try {
-      const res = await fetch(exportVideoUrl);
-      const blob = await res.blob();
-      const u = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = u; a.download = `annotated-${new Date().toISOString().slice(0, 10)}.mp4`;
-      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(u);
-    } catch (e) { console.error(e); } finally { setDownloading(false); }
   };
 
   const handleClose = () => s.close();
@@ -640,7 +748,6 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
       <div className="w-full max-w-6xl h-[88vh] bg-slate-950 border border-slate-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
-        {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-900 bg-slate-900">
           <div className="flex items-center gap-3">
             <h2 className="text-sm font-bold text-white uppercase tracking-wide">Annotation Tracking</h2>
@@ -652,12 +759,8 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
             )}
           </div>
           <div className="flex items-center gap-2">
-            {exportVideoUrl ? (
-              <button onClick={downloadExport} disabled={downloading} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold inline-flex items-center gap-1.5">
-                <Download className="w-3.5 h-3.5" /> {downloading ? 'Preparing…' : 'Download'}
-              </button>
-            ) : isCoach && status === 'ready' && (
-              <button onClick={startExport} disabled={exporting} className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold inline-flex items-center gap-1.5">
+            {isCoach && status === 'ready' && (
+              <button onClick={captureAndExport} disabled={exporting} className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold inline-flex items-center gap-1.5">
                 {exporting ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Exporting…</> : <><Download className="w-3.5 h-3.5" /> Export MP4</>}
               </button>
             )}
@@ -665,7 +768,6 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
           </div>
         </div>
 
-        {/* Body */}
         <div className="flex-1 flex flex-col sm:flex-row min-h-0">
           <div ref={containerRef} className="flex-1 relative bg-black">
             <video
@@ -713,7 +815,6 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
             )}
           </div>
 
-          {/* Toolbar — coach only */}
           {isCoach && (
             <div className="w-full sm:w-60 max-h-[38vh] sm:max-h-none border-t sm:border-t-0 sm:border-l border-slate-900 bg-slate-900 p-4 flex flex-col gap-4 overflow-y-auto">
               <div>
@@ -781,7 +882,6 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
           )}
         </div>
 
-        {/* Playback */}
         <div className="border-t border-slate-900 bg-slate-900 px-5 py-3 flex items-center gap-3 flex-wrap">
           {isCoach && (
             <>
