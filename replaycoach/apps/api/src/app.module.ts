@@ -21,6 +21,7 @@ import {
   Subscription,
   AuditLog,
   ReferenceVideo,
+  TrackedAnnotation,
 } from './database/entities/others.entities';
 
 import { AuthModule } from './auth/auth.module';
@@ -75,6 +76,7 @@ import { ReferenceModule } from './reference/reference.module';
           Subscription,
           AuditLog,
           ReferenceVideo,
+          TrackedAnnotation,
         ],
         migrations: [],
       }),
