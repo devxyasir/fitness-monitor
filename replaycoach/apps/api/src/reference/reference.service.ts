@@ -559,6 +559,7 @@ export class ReferenceService {
           midJoint: a.midJoint,
           color: a.color,
           thickness: a.thickness,
+          label: a.label ?? null,
           fromFrame: a.fromFrame,
           untilFrame: a.untilFrame,
         })),

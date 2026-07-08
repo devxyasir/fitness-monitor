@@ -556,7 +556,7 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
     if (!refId) return null;
     const dto = {
       shapeType: a.shapeType, startJoint: a.startJoint, endJoint: a.endJoint, midJoint: a.midJoint,
-      color: a.color, thickness: a.thickness, fromFrame: a.fromFrame, untilFrame: a.untilFrame,
+      color: a.color, thickness: a.thickness, label: a.label ?? null, fromFrame: a.fromFrame, untilFrame: a.untilFrame,
     };
     return apiClient.post<typeof dto, TrackedAnnotation>(`/sessions/${sessionId}/reference/${refId}/annotations`, dto);
   };
