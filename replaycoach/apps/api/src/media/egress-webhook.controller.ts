@@ -7,6 +7,7 @@ import type { Request } from 'express';
 import { EgressService } from './egress.service';
 import { RecordingsService, RecordingStatus } from '../recordings/recordings.service';
 import { SessionsService } from '../sessions/sessions.service';
+import { Public } from '../common/decorators/public.decorator';
 
 interface LiveKitTrack {
   sid?: string;
@@ -72,6 +73,10 @@ export class EgressWebhookController {
     }
   }
 
+  /** No JWT here by design — LiveKit calls this directly and self-verifies
+   * via HMAC signature (see constructor/isMockEnabled below), not a bearer
+   * token. Now that JwtAuthGuard is global, this needs an explicit opt-out. */
+  @Public()
   @Post('egress-webhook')
   async handleWebhook(
     @Headers('authorization') authHeader: string,

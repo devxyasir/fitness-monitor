@@ -35,6 +35,13 @@ export class RegisterDto {
 
   @IsEnum(['coach', 'student'])
   role!: Extract<UserRole, 'coach' | 'student'>;
+
+  /** Redeems an org (and optionally team) invite as part of registration —
+   * on success this overrides `role` with whatever the invite specifies. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  inviteToken?: string;
 }
 
 export class LoginDto {

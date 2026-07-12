@@ -7,6 +7,7 @@ import * as argon2 from 'argon2';
 import { AuthService } from './auth.service';
 import { RefreshTokenService } from './refresh-token.service';
 import { UserService } from '../users/user.service';
+import { OrganizationService } from '../organizations/organization.service';
 import type { User } from '../users/user.entity';
 import type { RefreshToken } from './refresh-token.entity';
 
@@ -21,8 +22,13 @@ const makeUser = (overrides: Partial<User> = {}): User =>
     orgId: null,
     displayName: 'Test User',
     avatarUrl: null,
+    status: 'active',
+    emailVerified: false,
+    emailVerifiedAt: null,
+    lastLoginAt: null,
     sessionVersion: 1,
     createdAt: new Date(),
+    deletedAt: null,
     organization: null,
     refreshTokens: [],
     ...overrides,
@@ -47,6 +53,12 @@ const mockUserService = {
   findByEmail: jest.fn(),
   findById: jest.fn(),
   incrementSessionVersion: jest.fn(),
+  touchLastLogin: jest.fn(),
+};
+
+const mockOrganizationService = {
+  consumeInviteForRegistration: jest.fn(),
+  joinTeamAfterRegistration: jest.fn(),
 };
 
 const mockRefreshTokenService = {
@@ -75,6 +87,7 @@ describe('AuthService', () => {
       providers: [
         AuthService,
         { provide: UserService, useValue: mockUserService },
+        { provide: OrganizationService, useValue: mockOrganizationService },
         { provide: RefreshTokenService, useValue: mockRefreshTokenService },
         { provide: JwtService, useValue: mockJwtService },
         { provide: ConfigService, useValue: mockConfigService },

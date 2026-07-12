@@ -22,6 +22,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request, Response } from 'express';
 
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Public } from '../common/decorators/public.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { SessionsGuard } from '../sessions/sessions.guard';
@@ -172,8 +173,11 @@ export class ReferenceController {
  * callback (verified by a per-video HMAC token) and signed media streaming
  * (verified by an HMAC signature — <video> tags and the pose-service can't
  * send an Authorization header, so this mirrors the CloudFront signed-URL
- * pattern already used for clips/recordings).
+ * pattern already used for clips/recordings). @Public() at class level since
+ * every endpoint here self-verifies via one of those two mechanisms instead
+ * of a bearer token.
  */
+@Public()
 @Controller('reference')
 export class ReferenceMediaController {
   constructor(

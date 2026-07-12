@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { Annotation, Clip, ClipShare, ReferenceVideo, TrackedAnnotation } from '../database/entities/others.entities';
@@ -13,8 +13,16 @@ import { ReferenceStorageService } from './reference-storage.service';
 @Module({
   imports: [
     TypeOrmModule.forFeature([ReferenceVideo, Clip, ClipShare, Annotation, TrackedAnnotation, SessionParticipant]),
-    SessionsModule,
-    RealtimeModule,
+    // AnnotationsModule now imports ClipsModule (which imports this module),
+    // and AnnotationsModule already sits in a require cycle with
+    // SessionsModule — that makes ClipsModule -> ReferenceModule -> here a
+    // second path back into the same cycle. Unlike a forwardRef'd usage
+    // elsewhere, a *plain* reference here is evaluated the instant this
+    // file's top-level @Module({...}) decorator runs, so if SessionsModule
+    // hadn't finished exporting yet at that exact point in the require
+    // chain, it would bake `undefined` into this array permanently.
+    forwardRef(() => SessionsModule),
+    forwardRef(() => RealtimeModule),
   ],
   controllers: [ReferenceController, ReferenceMediaController],
   providers: [ReferenceService, ReferenceStorageService],

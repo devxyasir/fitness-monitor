@@ -1,4 +1,5 @@
 import {
+  ForbiddenException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -11,6 +12,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { JwtPayload, TokenResponse } from '@replaycoach/types';
 
 import { UserService } from '../users/user.service';
+import { OrganizationService } from '../organizations/organization.service';
 import { RefreshTokenService } from './refresh-token.service';
 import type { RegisterDto, LoginDto } from './auth.dto';
 import { parseDurationMs } from './duration.util';
@@ -27,20 +29,42 @@ interface AuthResult {
 export class AuthService {
   constructor(
     private readonly userService: UserService,
+    private readonly organizationService: OrganizationService,
     private readonly jwtService: JwtService,
     private readonly refreshTokenService: RefreshTokenService,
     private readonly configService: ConfigService,
   ) {}
 
-  /** Register a new user and issue tokens. A fresh signup stays logged in
-   * (long TTL) since there's no "remember me" toggle on the register form. */
+  /**
+   * Register a new user and issue tokens. A fresh signup stays logged in
+   * (long TTL) since there's no "remember me" toggle on the register form.
+   *
+   * If `inviteToken` is present, this is invitation-only registration: the
+   * invite's org/role (and team, if any) win over whatever the form
+   * self-selected — see docs/AUTHENTICATION.md for why (a client-supplied
+   * role must never be trusted for anything beyond the open coach/student
+   * self-signup default).
+   */
   async register(dto: RegisterDto): Promise<AuthResult> {
-    const user = await this.userService.create({
-      email: dto.email,
-      password: dto.password,
-      displayName: dto.displayName,
-      role: dto.role,
-    });
+    let orgId: string | null = null;
+    let role = dto.role;
+    let teamId: string | null = null;
+
+    if (dto.inviteToken) {
+      const redeemed = await this.organizationService.consumeInviteForRegistration(dto.inviteToken, dto.email);
+      orgId = redeemed.orgId;
+      role = redeemed.role;
+      teamId = redeemed.teamId;
+    }
+
+    const user = await this.userService.create(
+      { email: dto.email, password: dto.password, displayName: dto.displayName, role },
+      { orgId },
+    );
+
+    if (teamId && orgId) {
+      await this.organizationService.joinTeamAfterRegistration(orgId, teamId, user.id);
+    }
 
     return this.issueTokenPair(user.id, user.email, user.role, user.orgId, user.sessionVersion, true);
   }
@@ -60,6 +84,9 @@ export class AuthService {
     if (!user || !valid) {
       throw new UnauthorizedException('Invalid credentials');
     }
+
+    this.assertActiveStatus(user.status);
+    await this.userService.touchLastLogin(user.id);
 
     return this.issueTokenPair(user.id, user.email, user.role, user.orgId, user.sessionVersion, dto.rememberMe ?? false);
   }
@@ -92,6 +119,11 @@ export class AuthService {
     );
 
     const user = await this.userService.findById(existing.userId);
+    // A suspended/disabled user must not be able to mint a fresh access
+    // token via refresh — sessionVersion only invalidates tokens already
+    // issued, it doesn't stop new ones from being handed out.
+    this.assertActiveStatus(user.status);
+
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
@@ -131,6 +163,19 @@ export class AuthService {
   }
 
   // ─── Private Helpers ───────────────────────────────────────────────────────
+
+  /** Blocks login/refresh for a moderated-out account. A still-live access
+   * token from before the status change is separately rejected by
+   * JwtStrategy (checks the same status column) — this covers the two
+   * paths that mint a *new* token. */
+  private assertActiveStatus(status: string): void {
+    if (status === 'suspended') {
+      throw new ForbiddenException('This account has been suspended');
+    }
+    if (status === 'disabled') {
+      throw new ForbiddenException('This account has been disabled');
+    }
+  }
 
   private async issueTokenPair(
     userId: string,

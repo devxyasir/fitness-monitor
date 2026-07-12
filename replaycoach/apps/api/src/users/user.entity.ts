@@ -1,6 +1,7 @@
 import {
   Column,
   CreateDateColumn,
+  DeleteDateColumn,
   Entity,
   Index,
   JoinColumn,
@@ -9,7 +10,7 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
-import type { UserRole } from '@replaycoach/types';
+import type { UserRole, UserStatus } from '@replaycoach/types';
 
 import { Organization } from '../organizations/organization.entity';
 import { RefreshToken } from '../auth/refresh-token.entity';
@@ -39,6 +40,25 @@ export class User {
   avatarUrl!: string | null;
 
   /**
+   * Account lifecycle state, independent of email verification.
+   * 'active': normal. 'suspended'/'disabled': admin-moderated lockout —
+   * enforced at login, at refresh, and (via sessionVersion) against any
+   * already-issued access token. 'pending': reserved for a future
+   * not-yet-activated state; nothing in the codebase currently assigns it.
+   */
+  @Column({ type: 'varchar', length: 20, default: 'active' })
+  status!: UserStatus;
+
+  @Column({ name: 'email_verified', type: 'boolean', default: false })
+  emailVerified!: boolean;
+
+  @Column({ name: 'email_verified_at', type: 'timestamptz', nullable: true })
+  emailVerifiedAt!: Date | null;
+
+  @Column({ name: 'last_login_at', type: 'timestamptz', nullable: true })
+  lastLoginAt!: Date | null;
+
+  /**
    * Increment on password change or forced logout.
    * Carried in access JWT; validated against DB value.
    * See 06_Authentication_Authorization_RBAC.md §7.
@@ -48,6 +68,12 @@ export class User {
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;
+
+  /** Soft delete — TypeORM auto-excludes rows with this set from normal
+   * find/findOne calls, so a deleted user can no longer look themselves up
+   * by email at login etc. without any extra filtering in application code. */
+  @DeleteDateColumn({ name: 'deleted_at' })
+  deletedAt!: Date | null;
 
   @ManyToOne(() => Organization, (org) => org.users, { nullable: true })
   @JoinColumn({ name: 'org_id' })

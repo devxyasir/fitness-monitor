@@ -1,5 +1,6 @@
-import { IsEmail, IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
-import type { UserRole } from '@replaycoach/types';
+import { Type } from 'class-transformer';
+import { IsEmail, IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
+import type { UserRole, UserStatus } from '@replaycoach/types';
 
 export class CreateUserDto {
   @IsEmail()
@@ -30,4 +31,36 @@ export class UpdateUserDto {
   @IsString()
   @MaxLength(512)
   avatarUrl?: string;
+}
+
+export class UpdateUserStatusDto {
+  @IsEnum(['active', 'pending', 'suspended', 'disabled'])
+  status!: UserStatus;
+}
+
+export class ListUsersQueryDto {
+  @IsOptional()
+  @IsString()
+  orgId?: string;
+
+  @IsOptional()
+  @IsEnum(['platform_admin', 'studio_admin', 'coach', 'student'])
+  role?: UserRole;
+
+  @IsOptional()
+  @IsEnum(['active', 'pending', 'suspended', 'disabled'])
+  status?: UserStatus;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  pageSize?: number;
 }

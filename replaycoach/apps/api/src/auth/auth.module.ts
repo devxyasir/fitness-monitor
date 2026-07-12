@@ -6,6 +6,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule } from '@nestjs/throttler';
 
 import { UserModule } from '../users/user.module';
+import { OrganizationModule } from '../organizations/organization.module';
 import { RefreshToken } from './refresh-token.entity';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -29,6 +30,7 @@ import { RefreshTokenCleanupService } from './refresh-token-cleanup.service';
     TypeOrmModule.forFeature([RefreshToken]),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
     UserModule,
+    OrganizationModule,
   ],
   providers: [AuthService, RefreshTokenService, RefreshTokenCleanupService, JwtStrategy],
   controllers: [AuthController],

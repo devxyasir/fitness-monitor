@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
@@ -11,6 +12,8 @@ import { User } from './users/user.entity';
 import { RefreshToken } from './auth/refresh-token.entity';
 import { Session } from './sessions/session.entity';
 import { SessionParticipant } from './sessions/session-participant.entity';
+import { Team } from './teams/team.entity';
+import { TeamMember } from './teams/team-member.entity';
 import {
   Recording,
   PoseKeypointFrame,
@@ -25,8 +28,11 @@ import {
 } from './database/entities/others.entities';
 
 import { AuthModule } from './auth/auth.module';
+import { JwtAuthGuard } from './auth/jwt-auth.guard';
+import { RolesGuard } from './common/guards/roles.guard';
 import { UserModule } from './users/user.module';
 import { OrganizationModule } from './organizations/organization.module';
+import { TeamsModule } from './teams/teams.module';
 import { HealthModule } from './health/health.module';
 import { SessionsModule } from './sessions/sessions.module';
 import { MediaModule } from './media/media.module';
@@ -67,6 +73,8 @@ import { ReferenceModule } from './reference/reference.module';
           RefreshToken,
           Session,
           SessionParticipant,
+          Team,
+          TeamMember,
           Recording,
           PoseKeypointFrame,
           ReplayEvent,
@@ -86,6 +94,7 @@ import { ReferenceModule } from './reference/reference.module';
     AuthModule,
     UserModule,
     OrganizationModule,
+    TeamsModule,
     HealthModule,
     SessionsModule,
     MediaModule,
@@ -96,6 +105,15 @@ import { ReferenceModule } from './reference/reference.module';
     ClipsModule,
     RecordingsModule,
     ReferenceModule,
+  ],
+  providers: [
+    // Global by default: every route requires a valid access token and
+    // passes any @Roles() check, unless explicitly marked @Public(). Closes
+    // the "a new controller forgot to add JwtAuthGuard" class of gap —
+    // existing per-controller @UseGuards(...) declarations still work
+    // exactly as before, this just adds a safety net underneath them.
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: RolesGuard },
   ],
 })
 export class AppModule {}

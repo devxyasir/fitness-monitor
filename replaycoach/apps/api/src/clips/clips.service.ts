@@ -233,14 +233,12 @@ export class ClipsService {
   }
 
   /**
-   * Retrieves detailed clip metadata, signed play URL, and dynamically linked annotations.
-   * Enforces server-side authorization check (IDOR gate checking).
+   * Fetches a clip and enforces the server-side ownership/share check (IDOR
+   * protection) — shared by every endpoint that reads a clip by ID,
+   * including ones (like clip annotations) that don't need the clip's
+   * signed play URL.
    */
-  async getClip(
-    clipId: string,
-    userId: string,
-    role: string,
-  ): Promise<{ clip: Clip; playUrl: string; annotations: Annotation[] }> {
+  async assertClipAccess(clipId: string, userId: string, role: string): Promise<Clip> {
     const clip = await this.clipRepository.findOne({
       where: { id: clipId },
       relations: ['session'],
@@ -267,6 +265,20 @@ export class ClipsService {
         throw new ForbiddenException('Access denied. You do not own this clip.');
       }
     }
+
+    return clip;
+  }
+
+  /**
+   * Retrieves detailed clip metadata, signed play URL, and dynamically linked annotations.
+   * Enforces server-side authorization check (IDOR gate checking).
+   */
+  async getClip(
+    clipId: string,
+    userId: string,
+    role: string,
+  ): Promise<{ clip: Clip; playUrl: string; annotations: Annotation[] }> {
+    const clip = await this.assertClipAccess(clipId, userId, role);
 
     // Reference-sourced clips (an uploaded/buffered MP4, not an HLS
     // recording segment) are signed via ReferenceStorageService instead of

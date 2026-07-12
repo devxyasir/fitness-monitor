@@ -15,6 +15,7 @@ import type { JwtPayload, TokenResponse } from '@replaycoach/types';
 
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Public } from '../common/decorators/public.decorator';
 import { AuthService } from './auth.service';
 import {
   ForgotPasswordDto,
@@ -37,6 +38,7 @@ export class AuthController {
   ) {}
 
   /** POST /auth/register */
+  @Public()
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   async register(
@@ -52,6 +54,7 @@ export class AuthController {
    * POST /auth/login
    * Rate limited: 5/min per IP (12_Backend_API_Design.md §7).
    */
+  @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 5, ttl: 60000 } })
@@ -65,6 +68,7 @@ export class AuthController {
   }
 
   /** POST /auth/refresh — reads httpOnly cookie, issues new token pair. */
+  @Public()
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   async refresh(
@@ -96,6 +100,7 @@ export class AuthController {
    * Rate limited: 3/hour per IP (12_Backend_API_Design.md §7).
    * Always returns 200 — never reveals whether an email exists.
    */
+  @Public()
   @Post('password/forgot')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 3, ttl: 3600000 } })
@@ -107,6 +112,7 @@ export class AuthController {
   }
 
   /** POST /auth/password/reset — stub until email infra exists. */
+  @Public()
   @Post('password/reset')
   @HttpCode(HttpStatus.OK)
   async resetPassword(@Body() dto: ResetPasswordDto): Promise<{ message: string }> {

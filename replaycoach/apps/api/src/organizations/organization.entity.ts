@@ -6,6 +6,8 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
+import type { OrgBranding, OrgSettings } from '@replaycoach/types';
+
 import { User } from '../users/user.entity';
 import { OrgInvite } from './org-invite.entity';
 
@@ -19,6 +21,16 @@ export class Organization {
 
   @Column({ type: 'varchar', length: 50, default: 'free', name: 'plan_tier' })
   planTier!: string;
+
+  /** Open bag, no fixed schema — see packages/types/src/organization.ts. */
+  @Column({ type: 'jsonb', default: {} })
+  settings!: OrgSettings;
+
+  @Column({ type: 'jsonb', default: {} })
+  branding!: OrgBranding;
+
+  @Column({ name: 'created_by', type: 'uuid', nullable: true })
+  createdBy!: string | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;

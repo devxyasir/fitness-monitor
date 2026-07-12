@@ -29,6 +29,11 @@ export class OrgInvite {
   @Column({ name: 'invited_by' })
   invitedBy!: string;
 
+  /** Drops the invitee straight into this team (in addition to the org) on
+   * acceptance; null for an org-level-only invite. */
+  @Column({ name: 'team_id', type: 'uuid', nullable: true })
+  teamId!: string | null;
+
   @Column({ name: 'expires_at', type: 'timestamptz' })
   expiresAt!: Date;
 

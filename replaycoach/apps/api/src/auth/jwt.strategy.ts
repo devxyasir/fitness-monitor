@@ -38,6 +38,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Session invalidated — please log in again');
     }
 
+    // A still-live access token issued before an admin suspended/disabled
+    // this account must stop working immediately, not just at its natural
+    // 15-minute expiry — same rationale as the sessionVersion check above.
+    if (user.status === 'suspended' || user.status === 'disabled') {
+      throw new UnauthorizedException('This account is no longer active');
+    }
+
     return payload;
   }
 }
