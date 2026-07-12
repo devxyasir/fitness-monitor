@@ -26,6 +26,21 @@ function getHeaders(): Record<string, string> {
   return headers;
 }
 
+/** Nest's default error body is `{ statusCode, message, error }` — surface
+ * `message` when present so callers see the real reason (e.g. "Only the
+ * session coach can manage reference videos") instead of a bare status code. */
+async function throwApiError(res: Response, formattedPath: string): Promise<never> {
+  let detail = '';
+  try {
+    const body = await res.clone().json();
+    if (typeof body?.message === 'string') detail = body.message;
+    else if (Array.isArray(body?.message)) detail = body.message.join(', ');
+  } catch {
+    // Non-JSON error body — fall back to the generic message below.
+  }
+  throw new Error(detail || `API error ${res.status}: ${formattedPath}`);
+}
+
 async function fetchWithAuth(path: string, options: RequestInit): Promise<Response> {
   const formattedPath = formatPath(path);
   const url = `${API_BASE_URL}${formattedPath}`;
@@ -63,7 +78,7 @@ async function get<T>(path: string): Promise<T> {
   const res = await fetchWithAuth(formattedPath, {
     method: 'GET',
   });
-  if (!res.ok) throw new Error(`API error ${res.status}: ${formattedPath}`);
+  if (!res.ok) return throwApiError(res, formattedPath);
   return res.json() as Promise<T>;
 }
 
@@ -73,7 +88,7 @@ async function post<TBody, TResponse>(path: string, body: TBody): Promise<TRespo
     method: 'POST',
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`API error ${res.status}: ${formattedPath}`);
+  if (!res.ok) return throwApiError(res, formattedPath);
   return res.json() as Promise<TResponse>;
 }
 
@@ -83,14 +98,14 @@ async function patch<TBody, TResponse>(path: string, body: TBody): Promise<TResp
     method: 'PATCH',
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`API error ${res.status}: ${formattedPath}`);
+  if (!res.ok) return throwApiError(res, formattedPath);
   return res.json() as Promise<TResponse>;
 }
 
 async function del<TResponse = unknown>(path: string): Promise<TResponse> {
   const formattedPath = formatPath(path);
   const res = await fetchWithAuth(formattedPath, { method: 'DELETE' });
-  if (!res.ok) throw new Error(`API error ${res.status}: ${formattedPath}`);
+  if (!res.ok) return throwApiError(res, formattedPath);
   // DELETE responses may be empty; tolerate no-body.
   const text = await res.text();
   return (text ? JSON.parse(text) : undefined) as TResponse;

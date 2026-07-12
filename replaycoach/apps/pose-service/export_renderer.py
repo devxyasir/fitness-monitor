@@ -139,12 +139,17 @@ def _draw_annotation(frame: np.ndarray, ann: dict, kp_by_name: dict, w: int, h: 
 
 
 def _mux_audio_video(video_path: str, audio_source_path: str, output_path: str) -> None:
-    """Mux the silent annotated video with audio from the source using FFmpeg."""
+    """Mux the silent annotated video with audio from the source using FFmpeg.
+
+    Re-encodes to H.264 (not '-c:v copy'): the silent video comes out of
+    cv2.VideoWriter as mp4v (MPEG-4 Part 2), which no major browser can
+    play. This pass both adds audio and produces a browser-playable stream.
+    """
     cmd = [
         "ffmpeg", "-y", "-loglevel", "error",
         "-i", video_path,
         "-i", audio_source_path,
-        "-c:v", "copy",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "veryfast",
         "-c:a", "aac", "-b:a", "128k",
         "-map", "0:v:0", "-map", "1:a:0",
         "-shortest",
@@ -155,6 +160,22 @@ def _mux_audio_video(video_path: str, audio_source_path: str, output_path: str) 
     if proc.returncode != 0:
         err = proc.stderr.decode("utf-8", errors="replace")[-500:]
         raise RuntimeError(f"ffmpeg audio mux failed (exit {proc.returncode}): {err}")
+
+
+def _reencode_video_only(video_path: str, output_path: str) -> None:
+    """Re-encode to browser-playable H.264, no audio (source has no audio track)."""
+    cmd = [
+        "ffmpeg", "-y", "-loglevel", "error",
+        "-i", video_path,
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "veryfast",
+        "-an",
+        "-movflags", "+faststart",
+        output_path,
+    ]
+    proc = subprocess.run(cmd, capture_output=True, timeout=FFMPEG_EXIT_TIMEOUT_S)
+    if proc.returncode != 0:
+        err = proc.stderr.decode("utf-8", errors="replace")[-500:]
+        raise RuntimeError(f"ffmpeg re-encode failed (exit {proc.returncode}): {err}")
 
 
 def export_annotated_video(
@@ -189,8 +210,8 @@ def export_annotated_video(
         if not cap.isOpened():
             raise RuntimeError("Could not open video for export")
         fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-        width = int(cap.get(cv2.CAP_PROP_F_WIDTH))
-        height = int(cap.get(cv2.CAP_PROP_F_HEIGHT))
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
         out_fd, silent_path = tempfile.mkstemp(suffix=".mp4")
         os.close(out_fd)
@@ -238,7 +259,14 @@ def export_annotated_video(
 
         out_fd, out_path = tempfile.mkstemp(suffix=".mp4")
         os.close(out_fd)
-        _mux_audio_video(silent_path, local_path, out_path)
+        try:
+            _mux_audio_video(silent_path, local_path, out_path)
+        except RuntimeError as mux_err:
+            # Common cause: the source reference video has no audio track
+            # (`-map 1:a:0` has nothing to map). Fall back to a video-only
+            # re-encode so export still succeeds and is browser-playable.
+            logger.warning("Export %s: audio mux failed (%s), falling back to video-only", ref_id, mux_err)
+            _reencode_video_only(silent_path, out_path)
 
         logger.info("Export %s: upload", ref_id)
         with open(out_path, "rb") as f:

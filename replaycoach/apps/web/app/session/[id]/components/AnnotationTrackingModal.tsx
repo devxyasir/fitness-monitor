@@ -50,6 +50,7 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
   const [busy, setBusy] = useState(false);
   const [hoveredJoint, setHoveredJoint] = useState<string | null>(null);
   const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const videoRect = (() => {
     const { width: cw, height: ch } = containerDims;
@@ -81,7 +82,10 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
     apiClient
       .get<TrackedAnnotation[]>(`/sessions/${sessionId}/reference/${refId}/annotations`)
       .then((list) => s.setAnnotations(list))
-      .catch((e) => console.error('[AnnotationTracking] annotations load failed', e));
+      .catch((e) => {
+        console.error('[AnnotationTracking] annotations load failed', e);
+        setError('Could not load existing annotations. Try reopening this video.');
+      });
   }, [refId, sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Container resize observer.
@@ -167,14 +171,19 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
         ctx.beginPath(); ctx.arc(px, py, 5, 0, Math.PI * 2); ctx.stroke();
       }
     } else {
+      // Only draw joints that matter right now: ones already used by an
+      // annotation visible on this frame, joints picked so far for the
+      // in-progress shape, and whichever joint the cursor is nearest to.
+      // We deliberately do NOT flood the frame with every body joint while
+      // the cursor is over the video — that read as "the whole skeleton is
+      // still showing" even with showSkeleton off.
       const active = getActiveJoints();
-      const showAllDots = mousePos !== null || pendingJoints.length > 0;
 
       for (let i = 0; i < names.length; i++) {
         const name = names[i]!;
         const k = ordered[i];
         if (!k || k.score < MIN_SCORE) continue;
-        if (!showAllDots && !active.has(name)) continue;
+        if (!active.has(name)) continue;
 
         const px = k.x * videoRect.width, py = k.y * videoRect.height;
         ctx.lineWidth = 1.25; ctx.strokeStyle = 'rgba(15, 23, 42, 0.85)';
@@ -413,6 +422,7 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
 
     s.clearPending();
     setBusy(true);
+    setError(null);
     try {
       const dto = {
         shapeType,
@@ -433,6 +443,7 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
       s.select(created.id);
     } catch (err) {
       console.error('[AnnotationTracking] create failed', err);
+      setError(err instanceof Error ? err.message : 'Failed to create annotation.');
     } finally {
       setBusy(false);
     }
@@ -480,7 +491,10 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
       await apiClient.del(`/sessions/${sessionId}/reference/${refId}/annotations/${selectedId}`);
       s.applyRemoteDelete(selectedId);
       s.pushUndo({ type: 'delete', annotation: ann });
-    } catch (e) { console.error('[AnnotationTracking] delete failed', e); }
+    } catch (e) {
+      console.error('[AnnotationTracking] delete failed', e);
+      setError(e instanceof Error ? e.message : 'Failed to delete annotation.');
+    }
     finally { setBusy(false); }
   };
 
@@ -496,7 +510,10 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
         const created = await recreate(op.annotation);
         if (created) s.applyRemoteCreate(created);
       }
-    } catch (e) { console.error('[AnnotationTracking] undo failed', e); }
+    } catch (e) {
+      console.error('[AnnotationTracking] undo failed', e);
+      setError(e instanceof Error ? e.message : 'Undo failed.');
+    }
   };
 
   const redo = async () => {
@@ -511,7 +528,10 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
         await apiClient.del(`/sessions/${sessionId}/reference/${refId}/annotations/${op.annotation.id}`);
         s.applyRemoteDelete(op.annotation.id);
       }
-    } catch (e) { console.error('[AnnotationTracking] redo failed', e); }
+    } catch (e) {
+      console.error('[AnnotationTracking] redo failed', e);
+      setError(e instanceof Error ? e.message : 'Redo failed.');
+    }
   };
 
   const recreate = async (a: TrackedAnnotation): Promise<TrackedAnnotation | null> => {
@@ -569,10 +589,12 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
   const startExport = async () => {
     if (!refId || exporting) return;
     setExporting(true);
+    setError(null);
     try {
       await apiClient.post(`/sessions/${sessionId}/reference/${refId}/export`, {});
     } catch (e) {
       console.error('[AnnotationTracking] export failed', e);
+      setError(e instanceof Error ? e.message : 'Export failed to start.');
       setExporting(false);
     }
   };
@@ -622,6 +644,15 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
             <button onClick={handleClose} className="text-slate-400 hover:text-white px-2" aria-label="Close"><X className="w-5 h-5" /></button>
           </div>
         </div>
+
+        {error && (
+          <div className="flex items-center justify-between gap-3 px-5 py-2 bg-red-950/40 border-b border-red-900 text-xs text-red-300">
+            <span>{error}</span>
+            <button onClick={() => setError(null)} className="text-red-400 hover:text-white shrink-0" aria-label="Dismiss error">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
 
         <div className="flex-1 flex flex-col sm:flex-row min-h-0">
           <div ref={containerRef} className="flex-1 relative bg-black">
