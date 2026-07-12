@@ -12,6 +12,7 @@ export default function LoginPage() {
   const redirectTo = searchParams.get('redirectTo');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -21,7 +22,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const user = await authClient.login({ email, password });
+      const user = await authClient.login({ email, password, rememberMe });
       
       // Redirect based on role or query redirect param
       const isValidRedirect = redirectTo && redirectTo.startsWith('/') && !redirectTo.startsWith('//');
@@ -95,6 +96,17 @@ export default function LoginPage() {
                 placeholder="••••••••••••"
               />
             </div>
+
+            <label htmlFor="rememberMe" className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                id="rememberMe"
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="h-4 w-4 rounded border-white/20 bg-transparent accent-brand-indigo"
+              />
+              <span className="text-xs text-ink-muted">Stay signed in on this device</span>
+            </label>
 
             <button
               type="submit"

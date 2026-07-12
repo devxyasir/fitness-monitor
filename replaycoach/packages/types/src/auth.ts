@@ -29,6 +29,8 @@ export interface TokenResponse {
 export interface LoginRequest {
   email: string;
   password: string;
+  /** Persistent login: long-lived refresh cookie that survives browser close. */
+  rememberMe?: boolean;
 }
 
 export interface RegisterRequest {

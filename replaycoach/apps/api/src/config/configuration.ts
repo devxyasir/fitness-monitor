@@ -13,7 +13,11 @@ export default () => ({
     secret: process.env['JWT_SECRET'],
     expiry: process.env['JWT_EXPIRY'] ?? '15m',
     refreshSecret: process.env['JWT_REFRESH_SECRET'],
+    // "Remember me" TTL — long-lived, persistent refresh cookie.
     refreshExpiry: process.env['JWT_REFRESH_EXPIRY'] ?? '7d',
+    // Default (non-"remember me") TTL — short-lived session cookie, cleared
+    // on browser close.
+    sessionExpiry: process.env['JWT_SESSION_EXPIRY'] ?? '1d',
   },
   auth: {
     cookieSameSite: process.env['AUTH_COOKIE_SAMESITE'] ?? 'strict',

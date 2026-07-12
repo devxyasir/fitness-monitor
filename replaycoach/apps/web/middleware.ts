@@ -2,27 +2,32 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 /**
+ * Mirrors apps/api/src/auth/cookie.helper.ts's SESSION_HINT_COOKIE_NAME.
+ * Non-httpOnly, Path=/, carries no privilege (just "1") — set/cleared
+ * alongside the real httpOnly refresh cookie on login/refresh/logout. It
+ * exists purely so this edge middleware has *something* to check: the real
+ * refresh token is httpOnly and deliberately scoped to /api/v1/auth (never
+ * sent on page requests), and the access token lives in JS memory only, so
+ * neither is visible here.
+ */
+const SESSION_HINT_COOKIE = 'rc_has_session';
+
+/**
  * Route auth guard.
  * IMPORTANT: This is a UX convenience only — frontend guards are NOT the security boundary.
- * Server-side authorization is always enforced per request.
+ * Server-side authorization is always enforced per request (every API guard
+ * re-validates the access token and re-checks role/ownership regardless of
+ * what this middleware decided). A forged/missing hint cookie can only send
+ * a visitor to the wrong page, never grant or withhold real access.
  * See 13_Frontend_Architecture.md §5 and 06_Authentication_Authorization_RBAC.md.
- *
- * Implementation: Phase 1 — replace the placeholder with real cookie/token validation.
  */
 export function middleware(request: NextRequest) {
-  // TODO (Phase 1): Check for a valid session cookie/token.
-  // - If missing/invalid on a protected route → redirect to /login.
-  // - Use a lightweight cookie check here (not a full DB call — that's for the API).
+  const hasSession = request.cookies.has(SESSION_HINT_COOKIE);
 
-  const { pathname } = request.nextUrl;
-
-  // Placeholder: allow all requests through (no auth yet)
-  const isProtectedRoute =
-    pathname.startsWith('/(dashboard)') || pathname.startsWith('/session');
-
-  if (isProtectedRoute) {
-    // TODO: redirect to /login if no valid session cookie
-    void isProtectedRoute; // suppress unused var until Phase 1
+  if (!hasSession) {
+    const loginUrl = new URL('/login', request.url);
+    loginUrl.searchParams.set('redirectTo', request.nextUrl.pathname);
+    return NextResponse.redirect(loginUrl);
   }
 
   return NextResponse.next();

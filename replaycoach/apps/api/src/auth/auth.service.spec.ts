@@ -46,6 +46,7 @@ const mockUserService = {
   create: jest.fn(),
   findByEmail: jest.fn(),
   findById: jest.fn(),
+  incrementSessionVersion: jest.fn(),
 };
 
 const mockRefreshTokenService = {
@@ -170,14 +171,18 @@ describe('AuthService', () => {
       const user = makeUser();
 
       mockRefreshTokenService.findValid.mockResolvedValue(rt);
-      mockRefreshTokenService.rotate.mockResolvedValue({ newRawToken: 'new-raw-token', familyId: 'family-uuid' });
+      mockRefreshTokenService.rotate.mockResolvedValue({
+        newRawToken: 'new-raw-token',
+        familyId: 'family-uuid',
+        rememberMe: false,
+      });
       mockUserService.findById.mockResolvedValue(user);
 
       const { tokenResponse, refreshToken } = await service.refresh(oldToken);
 
       expect(tokenResponse.accessToken).toBe('signed-access-token');
       expect(refreshToken).toBe('new-raw-token');
-      expect(mockRefreshTokenService.rotate).toHaveBeenCalledWith(oldToken, user.id, expect.any(Date));
+      expect(mockRefreshTokenService.rotate).toHaveBeenCalledWith(oldToken, user.id, expect.any(Function));
     });
 
     it('should throw UnauthorizedException if refresh token not found', async () => {
@@ -189,14 +194,18 @@ describe('AuthService', () => {
   // ── logout ─────────────────────────────────────────────────────────────────
 
   describe('logout', () => {
-    it('should revoke the refresh token', async () => {
+    it('should bump sessionVersion and revoke the refresh token', async () => {
       mockRefreshTokenService.revoke.mockResolvedValue(undefined);
-      await service.logout('some-token');
+      mockUserService.incrementSessionVersion.mockResolvedValue(undefined);
+      await service.logout('some-token', 'user-uuid');
+      expect(mockUserService.incrementSessionVersion).toHaveBeenCalledWith('user-uuid');
       expect(mockRefreshTokenService.revoke).toHaveBeenCalledWith('some-token');
     });
 
-    it('should be a no-op if no refresh token provided', async () => {
-      await service.logout(undefined);
+    it('should still bump sessionVersion if no refresh token provided', async () => {
+      mockUserService.incrementSessionVersion.mockResolvedValue(undefined);
+      await service.logout(undefined, 'user-uuid');
+      expect(mockUserService.incrementSessionVersion).toHaveBeenCalledWith('user-uuid');
       expect(mockRefreshTokenService.revoke).not.toHaveBeenCalled();
     });
   });

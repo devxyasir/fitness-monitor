@@ -59,6 +59,15 @@ export class RefreshToken {
   @Column({ name: 'expires_at', type: 'timestamptz' })
   expiresAt!: Date;
 
+  /**
+   * Whether this token's family should renew on the long ("remember me")
+   * TTL vs the short session TTL on each rotation — set once at login/register
+   * and carried forward by RefreshTokenService.rotate() so the client can't
+   * silently escalate a session-only login into a persistent one.
+   */
+  @Column({ name: 'remember_me', type: 'boolean', default: false })
+  rememberMe!: boolean;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;
 

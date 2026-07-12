@@ -13,6 +13,15 @@ import type { JwtPayload, TokenResponse } from '@replaycoach/types';
 import { UserService } from '../users/user.service';
 import { RefreshTokenService } from './refresh-token.service';
 import type { RegisterDto, LoginDto } from './auth.dto';
+import { parseDurationMs } from './duration.util';
+
+/** What the controller needs to both respond to the client and set the refresh cookie. */
+interface AuthResult {
+  tokenResponse: TokenResponse;
+  refreshToken: string;
+  rememberMe: boolean;
+  expiresAt: Date;
+}
 
 @Injectable()
 export class AuthService {
@@ -23,8 +32,9 @@ export class AuthService {
     private readonly configService: ConfigService,
   ) {}
 
-  /** Register a new user and issue tokens. */
-  async register(dto: RegisterDto): Promise<{ tokenResponse: TokenResponse; refreshToken: string }> {
+  /** Register a new user and issue tokens. A fresh signup stays logged in
+   * (long TTL) since there's no "remember me" toggle on the register form. */
+  async register(dto: RegisterDto): Promise<AuthResult> {
     const user = await this.userService.create({
       email: dto.email,
       password: dto.password,
@@ -32,11 +42,11 @@ export class AuthService {
       role: dto.role,
     });
 
-    return this.issueTokenPair(user.id, user.email, user.role, user.orgId, user.sessionVersion);
+    return this.issueTokenPair(user.id, user.email, user.role, user.orgId, user.sessionVersion, true);
   }
 
   /** Login with email/password. */
-  async login(dto: LoginDto): Promise<{ tokenResponse: TokenResponse; refreshToken: string }> {
+  async login(dto: LoginDto): Promise<AuthResult> {
     const user = await this.userService.findByEmail(dto.email);
 
     // Use constant-time comparison to prevent user enumeration via timing attacks.
@@ -51,7 +61,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    return this.issueTokenPair(user.id, user.email, user.role, user.orgId, user.sessionVersion);
+    return this.issueTokenPair(user.id, user.email, user.role, user.orgId, user.sessionVersion, dto.rememberMe ?? false);
   }
 
   /**
@@ -59,7 +69,7 @@ export class AuthService {
    * Detects reuse: if the token is not found in the DB, the family is revoked
    * and the user is forced to re-authenticate.
    */
-  async refresh(rawRefreshToken: string): Promise<{ tokenResponse: TokenResponse; refreshToken: string }> {
+  async refresh(rawRefreshToken: string): Promise<AuthResult> {
     const existing = await this.refreshTokenService.findValid(rawRefreshToken);
 
     if (!existing) {
@@ -68,12 +78,17 @@ export class AuthService {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
 
-    // Rotate: delete old, insert new in same family.
-    const expiresAt = this.refreshExpiresAt();
-    const { newRawToken } = await this.refreshTokenService.rotate(
+    // Rotate: delete old, insert new in same family. The "remember me"
+    // choice lives on the row itself (set at login) so it carries forward
+    // across rotations regardless of what this request does or doesn't send.
+    let expiresAt = new Date();
+    const { newRawToken, rememberMe } = await this.refreshTokenService.rotate(
       rawRefreshToken,
       existing.userId,
-      expiresAt,
+      (remember) => {
+        expiresAt = this.refreshExpiresAt(remember);
+        return expiresAt;
+      },
     );
 
     const user = await this.userService.findById(existing.userId);
@@ -86,13 +101,19 @@ export class AuthService {
     };
 
     const accessToken = this.jwtService.sign(payload);
-    return { tokenResponse: { accessToken }, refreshToken: newRawToken };
+    return { tokenResponse: { accessToken }, refreshToken: newRawToken, rememberMe, expiresAt };
   }
 
-  /** Revoke the current refresh token (logout). */
-  async logout(rawRefreshToken: string | undefined): Promise<void> {
-    if (!rawRefreshToken) return;
-    await this.refreshTokenService.revoke(rawRefreshToken);
+  /**
+   * Logout: revokes the refresh token AND bumps sessionVersion so any
+   * still-live access token (up to JWT_EXPIRY old) is rejected immediately
+   * instead of remaining valid until it naturally expires.
+   */
+  async logout(rawRefreshToken: string | undefined, userId: string): Promise<void> {
+    await this.userService.incrementSessionVersion(userId);
+    if (rawRefreshToken) {
+      await this.refreshTokenService.revoke(rawRefreshToken);
+    }
   }
 
   /**
@@ -117,7 +138,8 @@ export class AuthService {
     role: string,
     orgId: string | null,
     sessionVersion: number,
-  ): Promise<{ tokenResponse: TokenResponse; refreshToken: string }> {
+    rememberMe: boolean,
+  ): Promise<AuthResult> {
     const payload: JwtPayload = {
       sub: userId,
       email,
@@ -128,16 +150,24 @@ export class AuthService {
 
     const accessToken = this.jwtService.sign(payload);
     const rawRefreshToken = uuidv4();
-    const expiresAt = this.refreshExpiresAt();
-    await this.refreshTokenService.store(userId, rawRefreshToken, expiresAt);
+    const expiresAt = this.refreshExpiresAt(rememberMe);
+    await this.refreshTokenService.store(userId, rawRefreshToken, expiresAt, undefined, rememberMe);
 
-    return { tokenResponse: { accessToken }, refreshToken: rawRefreshToken };
+    return { tokenResponse: { accessToken }, refreshToken: rawRefreshToken, rememberMe, expiresAt };
   }
 
-  private refreshExpiresAt(): Date {
-    const expiry = this.configService.get<string>('jwt.refreshExpiry') ?? '7d';
-    const days = parseInt(expiry, 10); // '7d' → NaN; default to 7
-    const daysToAdd = isNaN(days) ? 7 : days;
-    return new Date(Date.now() + daysToAdd * 24 * 60 * 60 * 1000);
+  /**
+   * "Remember me" → the long-lived TTL (jwt.refreshExpiry, default 7d).
+   * Otherwise → a short session TTL (jwt.sessionExpiry, default 1d) and the
+   * cookie itself is set as a non-persistent session cookie (cleared on
+   * browser close) — see cookie.helper.ts.
+   */
+  private refreshExpiresAt(rememberMe: boolean): Date {
+    if (rememberMe) {
+      const raw = this.configService.get<string>('jwt.refreshExpiry') ?? '7d';
+      return new Date(Date.now() + parseDurationMs(raw, 7 * 86_400_000));
+    }
+    const raw = this.configService.get<string>('jwt.sessionExpiry') ?? '1d';
+    return new Date(Date.now() + parseDurationMs(raw, 86_400_000));
   }
 }

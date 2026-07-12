@@ -11,6 +11,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './jwt.strategy';
 import { RefreshTokenService } from './refresh-token.service';
+import { RefreshTokenCleanupService } from './refresh-token-cleanup.service';
 
 @Module({
   imports: [
@@ -29,7 +30,7 @@ import { RefreshTokenService } from './refresh-token.service';
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
     UserModule,
   ],
-  providers: [AuthService, RefreshTokenService, JwtStrategy],
+  providers: [AuthService, RefreshTokenService, RefreshTokenCleanupService, JwtStrategy],
   controllers: [AuthController],
   exports: [AuthService, JwtStrategy],
 })

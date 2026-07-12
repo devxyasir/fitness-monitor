@@ -56,6 +56,7 @@ describe('RefreshTokenService', () => {
     expiresAt: new Date(Date.now() + 86400000),
     createdAt: new Date(),
     rotatedAt,
+    rememberMe: false,
     user: null as unknown as import('../users/user.entity').User,
   });
 
@@ -131,7 +132,7 @@ describe('RefreshTokenService', () => {
       mockRepo.update.mockResolvedValue({ affected: 1 });
       mockRepo.save.mockResolvedValue({});
 
-      const { newRawToken, familyId } = await service.rotate(raw, 'user-1', new Date());
+      const { newRawToken, familyId } = await service.rotate(raw, 'user-1', () => new Date());
 
       expect(mockRepo.update).toHaveBeenCalledWith(
         { id: 'rt-id' },
@@ -145,7 +146,7 @@ describe('RefreshTokenService', () => {
     it('should throw UnauthorizedException if old token not found and no grace-window match', async () => {
       // findValid → no active match; findRotatedMatch → no rotated match either.
       mockRepo.findOne.mockResolvedValue(null);
-      await expect(service.rotate('bad-token', 'user-1', new Date())).rejects.toBeInstanceOf(
+      await expect(service.rotate('bad-token', 'user-1', () => new Date())).rejects.toBeInstanceOf(
         UnauthorizedException,
       );
     });
@@ -157,7 +158,7 @@ describe('RefreshTokenService', () => {
       mockRepo.update.mockResolvedValue({ affected: 1 });
       mockRepo.save.mockResolvedValue({});
 
-      const { newRawToken } = await service.rotate(raw, 'user-1', new Date());
+      const { newRawToken } = await service.rotate(raw, 'user-1', () => new Date());
       expect(newRawToken).not.toBe(raw);
     });
 
@@ -175,7 +176,7 @@ describe('RefreshTokenService', () => {
       mockRepo.update.mockResolvedValue({ affected: 1 });
       mockRepo.save.mockResolvedValue({});
 
-      const { newRawToken, familyId } = await service.rotate(rawOld, 'user-1', new Date());
+      const { newRawToken, familyId } = await service.rotate(rawOld, 'user-1', () => new Date());
 
       expect(familyId).toBe('fam-grace');
       expect(newRawToken).toBeDefined();
@@ -197,7 +198,7 @@ describe('RefreshTokenService', () => {
 
       mockRepo.delete.mockResolvedValue({ affected: 2 });
 
-      await expect(service.rotate(rawOld, 'user-1', new Date())).rejects.toBeInstanceOf(
+      await expect(service.rotate(rawOld, 'user-1', () => new Date())).rejects.toBeInstanceOf(
         UnauthorizedException,
       );
       expect(mockRepo.delete).toHaveBeenCalledWith({ familyId: 'fam-stale' });
@@ -255,7 +256,7 @@ describe('RefreshTokenService', () => {
       mockRepo.save.mockResolvedValue({});
 
       // Rotate A → B
-      await service.rotate(rawA, 'user-1', new Date());
+      await service.rotate(rawA, 'user-1', () => new Date());
 
       // Now A should not be findable as an active token (it was rotated out)
       const result = await service.findValid(rawA);

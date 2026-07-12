@@ -3,6 +3,49 @@ import type { LoginRequest, RegisterRequest, TokenResponse, UserDto } from '@rep
 
 const API_BASE_URL = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001';
 
+/** localStorage key used to broadcast logout to other tabs (see bottom of file). */
+const LOGOUT_BROADCAST_KEY = 'rc_logout_broadcast';
+
+// ─── Silent (proactive) token refresh ───────────────────────────────────────
+// Reactive refresh (on mount / on 401) already exists below; this adds a
+// timer so the access token is renewed shortly before it actually expires,
+// instead of waiting for a request to fail first.
+
+let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+const REFRESH_BUFFER_MS = 60_000; // refresh this long before the token's real expiry
+const MIN_REFRESH_DELAY_MS = 5_000; // never schedule tighter than this (clock skew safety)
+
+/** Reads the `exp` claim out of a JWT without verifying it — verification is
+ * the server's job; this is only used to time a local timer. */
+function decodeJwtExpMs(token: string): number | null {
+  try {
+    const payload = token.split('.')[1];
+    if (!payload) return null;
+    const json = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/'))) as { exp?: number };
+    return typeof json.exp === 'number' ? json.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+function scheduleSilentRefresh(accessToken: string): void {
+  if (refreshTimer) clearTimeout(refreshTimer);
+  const expMs = decodeJwtExpMs(accessToken);
+  if (expMs === null) return;
+  const delay = Math.max(MIN_REFRESH_DELAY_MS, expMs - Date.now() - REFRESH_BUFFER_MS);
+  refreshTimer = setTimeout(() => {
+    refresh().catch((err) => console.warn('Silent refresh failed:', err));
+  }, delay);
+}
+
+function clearSilentRefresh(): void {
+  if (refreshTimer) {
+    clearTimeout(refreshTimer);
+    refreshTimer = null;
+  }
+}
+
 /** Helper to construct authorization headers using the store's current token */
 function getAuthHeaders(): Record<string, string> {
   const token = useAuthStore.getState().accessToken;
@@ -76,6 +119,7 @@ async function login(payload: LoginRequest): Promise<UserDto> {
   const { accessToken } = (await res.json()) as TokenResponse;
   const user = await fetchUserProfile(accessToken);
   useAuthStore.getState().setAuth(accessToken, user);
+  scheduleSilentRefresh(accessToken);
   return user;
 }
 
@@ -99,6 +143,7 @@ async function register(payload: RegisterRequest): Promise<UserDto> {
   const { accessToken } = (await res.json()) as TokenResponse;
   const user = await fetchUserProfile(accessToken);
   useAuthStore.getState().setAuth(accessToken, user);
+  scheduleSilentRefresh(accessToken);
   return user;
 }
 
@@ -134,10 +179,12 @@ async function doRefresh(): Promise<UserDto> {
   if (!res.ok) {
     // Genuine "no valid session" — clear and bubble up.
     useAuthStore.getState().clearAuth();
+    clearSilentRefresh();
     throw new Error('Session expired');
   }
 
   const { accessToken } = (await res.json()) as TokenResponse;
+  scheduleSilentRefresh(accessToken);
 
   // Fetch profile. IMPORTANT: a failure HERE must NOT clear auth — the refresh
   // itself succeeded and the access token is valid. Set the token first so the
@@ -158,7 +205,7 @@ async function doRefresh(): Promise<UserDto> {
 }
 
 /**
- * Logout: call revoke on backend, clear store.
+ * Logout: call revoke on backend, clear store, and tell other open tabs.
  */
 async function logout(): Promise<void> {
   const res = await fetchWithTimeout(`${API_BASE_URL}/api/v1/auth/logout`, {
@@ -169,10 +216,38 @@ async function logout(): Promise<void> {
   });
 
   useAuthStore.getState().clearAuth();
+  clearSilentRefresh();
+  broadcastLogout();
   if (!res.ok) {
     // Audit log / warning, but clean up state anyway.
     console.warn('Logout request did not complete successfully on backend');
   }
+}
+
+// ─── Cross-tab logout sync ───────────────────────────────────────────────
+// Each tab has its own in-memory access token (deliberately — see auth-store.ts),
+// so a tab that logs out doesn't automatically tell any other open tab. Since
+// the refresh cookie is shared across tabs and gets revoked/cleared on logout,
+// other tabs would eventually discover this on their own next refresh/401 —
+// but broadcasting via localStorage's 'storage' event makes it instant instead
+// of leaving stale tabs looking signed-in until their next API call.
+
+function broadcastLogout(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(LOGOUT_BROADCAST_KEY, String(Date.now()));
+  } catch {
+    // Storage unavailable (private browsing, quota) — other tabs just fall
+    // back to discovering the logout on their own next 401.
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (event) => {
+    if (event.key !== LOGOUT_BROADCAST_KEY || event.newValue === null) return;
+    useAuthStore.getState().clearAuth();
+    clearSilentRefresh();
+  });
 }
 
 export const authClient = { login, register, refresh, logout };

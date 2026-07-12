@@ -29,9 +29,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: JwtPayload): Promise<JwtPayload> {
-    const user = await this.userService.findById(payload.sub);
+    // A NotFoundException here (deleted/never-existed user) would otherwise
+    // surface as a 404-shaped error mid-auth-guard instead of a clean 401 —
+    // from the client's point of view this is just "not authenticated".
+    const user = await this.userService.findById(payload.sub).catch(() => null);
 
-    if (user.sessionVersion !== payload.sessionVersion) {
+    if (!user || user.sessionVersion !== payload.sessionVersion) {
       throw new UnauthorizedException('Session invalidated — please log in again');
     }
 

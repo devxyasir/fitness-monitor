@@ -13,6 +13,15 @@ export default function AuthInitializer({ children }: { children: React.ReactNod
 
   useEffect(() => {
     async function restoreSession() {
+      // rc_has_session (non-httpOnly, mirrors the real refresh cookie — see
+      // apps/api/src/auth/cookie.helper.ts) lets us skip the round trip
+      // entirely for a visitor who was never logged in, instead of always
+      // firing a refresh call that's guaranteed to 401.
+      const hasSessionHint = document.cookie.includes('rc_has_session=');
+      if (!hasSessionHint) {
+        setInitializing(false);
+        return;
+      }
       try {
         await authClient.refresh();
       } catch (err) {

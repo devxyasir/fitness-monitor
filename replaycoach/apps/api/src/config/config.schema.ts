@@ -13,6 +13,7 @@ export const configSchema = Joi.object({
   JWT_REFRESH_SECRET: Joi.string().min(32).required(),
   JWT_EXPIRY: Joi.string().default('15m'),
   JWT_REFRESH_EXPIRY: Joi.string().default('7d'),
+  JWT_SESSION_EXPIRY: Joi.string().default('1d'),
 
   // Refresh-cookie strategy — only relevant when web + API are on different domains
   AUTH_COOKIE_SAMESITE: Joi.string().valid('strict', 'lax', 'none').default('strict'),

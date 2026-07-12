@@ -68,12 +68,13 @@ export class RefreshTokenService {
     rawToken: string,
     expiresAt: Date,
     familyId?: string,
+    rememberMe = false,
   ): Promise<string> {
     const family = familyId ?? uuidv4();
     const tokenHash = await this.hash(rawToken);
     const tokenLookupHash = this.lookupHash(rawToken);
     await this.repo.save(
-      this.repo.create({ userId, familyId: family, tokenHash, tokenLookupHash, expiresAt }),
+      this.repo.create({ userId, familyId: family, tokenHash, tokenLookupHash, expiresAt, rememberMe }),
     );
     return family;
   }
@@ -134,8 +135,8 @@ export class RefreshTokenService {
   async rotate(
     rawOldToken: string,
     userId: string,
-    expiresAt: Date,
-  ): Promise<{ newRawToken: string; familyId: string }> {
+    expiresAtFor: (rememberMe: boolean) => Date,
+  ): Promise<{ newRawToken: string; familyId: string; rememberMe: boolean }> {
     const existing = await this.findValid(rawOldToken);
 
     if (!existing) {
@@ -153,8 +154,9 @@ export class RefreshTokenService {
             );
             await this.repo.update({ id: active.id }, { rotatedAt: new Date() });
             const newRawToken = uuidv4();
-            await this.store(userId, newRawToken, expiresAt, rotatedMatch.familyId);
-            return { newRawToken, familyId: rotatedMatch.familyId };
+            const rememberMe = rotatedMatch.rememberMe;
+            await this.store(userId, newRawToken, expiresAtFor(rememberMe), rotatedMatch.familyId, rememberMe);
+            return { newRawToken, familyId: rotatedMatch.familyId, rememberMe };
           }
         } else {
           // Outside the grace window: genuine reuse of an old rotated-out token.
@@ -165,14 +167,14 @@ export class RefreshTokenService {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
 
-    const { familyId } = existing;
+    const { familyId, rememberMe } = existing;
 
     await this.repo.update({ id: existing.id }, { rotatedAt: new Date() });
 
     const newRawToken = uuidv4();
-    await this.store(userId, newRawToken, expiresAt, familyId);
+    await this.store(userId, newRawToken, expiresAtFor(rememberMe), familyId, rememberMe);
 
-    return { newRawToken, familyId };
+    return { newRawToken, familyId, rememberMe };
   }
 
   /** Revoke every row (active or rotated-out) in a family — the theft-response action. */

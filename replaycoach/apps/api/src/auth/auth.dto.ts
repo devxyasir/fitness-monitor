@@ -1,6 +1,8 @@
 import {
+  IsBoolean,
   IsEmail,
   IsEnum,
+  IsOptional,
   IsString,
   Matches,
   MaxLength,
@@ -42,6 +44,12 @@ export class LoginDto {
   @IsString()
   @MinLength(1)
   password!: string;
+
+  /** Persistent login: long-lived refresh cookie that survives browser close.
+   * Omitted/false → session cookie tied to the short session TTL. */
+  @IsOptional()
+  @IsBoolean()
+  rememberMe?: boolean;
 }
 
 export class ForgotPasswordDto {

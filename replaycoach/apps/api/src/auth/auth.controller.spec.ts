@@ -158,7 +158,7 @@ describe('AuthController', () => {
         sessionVersion: 1,
       });
 
-      expect(mockAuthService.logout).toHaveBeenCalledWith('active-refresh-token');
+      expect(mockAuthService.logout).toHaveBeenCalledWith('active-refresh-token', 'user-id');
       expect(res.clearCookie).toHaveBeenCalledWith('rc_refresh', expect.any(Object));
     });
   });

@@ -43,8 +43,8 @@ export class AuthController {
     @Body() dto: RegisterDto,
     @Res({ passthrough: true }) res: Response,
   ): Promise<TokenResponse> {
-    const { tokenResponse, refreshToken } = await this.authService.register(dto);
-    setRefreshCookie(res, refreshToken, this.configService);
+    const { tokenResponse, refreshToken, rememberMe, expiresAt } = await this.authService.register(dto);
+    setRefreshCookie(res, refreshToken, this.configService, { rememberMe, expiresAt });
     return tokenResponse;
   }
 
@@ -59,8 +59,8 @@ export class AuthController {
     @Body() dto: LoginDto,
     @Res({ passthrough: true }) res: Response,
   ): Promise<TokenResponse> {
-    const { tokenResponse, refreshToken } = await this.authService.login(dto);
-    setRefreshCookie(res, refreshToken, this.configService);
+    const { tokenResponse, refreshToken, rememberMe, expiresAt } = await this.authService.login(dto);
+    setRefreshCookie(res, refreshToken, this.configService, { rememberMe, expiresAt });
     return tokenResponse;
   }
 
@@ -72,8 +72,8 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<TokenResponse> {
     const rawToken = getRefreshTokenFromCookie(req as { cookies?: Record<string, string> });
-    const { tokenResponse, refreshToken } = await this.authService.refresh(rawToken ?? '');
-    setRefreshCookie(res, refreshToken, this.configService);
+    const { tokenResponse, refreshToken, rememberMe, expiresAt } = await this.authService.refresh(rawToken ?? '');
+    setRefreshCookie(res, refreshToken, this.configService, { rememberMe, expiresAt });
     return tokenResponse;
   }
 
@@ -84,10 +84,10 @@ export class AuthController {
   async logout(
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
-    @CurrentUser() _payload: JwtPayload,
+    @CurrentUser() payload: JwtPayload,
   ): Promise<void> {
     const rawToken = getRefreshTokenFromCookie(req as { cookies?: Record<string, string> });
-    await this.authService.logout(rawToken);
+    await this.authService.logout(rawToken, payload.sub);
     clearRefreshCookie(res, this.configService);
   }
 
