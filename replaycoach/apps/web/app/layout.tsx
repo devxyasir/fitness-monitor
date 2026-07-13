@@ -1,23 +1,38 @@
 import type { Metadata } from 'next';
-import { Space_Grotesk, Inter, JetBrains_Mono } from 'next/font/google';
+import localFont from 'next/font/local';
 import AuthInitializer from './components/AuthInitializer';
 
 import './globals.css';
 
-const display = Space_Grotesk({
-  subsets: ['latin'],
-  weight: ['600', '700'],
+// Self-hosted (not next/font/google) — the production host has no outbound
+// internet access, and next/font/google downloads its font files from
+// Google's CDN at BUILD time, not runtime. That made every production build
+// fail (missing .next/BUILD_ID → PM2 crash-loop on the web process). These
+// three .woff2 files are the exact same Google Fonts assets (latin subset,
+// same weights), just vendored under public/fonts/ so the build has zero
+// network dependency. Re-fetch from Google Fonts' CSS2 API if a weight ever
+// needs to change.
+const display = localFont({
+  src: [
+    { path: '../public/fonts/SpaceGrotesk-latin.woff2', weight: '600', style: 'normal' },
+    { path: '../public/fonts/SpaceGrotesk-latin.woff2', weight: '700', style: 'normal' },
+  ],
   variable: '--font-display',
+  display: 'swap',
 });
-const sans = Inter({
-  subsets: ['latin'],
-  weight: ['400', '500', '600'],
+const sans = localFont({
+  src: [
+    { path: '../public/fonts/Inter-latin.woff2', weight: '400', style: 'normal' },
+    { path: '../public/fonts/Inter-latin.woff2', weight: '500', style: 'normal' },
+    { path: '../public/fonts/Inter-latin.woff2', weight: '600', style: 'normal' },
+  ],
   variable: '--font-sans',
+  display: 'swap',
 });
-const mono = JetBrains_Mono({
-  subsets: ['latin'],
-  weight: ['500'],
+const mono = localFont({
+  src: [{ path: '../public/fonts/JetBrainsMono-latin.woff2', weight: '500', style: 'normal' }],
   variable: '--font-mono',
+  display: 'swap',
 });
 
 export const metadata: Metadata = {
