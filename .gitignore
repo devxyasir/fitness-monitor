@@ -57,3 +57,7 @@ pnpm-debug.log*
 Thumbs.db
 *.pem
 *.key
+
+.claude
+.claude-code-history
+.codex-history

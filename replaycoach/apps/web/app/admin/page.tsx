@@ -41,8 +41,8 @@ export default function AdminPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-6 h-6 text-indigo-400 animate-spin" />
-        <span className="ml-2 text-slate-400">Loading dashboard...</span>
+        <Loader2 className="w-6 h-6 text-brand-indigo animate-spin" />
+        <span className="ml-2 text-ink-muted">Loading dashboard...</span>
       </div>
     );
   }
@@ -50,12 +50,12 @@ export default function AdminPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-white">Platform Admin</h1>
-        <p className="text-sm text-slate-400 mt-1">Overview and management</p>
+        <h1 className="text-xl font-bold text-ink">Platform Admin</h1>
+        <p className="text-sm text-ink-muted mt-1">Overview and management</p>
       </div>
 
       {error && (
-        <div className="p-4 rounded-lg bg-red-950/30 border border-red-800 text-red-300 text-sm">
+        <div className="p-4 rounded-lg bg-danger/10 border border-danger/30 text-danger text-sm">
           {error}
         </div>
       )}
@@ -69,8 +69,8 @@ export default function AdminPage() {
         </div>
       )}
 
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-        <h2 className="text-lg font-semibold text-white mb-4">Quick Actions</h2>
+      <div className="bg-panel border border-hairline rounded-xl p-6">
+        <h2 className="text-lg font-semibold text-ink mb-4">Quick Actions</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <ActionButton label="Manage Users" icon={Users} href="/admin/users" />
           <ActionButton label="Manage Organizations" icon={Shield} href="/admin/orgs" />
@@ -82,14 +82,14 @@ export default function AdminPage() {
 
 function StatCard({ icon: Icon, label, value }: { icon: any; label: string; value: number }) {
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+    <div className="bg-panel border border-hairline rounded-xl p-4">
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-lg bg-indigo-600/20 flex items-center justify-center">
-          <Icon className="w-5 h-5 text-indigo-300" />
+        <div className="w-10 h-10 rounded-lg bg-brand-indigo/20 flex items-center justify-center">
+          <Icon className="w-5 h-5 text-brand-indigo" />
         </div>
         <div>
-          <div className="text-2xl font-bold text-white">{value}</div>
-          <div className="text-xs text-slate-400">{label}</div>
+          <div className="text-2xl font-bold text-ink">{value}</div>
+          <div className="text-xs text-ink-muted">{label}</div>
         </div>
       </div>
     </div>
@@ -100,10 +100,10 @@ function ActionButton({ label, icon: Icon, href }: { label: string; icon: any; h
   return (
     <a
       href={href}
-      className="flex items-center gap-3 p-4 rounded-lg bg-slate-800 hover:bg-slate-700 transition border border-slate-700"
+      className="flex items-center gap-3 p-4 rounded-lg bg-panel-2 hover:bg-panel-2/80 transition border border-hairline"
     >
-      <Icon className="w-5 h-5 text-slate-400" />
-      <span className="text-sm font-medium text-white">{label}</span>
+      <Icon className="w-5 h-5 text-ink-muted" />
+      <span className="text-sm font-medium text-ink">{label}</span>
     </a>
   );
 }

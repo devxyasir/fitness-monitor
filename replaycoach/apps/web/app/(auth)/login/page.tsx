@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { authClient } from '../../../lib/auth-client';
-import { useAuthStore } from '../../../stores/auth-store';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -12,7 +11,7 @@ export default function LoginPage() {
   const redirectTo = searchParams.get('redirectTo');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -22,14 +21,12 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const user = await authClient.login({ email, password, rememberMe });
-      
-      // Redirect based on role or query redirect param
+      const user = await authClient.login({ email, password });
       const isValidRedirect = redirectTo && redirectTo.startsWith('/') && !redirectTo.startsWith('//');
       if (isValidRedirect) {
         router.push(redirectTo);
       } else if (user.role === 'platform_admin' || user.role === 'studio_admin' || user.role === 'coach') {
-        router.push('/coach/clips');
+        router.push('/coach');
       } else {
         router.push('/student/sessions');
       }
@@ -40,94 +37,82 @@ export default function LoginPage() {
     }
   };
 
+  const canSubmit = email.trim().length > 0 && password.length > 0 && !loading;
+
   return (
-    <div className="min-h-screen flex items-center justify-center p-6">
-      <div className="relative w-full max-w-md glass rounded-lg shadow-2xl p-8 overflow-hidden animate-rise">
-        {/* Glow effect */}
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-brand-indigo/10 rounded-full blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-brand-violet/10 rounded-full blur-3xl" />
-
-        <div className="relative z-10">
-          <div className="mb-8 text-center">
-            <h1 className="font-display text-3xl font-bold tracking-tight text-ink mb-2">
-              Replay<span className="bg-gradient-to-r from-brand-indigo to-brand-violet bg-clip-text text-transparent">Coach</span>
-            </h1>
-            <p className="text-sm text-ink-muted">Welcome back. Enter your credentials to sign in.</p>
-          </div>
-
-          {error && (
-            <div className="mb-6 p-4 bg-danger/10 border border-danger/30 text-danger text-xs rounded-md">
-              {error}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label htmlFor="email" className="block text-xs font-semibold text-ink-muted uppercase tracking-wider mb-2">
-                Email Address
-              </label>
-              <input
-                id="email"
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="input"
-                placeholder="you@example.com"
-              />
-            </div>
-
-            <div>
-              <div className="flex justify-between mb-2">
-                <label htmlFor="password" className="text-xs font-semibold text-ink-muted uppercase tracking-wider">
-                  Password
-                </label>
-                <a href="#" className="text-xs text-brand-indigo hover:underline">
-                  Forgot?
-                </a>
-              </div>
-              <input
-                id="password"
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="input"
-                placeholder="••••••••••••"
-              />
-            </div>
-
-            <label htmlFor="rememberMe" className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                id="rememberMe"
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                className="h-4 w-4 rounded border-white/20 bg-transparent accent-brand-indigo"
-              />
-              <span className="text-xs text-ink-muted">Stay signed in on this device</span>
-            </label>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn-primary w-full py-3 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? 'Signing in...' : 'Sign In'}
-            </button>
-          </form>
-
-          <p className="mt-8 text-center text-xs text-ink-faint">
-            Don&apos;t have an account?{' '}
-            <Link
-              href={redirectTo ? `/register?redirectTo=${encodeURIComponent(redirectTo)}` : '/register'}
-              className="text-brand-indigo hover:underline font-semibold"
-            >
-              Create an account
-            </Link>
-          </p>
+    <>
+      <div className="flex items-center gap-2.5 mb-5">
+        <div className="w-5 h-5 rounded-md bg-gradient-to-br from-brand-indigo to-brand-violet flex-shrink-0" />
+        <div>
+          <h2 className="font-display font-semibold text-lg leading-tight">Welcome back</h2>
+          <p className="text-ink-muted text-sm mt-0.5">Sign in to your film room.</p>
         </div>
       </div>
-    </div>
+
+      {error && (
+        <div role="alert" className="bg-danger/10 border border-danger/30 text-danger text-xs rounded-lg px-3.5 py-2.5 mb-5 animate-rise">
+          {error}
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <div>
+          <label htmlFor="auth-email" className="block text-xs text-ink-muted mb-1.5">Email</label>
+          <input
+            id="auth-email"
+            type="email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full bg-panel-2 border border-hairline rounded-lg px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-faint transition-all duration-150 focus:outline-none focus-visible:border-brand-indigo/60 focus-visible:shadow-[0_0_0_4px_rgba(99,102,241,0.15)]"
+            placeholder="you@club.com"
+          />
+        </div>
+
+        <div>
+          <label htmlFor="auth-password" className="block text-xs text-ink-muted mb-1.5">Password</label>
+          <div className="relative">
+            <input
+              id="auth-password"
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="current-password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full bg-panel-2 border border-hairline rounded-lg px-3.5 py-2.5 pr-12 text-sm text-ink placeholder:text-ink-faint transition-all duration-150 focus:outline-none focus-visible:border-brand-indigo/60 focus-visible:shadow-[0_0_0_4px_rgba(99,102,241,0.15)]"
+              placeholder="••••••••••••"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              className="absolute right-2 top-1/2 -translate-y-1/2 bg-none border-none text-ink-muted text-xs cursor-pointer px-2 py-1.5 rounded"
+            >
+              {showPassword ? 'Hide' : 'Show'}
+            </button>
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          disabled={!canSubmit}
+          className="mt-2 w-full font-semibold text-sm text-canvas bg-gradient-to-r from-brand-indigo to-brand-violet rounded-full py-3 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-glow transition-all duration-150 flex items-center justify-center gap-2"
+        >
+          {loading && <span className="w-3.5 h-3.5 rounded-full border-2 border-canvas/30 border-t-canvas animate-spin" />}
+          {loading ? 'Signing in…' : 'Log in'}
+        </button>
+      </form>
+
+      <div className="text-center mt-6 text-sm text-ink-muted">
+        New here?{' '}
+        <Link
+          href={redirectTo ? `/register?redirectTo=${encodeURIComponent(redirectTo)}` : '/register'}
+          className="text-brand-violet hover:text-brand-violet/80 font-semibold"
+        >
+          Sign up
+        </Link>
+      </div>
+    </>
   );
 }

@@ -12,13 +12,16 @@ export default function DashboardRedirectPage() {
     if (user?.role === 'student') {
       router.push('/student/sessions');
     } else {
-      router.push('/coach/sessions');
+      router.push('/coach');
     }
   }, [user, router]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-zinc-950">
-      <div className="text-zinc-500 text-sm animate-pulse">Redirecting...</div>
+    <div className="min-h-screen flex items-center justify-center bg-canvas">
+      <div className="flex flex-col items-center gap-4">
+        <div className="w-10 h-10 border-4 border-brand-indigo/30 border-t-brand-indigo rounded-full animate-spin" />
+        <div className="text-ink-muted text-sm">Redirecting...</div>
+      </div>
     </div>
   );
 }

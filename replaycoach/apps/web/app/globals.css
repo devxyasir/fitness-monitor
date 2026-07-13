@@ -85,4 +85,49 @@
   .pill-replay {
     @apply pill bg-replay/10 border-replay/30 text-replay;
   }
+  .pill-scheduled {
+    @apply pill bg-brand-indigo/10 border-brand-indigo/30 text-brand-indigo;
+  }
+  .pill-ended {
+    @apply pill bg-hairline text-ink-muted;
+  }
+
+  .stat {
+    @apply bg-panel border border-hairline rounded-lg p-5;
+  }
+
+  .sidebar-link {
+    @apply flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm text-ink-muted transition-colors;
+  }
+  .sidebar-link:hover {
+    @apply bg-panel-2 text-ink;
+  }
+  .sidebar-link-active {
+    @apply bg-panel-2 text-ink font-medium;
+    border-left: 2px solid #6366f1;
+  }
+
+  .input-glow:focus {
+    border-color: rgba(99, 102, 241, 0.6) !important;
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15);
+  }
+
+  .gradient-text {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .gradient-border {
+    position: relative;
+  }
+  .gradient-border::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.4), rgba(139, 92, 246, 0.4));
+    z-index: -1;
+  }
 }
