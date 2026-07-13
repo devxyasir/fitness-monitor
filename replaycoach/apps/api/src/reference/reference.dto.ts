@@ -1,4 +1,4 @@
-import { IsIn, IsInt, IsObject, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsObject, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 
 export class UploadReferenceVideoDto {
   /** Direct video URL, used when the coach pastes a link instead of uploading a file. */
@@ -102,6 +102,14 @@ export class SyncReferenceAnnotationsDto {
   /** Keyed by frame index (as a string, since it travels through JSON). */
   @IsObject()
   strokesByFrame!: Record<string, ReferenceStroke[]>;
+}
+
+/** Two download modes for the coach: full skeleton overlay burned in, or just
+ * the joint-attached annotations/markers with the raw video underneath. */
+export class ExportReferenceVideoDto {
+  @IsOptional()
+  @IsBoolean()
+  drawSkeleton?: boolean;
 }
 
 export interface ReferenceVideoResponse {

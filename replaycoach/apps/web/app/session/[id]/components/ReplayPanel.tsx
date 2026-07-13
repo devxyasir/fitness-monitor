@@ -188,7 +188,7 @@ export function ReplayPanel({
   }, [duration, isCoach]);
 
   return (
-    <div className="flex-1 flex flex-col h-full min-h-0 bg-slate-950 relative animate-rise">
+    <div className="flex-1 flex flex-col h-full min-h-0 bg-canvas relative animate-rise">
       {/* Video player */}
       <video
         ref={videoRef}
@@ -203,16 +203,16 @@ export function ReplayPanel({
       {/* Loading / unavailable states — previously a blank black video with
           only a console.warn on failure, no feedback to the user at all. */}
       {loadState === 'loading' && (
-        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-slate-950">
-          <Loader2 className="w-8 h-8 text-indigo-400 animate-spin" />
-          <p className="text-sm font-medium text-slate-300">Loading replay…</p>
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-canvas">
+          <Loader2 className="w-8 h-8 text-brand-violet animate-spin" />
+          <p className="text-sm font-medium text-ink-muted">Loading replay…</p>
         </div>
       )}
       {loadState === 'unavailable' && (
-        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-slate-950 px-6 text-center">
-          <Circle className="w-8 h-8 text-amber-500" />
-          <p className="text-sm font-medium text-slate-300">No buffered footage available yet.</p>
-          <p className="text-xs text-slate-500 max-w-xs">
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-canvas px-6 text-center">
+          <Circle className="w-8 h-8 text-replay" />
+          <p className="text-sm font-medium text-ink-muted">No buffered footage available yet.</p>
+          <p className="text-xs text-ink-faint max-w-xs">
             The rolling buffer needs a few seconds of video before it can replay — try again shortly.
           </p>
         </div>
@@ -229,7 +229,7 @@ export function ReplayPanel({
       </div>
 
       {/* Controls bar */}
-      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-slate-950/95 to-transparent px-4 pt-8 pb-4 z-20 flex flex-col gap-2">
+      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-canvas/95 to-transparent px-4 pt-8 pb-4 z-20 flex flex-col gap-2">
         {/* Seek bar */}
         <input
           type="range"
@@ -246,7 +246,7 @@ export function ReplayPanel({
               );
             }
           }}
-          className="w-full accent-indigo-500 h-1.5 cursor-pointer"
+          className="rc-scrubber w-full cursor-pointer"
         />
 
         <div className="flex items-center justify-between flex-wrap gap-3">
@@ -254,12 +254,12 @@ export function ReplayPanel({
           <div className="flex items-center gap-2">
             <button
               onClick={() => videoRef.current?.paused ? videoRef.current.play() : videoRef.current?.pause()}
-              className="bg-slate-700 hover:bg-slate-600 text-white text-xs px-3 py-1.5 rounded-md transition font-semibold inline-flex items-center gap-1.5"
+              className="bg-panel-2 hover:bg-panel-2/70 border border-hairline text-ink text-xs px-3 py-1.5 rounded-full transition-colors font-semibold inline-flex items-center gap-1.5"
             >
               {isPlaying ? (<><Pause className="w-3.5 h-3.5 fill-current" /> Pause</>) : (<><Play className="w-3.5 h-3.5 fill-current" /> Play</>)}
             </button>
 
-            <span className="text-slate-400 text-xs tabular-nums">
+            <span className="text-replay font-mono text-xs tabular-nums">
               {formatTime(currentTime)} / {formatTime(duration)}
             </span>
           </div>
@@ -273,10 +273,10 @@ export function ReplayPanel({
                   setPlaybackRate(s);
                   if (videoRef.current) videoRef.current.playbackRate = s;
                 }}
-                className={`text-xs px-2 py-1 rounded transition ${
+                className={`text-xs font-mono px-2 py-1 rounded-full transition-colors ${
                   playbackRate === s
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
+                    ? 'bg-gradient-to-r from-brand-indigo to-brand-violet text-canvas font-semibold'
+                    : 'bg-panel-2 border border-hairline hover:bg-panel-2/70 text-ink-muted'
                 }`}
               >
                 {s}×
@@ -288,7 +288,7 @@ export function ReplayPanel({
           {isCoach && (
             <button
               onClick={handleEndReplay}
-              className="bg-green-700 hover:bg-green-600 text-white text-xs font-semibold px-3 py-1.5 rounded-md transition inline-flex items-center gap-1.5"
+              className="bg-live/90 hover:bg-live text-canvas text-xs font-semibold px-3.5 py-1.5 rounded-full transition-colors inline-flex items-center gap-1.5"
             >
               <Rewind className="w-3.5 h-3.5" /> Return to Live
             </button>
@@ -297,12 +297,12 @@ export function ReplayPanel({
       </div>
 
       {/* DVR badge */}
-      <div className="absolute top-3 left-3 z-20 bg-amber-600/90 text-white text-xs font-bold px-2.5 py-1 rounded-md shadow animate-pulse inline-flex items-center gap-1.5">
-        <Circle className="w-2.5 h-2.5 fill-current" /> DVR PLAYBACK
+      <div className="absolute top-3 left-3 z-20 bg-replay/15 border border-replay/35 text-replay text-xs font-mono font-semibold px-2.5 py-1 rounded-full inline-flex items-center gap-1.5">
+        <Circle className="w-2 h-2 fill-current animate-pulse" /> ◍ DVR playback
       </div>
 
       {/* Keyboard shortcuts hint */}
-      <div className="absolute top-3 right-3 z-20 bg-slate-950/70 text-slate-400 text-[10px] font-mono px-2 py-1 rounded-md hidden sm:block">
+      <div className="absolute top-3 right-3 z-20 bg-panel/70 backdrop-blur-glass border border-hairline text-ink-faint text-[10px] font-mono px-2.5 py-1 rounded-full hidden sm:block">
         Space play/pause · ←→ seek 5s{isCoach ? ' · Esc return to live' : ''}
       </div>
     </div>

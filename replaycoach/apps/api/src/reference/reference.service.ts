@@ -529,7 +529,13 @@ export class ReferenceService {
   }
 
   /** Kicks off a server-side export render on the pose-service (background). */
-  async startExport(sessionId: string, refId: string, coachId: string, role: string): Promise<{ status: string }> {
+  async startExport(
+    sessionId: string,
+    refId: string,
+    coachId: string,
+    role: string,
+    drawSkeleton = false,
+  ): Promise<{ status: string }> {
     await this.assertCoach(sessionId, coachId, role);
     const video = await this.getForSession(sessionId, refId);
     if (!video.keypointsKey) throw new BadRequestException('Video has no keypoints to export');
@@ -553,7 +559,7 @@ export class ReferenceService {
         callbackUrl,
         callbackToken,
         keypointFormat: video.keypointFormat,
-        drawSkeleton: false,
+        drawSkeleton,
         annotations: annotations.map((a) => ({
           shapeType: a.shapeType,
           startJoint: a.startJoint,

@@ -34,6 +34,7 @@ import { ReferenceService } from './reference.service';
 import { ReferenceStorageService } from './reference-storage.service';
 import {
   CreateTrackedAnnotationDto,
+  ExportReferenceVideoDto,
   SyncReferenceAnnotationsDto,
   UpdateTrackedAnnotationDto,
   UploadReferenceVideoDto,
@@ -159,14 +160,16 @@ export class ReferenceController {
     return res;
   }
 
-  /** Coach exports the video with skeleton + tracked annotations burned in. */
+  /** Coach exports the video: either the full skeleton overlay burned in, or
+   * just the joint-attached annotations over the raw footage. */
   @Post(':refId/export')
   async export(
     @Param('id') sessionId: string,
     @Param('refId') refId: string,
     @CurrentUser() user: JwtPayload,
+    @Body() body: ExportReferenceVideoDto,
   ) {
-    return this.referenceService.startExport(sessionId, refId, user.sub, user.role);
+    return this.referenceService.startExport(sessionId, refId, user.sub, user.role, body.drawSkeleton ?? false);
   }
 }
 

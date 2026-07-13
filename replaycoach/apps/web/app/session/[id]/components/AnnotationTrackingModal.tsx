@@ -7,7 +7,7 @@ import { skeletonConnectionsFor, keypointNamesFor, type TrackedAnnotation, type 
 import {
   X, Play, Pause, StepBack, StepForward, Loader2, Download,
   Minus, ArrowUpRight, Circle as CircleIcon, Trash2, Undo2, Redo2, Eye, EyeOff, MousePointer2,
-  ChevronRight,
+  ChevronRight, Bone, PenLine, RotateCcw,
 } from 'lucide-react';
 
 interface Props {
@@ -153,7 +153,14 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
     };
 
     if (showSkeleton) {
-      ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.strokeStyle = '#FFA500';
+      // Signature neon skeleton — same indigo→violet gradient + glow used by
+      // the live overlay (SkeletonOverlay.tsx), not a flat per-limb color.
+      const boneGradient = ctx.createLinearGradient(0, 0, videoRect.width, videoRect.height);
+      boneGradient.addColorStop(0, '#6366F1');
+      boneGradient.addColorStop(1, '#8B5CF6');
+
+      ctx.lineWidth = 1.75; ctx.lineCap = 'round'; ctx.strokeStyle = boneGradient;
+      ctx.shadowColor = 'rgba(139,92,246,0.75)'; ctx.shadowBlur = 6;
       for (const [a, b] of skeletonConnectionsFor(keypointFormat)) {
         const ka = ordered[a], kb = ordered[b];
         if (!ka || !kb || ka.score < MIN_SCORE || kb.score < MIN_SCORE) continue;
@@ -162,14 +169,14 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
         ctx.lineTo(kb.x * videoRect.width, kb.y * videoRect.height);
         ctx.stroke();
       }
+      ctx.fillStyle = '#8B5CF6';
       for (const k of ordered) {
         if (!k || k.score < MIN_SCORE) continue;
         const px = k.x * videoRect.width, py = k.y * videoRect.height;
-        ctx.lineWidth = 1.25; ctx.strokeStyle = 'rgba(15,23,42,0.85)';
-        ctx.beginPath(); ctx.arc(px, py, 6, 0, Math.PI * 2); ctx.stroke();
-        ctx.strokeStyle = '#FFFFFF';
-        ctx.beginPath(); ctx.arc(px, py, 5, 0, Math.PI * 2); ctx.stroke();
+        ctx.shadowBlur = 4;
+        ctx.beginPath(); ctx.arc(px, py, 2.75, 0, Math.PI * 2); ctx.fill();
       }
+      ctx.shadowBlur = 0;
     } else {
       // Only draw joints that matter right now: ones already used by an
       // annotation visible on this frame, joints picked so far for the
@@ -586,12 +593,19 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
 
   // Server-side export: sends annotation data to the backend pose-service
   // which composites the video + annotations via FFmpeg (preserves audio).
-  const startExport = async () => {
+  // Two modes: burn in the full skeleton overlay, or just the joint-attached
+  // annotations over the raw footage — the coach picks per-export.
+  const [lastExportMode, setLastExportMode] = useState<'skeleton' | 'annotations' | null>(null);
+  const [showModeChooser, setShowModeChooser] = useState(false);
+
+  const startExport = async (drawSkeleton: boolean) => {
     if (!refId || exporting) return;
     setExporting(true);
     setError(null);
+    setShowModeChooser(false);
     try {
-      await apiClient.post(`/sessions/${sessionId}/reference/${refId}/export`, {});
+      await apiClient.post(`/sessions/${sessionId}/reference/${refId}/export`, { drawSkeleton });
+      setLastExportMode(drawSkeleton ? 'skeleton' : 'annotations');
     } catch (e) {
       console.error('[AnnotationTracking] export failed', e);
       setError(e instanceof Error ? e.message : 'Export failed to start.');
@@ -632,35 +646,65 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      <div className="w-full max-w-6xl h-[88vh] bg-slate-950 border border-slate-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-900 bg-slate-900">
+      <div className="w-full max-w-6xl h-[88vh] bg-panel border border-hairline rounded-lg shadow-2xl flex flex-col overflow-hidden animate-settle">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-hairline bg-panel-2">
           <div className="flex items-center gap-3">
-            <h2 className="text-sm font-bold text-white uppercase tracking-wide">Annotation Tracking</h2>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-950/40 border border-indigo-800 text-indigo-300 uppercase tracking-wider">
+            <h2 className="text-sm font-display font-bold text-ink uppercase tracking-wide">Annotation Tracking</h2>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-brand-indigo/10 border border-brand-indigo/30 text-brand-violet uppercase tracking-wider">
               Joints follow the body
             </span>
             {status === 'processing' && (
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-950/40 border border-amber-800 text-amber-400 uppercase tracking-wider animate-pulse">Analyzing…</span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-replay/10 border border-replay/30 text-replay uppercase tracking-wider animate-pulse">Analyzing…</span>
             )}
           </div>
           <div className="flex items-center gap-2">
-            {exportVideoUrl ? (
-              <button onClick={downloadExport} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold inline-flex items-center gap-1.5">
-                <Download className="w-3.5 h-3.5" /> Download
+            {exporting ? (
+              <button disabled className="px-3 py-1.5 rounded-full bg-panel-2 border border-hairline text-ink-muted text-xs font-semibold opacity-70 cursor-not-allowed inline-flex items-center gap-1.5">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Exporting…
               </button>
+            ) : exportVideoUrl && !showModeChooser ? (
+              <>
+                <button onClick={downloadExport} className="px-3 py-1.5 rounded-full bg-live/90 hover:bg-live text-canvas text-xs font-semibold transition-colors inline-flex items-center gap-1.5">
+                  <Download className="w-3.5 h-3.5" /> Download {lastExportMode === 'skeleton' ? '(skeleton)' : '(annotations)'}
+                </button>
+                {isCoach && status === 'ready' && (
+                  <button
+                    onClick={() => setShowModeChooser(true)}
+                    title="Export a different version"
+                    aria-label="Export a different version"
+                    className="w-8 h-8 flex items-center justify-center rounded-full bg-panel-2 border border-hairline hover:bg-panel-2/60 text-ink-muted transition-colors"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </>
             ) : isCoach && status === 'ready' && (
-              <button onClick={startExport} disabled={exporting} className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold inline-flex items-center gap-1.5">
-                {exporting ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Exporting…</> : <><Download className="w-3.5 h-3.5" /> Export MP4</>}
-              </button>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-mono text-ink-faint uppercase tracking-wide mr-0.5 hidden sm:inline">Download:</span>
+                <button
+                  onClick={() => startExport(true)}
+                  title="Burn in the full skeleton overlay"
+                  className="px-3 py-1.5 rounded-full bg-brand-indigo/15 hover:bg-brand-indigo/25 border border-brand-indigo/40 text-[#A5A9F5] text-xs font-semibold transition-colors inline-flex items-center gap-1.5"
+                >
+                  <Bone className="w-3.5 h-3.5" /> Full skeleton
+                </button>
+                <button
+                  onClick={() => startExport(false)}
+                  title="Just the joint-attached annotations over the raw video"
+                  className="px-3 py-1.5 rounded-full bg-panel-2 hover:bg-panel-2/60 border border-hairline text-ink-muted text-xs font-semibold transition-colors inline-flex items-center gap-1.5"
+                >
+                  <PenLine className="w-3.5 h-3.5" /> Annotations only
+                </button>
+              </div>
             )}
-            <button onClick={handleClose} className="text-slate-400 hover:text-white px-2" aria-label="Close"><X className="w-5 h-5" /></button>
+            <button onClick={handleClose} className="text-ink-faint hover:text-ink px-2 transition-colors" aria-label="Close"><X className="w-5 h-5" /></button>
           </div>
         </div>
 
         {error && (
-          <div className="flex items-center justify-between gap-3 px-5 py-2 bg-red-950/40 border-b border-red-900 text-xs text-red-300">
+          <div className="flex items-center justify-between gap-3 px-5 py-2 bg-danger/10 border-b border-danger/30 text-xs text-danger animate-rise">
             <span>{error}</span>
-            <button onClick={() => setError(null)} className="text-red-400 hover:text-white shrink-0" aria-label="Dismiss error">
+            <button onClick={() => setError(null)} className="text-danger hover:text-ink shrink-0 transition-colors" aria-label="Dismiss error">
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -687,14 +731,14 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
               onPointerLeave={handlePointerLeave}
             />
             {status === 'processing' && (
-              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-slate-950">
-                <Loader2 className="w-8 h-8 text-amber-400 animate-spin" />
-                <p className="text-sm font-semibold text-slate-300">Analyzing video…</p>
-                <p className="text-xs text-slate-500">Detecting the skeleton so annotations can track the body.</p>
+              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-canvas">
+                <Loader2 className="w-8 h-8 text-replay animate-spin" />
+                <p className="text-sm font-semibold text-ink-muted">Analyzing video…</p>
+                <p className="text-xs text-ink-faint">Detecting the skeleton so annotations can track the body.</p>
               </div>
             )}
             {isCoach && status === 'ready' && (
-              <div className="absolute top-3 left-3 z-10 bg-slate-950/85 border border-slate-800 rounded-lg px-3 py-1.5 text-[11px] text-slate-300 flex flex-col gap-1">
+              <div className="absolute top-3 left-3 z-10 bg-panel/85 backdrop-blur-glass border border-hairline rounded-lg px-3 py-1.5 text-[11px] text-ink-muted flex flex-col gap-1">
                 <div>
                   {pendingJoints.length > 0
                     ? `Click ${jointsNeeded(shapeType) - pendingJoints.length} more joint(s) to complete`
@@ -705,7 +749,7 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
                         : 'Click two joints to connect them'}
                 </div>
                 {pendingJoints.length > 0 && (
-                  <div className="text-[10px] text-indigo-400 font-mono">
+                  <div className="text-[10px] text-brand-violet font-mono">
                     Selected: {pendingJoints.join(' → ')}
                   </div>
                 )}
@@ -714,81 +758,81 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
           </div>
 
           {isCoach && (
-            <div className="w-full sm:w-60 max-h-[38vh] sm:max-h-none border-t sm:border-t-0 sm:border-l border-slate-900 bg-slate-900 p-4 flex flex-col gap-4 overflow-y-auto">
+            <div className="w-full sm:w-60 max-h-[38vh] sm:max-h-none border-t sm:border-t-0 sm:border-l border-hairline bg-panel-2 p-4 flex flex-col gap-4 overflow-y-auto">
               <div>
-                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Shape</div>
+                <div className="text-[10px] font-bold text-ink-faint uppercase tracking-wider mb-2">Shape</div>
                 <div className="grid grid-cols-3 gap-1.5">
                   {SHAPES.map((sh) => (
                     <button key={sh.id} onClick={() => s.setShape(sh.id)}
-                      className={`flex flex-col items-center gap-1 py-2 rounded-lg text-[10px] font-semibold border transition ${shapeType === sh.id ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'}`}>
+                      className={`flex flex-col items-center gap-1 py-2 rounded-lg text-[10px] font-semibold border transition-colors ${shapeType === sh.id ? 'bg-gradient-to-r from-brand-indigo to-brand-violet border-transparent text-canvas' : 'bg-panel border-hairline text-ink-muted hover:text-ink'}`}>
                       <sh.icon className="w-4 h-4" /> {sh.label}
                     </button>
                   ))}
                   <button onClick={() => { s.setShape('line'); s.clearPending(); s.select(null); }}
-                    className="flex flex-col items-center gap-1 py-2 rounded-lg text-[10px] font-semibold border bg-slate-950 border-slate-800 text-slate-400 hover:text-white transition">
+                    className="flex flex-col items-center gap-1 py-2 rounded-lg text-[10px] font-semibold border bg-panel border-hairline text-ink-muted hover:text-ink transition-colors">
                     <MousePointer2 className="w-4 h-4" /> Select
                   </button>
                 </div>
               </div>
 
               <div>
-                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Color</div>
+                <div className="text-[10px] font-bold text-ink-faint uppercase tracking-wider mb-2">Color</div>
                 <div className="flex flex-wrap gap-2">
                   {COLORS.map((c) => (
                     <button key={c} onClick={() => changeSelectedColor(c)} style={{ backgroundColor: c }}
-                      className={`w-7 h-7 rounded-full border-2 ${color === c ? 'border-white' : 'border-slate-700'}`} />
+                      className={`w-7 h-7 rounded-full border-2 transition-colors ${color === c ? 'border-ink' : 'border-hairline'}`} />
                   ))}
                 </div>
               </div>
 
               <div>
-                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Thickness</div>
+                <div className="text-[10px] font-bold text-ink-faint uppercase tracking-wider mb-2">Thickness</div>
                 <div className="flex items-center gap-1.5">
                   {THICKNESSES.map((t) => (
                     <button key={t} onClick={() => changeSelectedThickness(t)}
-                      className={`flex-1 py-1.5 rounded-lg text-xs font-semibold border transition ${thickness === t ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'}`}>{t}px</button>
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${thickness === t ? 'bg-gradient-to-r from-brand-indigo to-brand-violet border-transparent text-canvas' : 'bg-panel border-hairline text-ink-muted hover:text-ink'}`}>{t}px</button>
                   ))}
                 </div>
               </div>
 
-              <div className="flex flex-col gap-1.5 pt-2 border-t border-slate-900">
+              <div className="flex flex-col gap-1.5 pt-2 border-t border-hairline">
                 {selectedId && (
                   <div className="mb-2">
-                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Text Note / Label</div>
+                    <div className="text-[10px] font-bold text-ink-faint uppercase tracking-wider mb-1">Text Note / Label</div>
                     <input
                       id="annotation-label-input"
                       type="text"
                       value={annotations.find((a) => a.id === selectedId)?.label ?? ''}
                       onChange={(e) => changeSelectedLabel(e.target.value)}
                       placeholder="e.g. Keep elbow high"
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+                      className="w-full bg-panel border border-hairline rounded-lg px-2.5 py-1.5 text-xs text-ink placeholder-ink-faint focus:outline-none focus:border-brand-indigo"
                     />
                   </div>
                 )}
-                <button onClick={deleteSelected} disabled={!selectedId || busy} className="text-xs text-left px-2 py-1.5 rounded-lg text-red-400 hover:bg-red-950/20 disabled:opacity-40 inline-flex items-center gap-1.5"><Trash2 className="w-3.5 h-3.5" /> Delete selected</button>
+                <button onClick={deleteSelected} disabled={!selectedId || busy} className="text-xs text-left px-2 py-1.5 rounded-lg text-danger hover:bg-danger/10 disabled:opacity-40 transition-colors inline-flex items-center gap-1.5"><Trash2 className="w-3.5 h-3.5" /> Delete selected</button>
                 <div className="flex gap-1.5">
-                  <button onClick={undo} disabled={s.undoStack.length === 0} className="flex-1 text-xs px-2 py-1.5 rounded-lg text-slate-300 hover:bg-slate-800 disabled:opacity-40 inline-flex items-center justify-center gap-1.5"><Undo2 className="w-3.5 h-3.5" /> Undo</button>
-                  <button onClick={redo} disabled={s.redoStack.length === 0} className="flex-1 text-xs px-2 py-1.5 rounded-lg text-slate-300 hover:bg-slate-800 disabled:opacity-40 inline-flex items-center justify-center gap-1.5"><Redo2 className="w-3.5 h-3.5" /> Redo</button>
+                  <button onClick={undo} disabled={s.undoStack.length === 0} className="flex-1 text-xs px-2 py-1.5 rounded-lg text-ink-muted hover:bg-panel disabled:opacity-40 transition-colors inline-flex items-center justify-center gap-1.5"><Undo2 className="w-3.5 h-3.5" /> Undo</button>
+                  <button onClick={redo} disabled={s.redoStack.length === 0} className="flex-1 text-xs px-2 py-1.5 rounded-lg text-ink-muted hover:bg-panel disabled:opacity-40 transition-colors inline-flex items-center justify-center gap-1.5"><Redo2 className="w-3.5 h-3.5" /> Redo</button>
                 </div>
-                <button onClick={() => s.toggleSkeleton()} className="text-xs text-left px-2 py-1.5 rounded-lg text-slate-300 hover:bg-slate-800 inline-flex items-center gap-1.5">{showSkeleton ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />} {showSkeleton ? 'Hide' : 'Show'} skeleton</button>
+                <button onClick={() => s.toggleSkeleton()} className="text-xs text-left px-2 py-1.5 rounded-lg text-ink-muted hover:bg-panel transition-colors inline-flex items-center gap-1.5">{showSkeleton ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />} {showSkeleton ? 'Hide' : 'Show'} skeleton</button>
               </div>
 
-              <div className="pt-2 border-t border-slate-900 text-[10px] text-slate-500 leading-snug">
+              <div className="pt-2 border-t border-hairline text-[10px] text-ink-faint leading-snug">
                 {annotations.length} annotation(s). Each is attached to body joints and follows them through the whole video — press play.
               </div>
             </div>
           )}
         </div>
 
-        <div className="border-t border-slate-900 bg-slate-900 px-5 py-3 flex items-center gap-3 flex-wrap">
+        <div className="border-t border-hairline bg-panel-2 px-5 py-3 flex items-center gap-3 flex-wrap">
           {isCoach && (
             <>
-              <button onClick={() => step(-1)} className="bg-slate-800 hover:bg-slate-700 text-white text-xs px-2.5 py-1.5 rounded-md"><StepBack className="w-3.5 h-3.5" /></button>
-              <button onClick={togglePlay} className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-1.5 rounded-md inline-flex items-center gap-1.5">{playing ? <><Pause className="w-3.5 h-3.5" /> Pause</> : <><Play className="w-3.5 h-3.5" /> Play</>}</button>
-              <button onClick={() => step(1)} className="bg-slate-800 hover:bg-slate-700 text-white text-xs px-2.5 py-1.5 rounded-md"><StepForward className="w-3.5 h-3.5" /></button>
+              <button onClick={() => step(-1)} className="bg-panel hover:bg-panel/70 border border-hairline text-ink text-xs px-2.5 py-1.5 rounded-full transition-colors"><StepBack className="w-3.5 h-3.5" /></button>
+              <button onClick={togglePlay} className="bg-gradient-to-r from-brand-indigo to-brand-violet hover:shadow-glow text-canvas text-xs font-semibold px-3 py-1.5 rounded-full transition-colors inline-flex items-center gap-1.5">{playing ? <><Pause className="w-3.5 h-3.5" /> Pause</> : <><Play className="w-3.5 h-3.5" /> Play</>}</button>
+              <button onClick={() => step(1)} className="bg-panel hover:bg-panel/70 border border-hairline text-ink text-xs px-2.5 py-1.5 rounded-full transition-colors"><StepForward className="w-3.5 h-3.5" /></button>
             </>
           )}
-          <span className="text-slate-400 text-xs font-mono tabular-nums ml-1">frame {frameIndex}{frameCount ? ` / ${frameCount}` : ''}</span>
+          <span className="text-ink-muted text-xs font-mono tabular-nums ml-1">frame {frameIndex}{frameCount ? ` / ${frameCount}` : ''}</span>
         </div>
       </div>
     </div>

@@ -4,33 +4,14 @@ import { useEffect, useRef } from 'react';
 import { usePoseStore } from '../../../../stores/pose-store';
 import { keypointNamesFor, skeletonConnectionsFor, type KeypointFormat } from '@replaycoach/types';
 
-// Limb color palette for visual distinction
-const LIMB_COLORS: Record<string, string> = {
-  face: '#A78BFA',       // violet
-  leftArm: '#34D399',    // emerald
-  rightArm: '#60A5FA',   // blue
-  torso: '#FBBF24',      // amber
-  leftLeg: '#F87171',    // red
-  rightLeg: '#FB923C',   // orange
-};
+// The signature neon skeleton: thin indigo→violet gradient bones with a soft
+// violet glow, small glowing joint dots — one look everywhere (hero mock,
+// live overlay, analysis modals), not per-limb flat colors.
+const SKELETON_INDIGO = '#6366F1';
+const SKELETON_VIOLET = '#8B5CF6';
+const SKELETON_GLOW = 'rgba(139,92,246,0.75)';
 
-function getLimbColorByName(nameA: string, nameB: string): string {
-  const isLeft = (n: string) => n.startsWith('left_') || n.includes('_left');
-  const isFace = (n: string) => ['nose', 'left_eye', 'right_eye', 'left_ear', 'right_ear', 'head', 'neck'].includes(n);
-  
-  if (isFace(nameA) || isFace(nameB)) return LIMB_COLORS['face']!;
-  if (nameA === 'neck' || nameA === 'pelvis' || nameB === 'neck' || nameB === 'pelvis') return LIMB_COLORS['torso']!;
-  if (nameA.includes('shoulder') && nameB.includes('shoulder')) return LIMB_COLORS['torso']!;
-  if (nameA.includes('hip') && nameB.includes('hip')) return LIMB_COLORS['torso']!;
-  
-  if (nameA.includes('shoulder') || nameA.includes('elbow') || nameA.includes('wrist')) {
-    return isLeft(nameA) ? LIMB_COLORS['leftArm']! : LIMB_COLORS['rightArm']!;
-  }
-  if (nameA.includes('hip') || nameA.includes('knee') || nameA.includes('ankle') || nameA.includes('toe') || nameA.includes('heel')) {
-    return isLeft(nameA) ? LIMB_COLORS['leftLeg']! : LIMB_COLORS['rightLeg']!;
-  }
-  return LIMB_COLORS['torso']!;
-}
+const HEAD_KEYPOINT_NAMES = new Set(['nose', 'head']);
 
 interface SkeletonOverlayProps {
   /** Session context for filtering pose updates */
@@ -95,9 +76,17 @@ export function SkeletonOverlay({
 
     const orderedKps = names.map((name) => kpMap.get(name));
 
-    // Draw skeleton connections (limbs) — clean, thin lines.
-    ctx.lineWidth = 2;
+    // One gradient spans the whole canvas so every bone reads as part of the
+    // same signature skeleton rather than per-limb flat colors.
+    const boneGradient = ctx.createLinearGradient(0, 0, width, height);
+    boneGradient.addColorStop(0, SKELETON_INDIGO);
+    boneGradient.addColorStop(1, SKELETON_VIOLET);
+
+    ctx.lineWidth = 1.75;
     ctx.lineCap = 'round';
+    ctx.strokeStyle = boneGradient;
+    ctx.shadowColor = SKELETON_GLOW;
+    ctx.shadowBlur = 6;
 
     for (let i = 0; i < connections.length; i++) {
       const conn = connections[i]!;
@@ -107,9 +96,6 @@ export function SkeletonOverlay({
       if (!kpA || !kpB) continue;
       if (kpA.score < 0.3 || kpB.score < 0.3) continue;
 
-      const nameA = names[conn[0]]!;
-      const nameB = names[conn[1]]!;
-      ctx.strokeStyle = getLimbColorByName(nameA, nameB);
       ctx.globalAlpha = Math.min(kpA.score, kpB.score);
       ctx.beginPath();
       ctx.moveTo(kpA.x * width, kpA.y * height);
@@ -117,31 +103,25 @@ export function SkeletonOverlay({
       ctx.stroke();
     }
 
-    // Draw keypoints as thin HOLLOW rings — a real open circle with clear
-    // space inside (radius well above the 1.25px stroke), consistent size
-    // across the skeleton. A thin dark ring just outside gives contrast on
-    // any background while the interior stays empty.
+    // Small filled glowing joint dots — the head keypoint renders larger as
+    // the skeleton's visual anchor, matching the design system signature.
     ctx.globalAlpha = 1.0;
-    const JOINT_RADIUS = 6;
+    ctx.fillStyle = SKELETON_VIOLET;
+    ctx.shadowColor = SKELETON_GLOW;
     for (let i = 0; i < orderedKps.length; i++) {
       const kp = orderedKps[i];
       if (!kp || kp.score < 0.3) continue;
 
       const px = kp.x * width;
       const py = kp.y * height;
+      const isHead = HEAD_KEYPOINT_NAMES.has(names[i]!);
 
-      ctx.lineWidth = 1.25;
-      ctx.strokeStyle = 'rgba(15, 23, 42, 0.85)'; // slate-900 contrast ring
+      ctx.shadowBlur = isHead ? 8 : 4;
       ctx.beginPath();
-      ctx.arc(px, py, JOINT_RADIUS + 1, 0, Math.PI * 2);
-      ctx.stroke();
-
-      // Single consistent joint color reads cleaner over the colored limbs.
-      ctx.strokeStyle = '#FFFFFF';
-      ctx.beginPath();
-      ctx.arc(px, py, JOINT_RADIUS, 0, Math.PI * 2);
-      ctx.stroke();
+      ctx.arc(px, py, isHead ? 7 : 2.75, 0, Math.PI * 2);
+      ctx.fill();
     }
+    ctx.shadowBlur = 0;
   }, [frame, width, height]);
 
   return (

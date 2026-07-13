@@ -21,18 +21,18 @@ export function ConnectionStatusBanner() {
     'Connection interrupted…';
 
   return (
-    <div className="absolute top-16 left-1/2 -translate-x-1/2 z-40 bg-amber-950/90 border border-amber-800 text-amber-300 text-xs font-semibold px-3.5 py-1.5 rounded-full shadow-xl backdrop-blur-md inline-flex items-center gap-2 animate-pulse">
+    <div className="absolute top-16 left-1/2 -translate-x-1/2 z-40 bg-replay/15 border border-replay/35 text-replay text-xs font-semibold px-3.5 py-1.5 rounded-full shadow-xl backdrop-blur-glass inline-flex items-center gap-2 animate-pulse">
       <WifiOff className="w-3.5 h-3.5" /> {label}
     </div>
   );
 }
 
 const QUALITY_CONFIG: Record<ConnectionQuality, { icon: any; className: string; label: string }> = {
-  [ConnectionQuality.Excellent]: { icon: SignalHigh, className: 'text-emerald-400', label: 'Excellent connection' },
-  [ConnectionQuality.Good]: { icon: SignalMedium, className: 'text-emerald-400', label: 'Good connection' },
-  [ConnectionQuality.Poor]: { icon: SignalLow, className: 'text-amber-400', label: 'Poor connection' },
-  [ConnectionQuality.Lost]: { icon: WifiOff, className: 'text-red-400', label: 'Connection lost' },
-  [ConnectionQuality.Unknown]: { icon: Wifi, className: 'text-slate-500', label: 'Connection quality unknown' },
+  [ConnectionQuality.Excellent]: { icon: SignalHigh, className: 'text-live', label: 'Excellent connection' },
+  [ConnectionQuality.Good]: { icon: SignalMedium, className: 'text-live', label: 'Good connection' },
+  [ConnectionQuality.Poor]: { icon: SignalLow, className: 'text-replay', label: 'Poor connection' },
+  [ConnectionQuality.Lost]: { icon: WifiOff, className: 'text-danger', label: 'Connection lost' },
+  [ConnectionQuality.Unknown]: { icon: Wifi, className: 'text-ink-faint', label: 'Connection quality unknown' },
 };
 
 /** Small per-user quality dot for the local participant — the toolbar/header

@@ -655,7 +655,7 @@ export function AnnotationCanvas({
   ];
 
   return (
-    <div ref={containerRef} className="relative w-full h-full select-none bg-slate-900/10">
+    <div ref={containerRef} className="relative w-full h-full select-none bg-panel-2/10">
       <canvas
         ref={canvasRef}
         onPointerDown={handlePointerDown}
@@ -682,8 +682,8 @@ export function AnnotationCanvas({
           style={{
             position: 'absolute', left: textInputPos.x, top: textInputPos.y - 12,
             color: activeColor, font: 'bold 16px Inter, sans-serif',
-            background: 'rgba(15, 23, 42, 0.9)', border: `1.5px solid ${activeColor}`,
-            borderRadius: '4px', padding: '2px 6px', outline: 'none', zIndex: 30, width: '180px',
+            background: 'rgba(15, 21, 34, 0.92)', border: `1.5px solid ${activeColor}`,
+            borderRadius: '8px', padding: '2px 6px', outline: 'none', zIndex: 30, width: '180px',
           }}
           placeholder="Type label..."
         />
@@ -693,7 +693,7 @@ export function AnnotationCanvas({
       {pendingPoints.length > 0 && (
         <svg className="absolute inset-0 pointer-events-none z-20" width="100%" height="100%">
           {pendingPoints.map((p, i) => (
-            <circle key={i} cx={p.px.x} cy={p.px.y} r={5} fill={activeColor} stroke="#0f172a" strokeWidth={1.5} />
+            <circle key={i} cx={p.px.x} cy={p.px.y} r={5} fill={activeColor} stroke="#0F1522" strokeWidth={1.5} />
           ))}
           {mousePos && (
             <line
@@ -707,13 +707,13 @@ export function AnnotationCanvas({
       )}
 
       {isCoach && (
-        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 flex flex-wrap items-center justify-center gap-3 bg-slate-900/90 hover:bg-slate-900 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-slate-800 shadow-2xl z-20 transition max-w-[92vw]">
-          <div className="flex items-center gap-1 border-r border-slate-800 pr-3">
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 flex flex-wrap items-center justify-center gap-3 bg-panel/70 hover:bg-panel/90 backdrop-blur-glass px-4 py-2.5 rounded-full border border-hairline shadow-2xl z-20 transition-colors max-w-[92vw]">
+          <div className="flex items-center gap-1 border-r border-hairline pr-3">
             <button
               type="button"
               onClick={() => { setActiveTool('select'); setPendingPoints([]); }}
-              className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold uppercase tracking-wider transition inline-flex items-center gap-1.5 ${
-                activeTool === 'select' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+              className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold uppercase tracking-wider transition-colors inline-flex items-center gap-1.5 ${
+                activeTool === 'select' ? 'bg-gradient-to-r from-brand-indigo to-brand-violet text-canvas shadow-md' : 'text-ink-muted hover:text-ink hover:bg-panel-2'
               }`}
               title="Select an existing shape"
             >
@@ -724,8 +724,8 @@ export function AnnotationCanvas({
                 key={sh.id}
                 type="button"
                 onClick={() => { setActiveTool(sh.id); setPendingPoints([]); setTextInputPos(null); }}
-                className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold uppercase tracking-wider transition inline-flex items-center gap-1.5 ${
-                  activeTool === sh.id ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold uppercase tracking-wider transition-colors inline-flex items-center gap-1.5 ${
+                  activeTool === sh.id ? 'bg-gradient-to-r from-brand-indigo to-brand-violet text-canvas shadow-md' : 'text-ink-muted hover:text-ink hover:bg-panel-2'
                 }`}
                 title={sh.label}
               >
@@ -734,55 +734,55 @@ export function AnnotationCanvas({
             ))}
           </div>
 
-          <div className="flex items-center gap-1 border-r border-slate-800 pr-3">
+          <div className="flex items-center gap-1 border-r border-hairline pr-3">
             {['#FF3B30', '#FF9500', '#FFCC00', '#34C759', '#007AFF', '#AF52DE', '#FFFFFF'].map((color) => (
               <button
                 key={color}
                 type="button"
                 onClick={() => setActiveColor(color)}
                 style={{ backgroundColor: color }}
-                className={`w-5 h-5 rounded-full border-2 transition ${
-                  activeColor === color ? 'border-white scale-110 shadow' : 'border-transparent hover:scale-105'
+                className={`w-5 h-5 rounded-full border-2 transition-colors ${
+                  activeColor === color ? 'border-ink scale-110 shadow' : 'border-transparent hover:scale-105'
                 }`}
                 title={`Select color ${color}`}
               />
             ))}
           </div>
 
-          <div className="flex items-center gap-1.5 border-r border-slate-800 pr-3">
+          <div className="flex items-center gap-1.5 border-r border-hairline pr-3">
             {[2, 3, 5, 8].map((t) => (
               <button
                 key={t}
                 type="button"
                 onClick={() => setActiveThickness(t)}
-                className={`w-6 h-6 rounded-md flex items-center justify-center transition ${
-                  activeThickness === t ? 'bg-indigo-600' : 'hover:bg-slate-800'
+                className={`w-6 h-6 rounded-md flex items-center justify-center transition-colors ${
+                  activeThickness === t ? 'bg-gradient-to-r from-brand-indigo to-brand-violet' : 'hover:bg-panel-2'
                 }`}
                 title={`${t}px`}
               >
-                <span className="rounded-full bg-white" style={{ width: Math.min(t + 2, 10), height: Math.min(t + 2, 10) }} />
+                <span className="rounded-full bg-ink" style={{ width: Math.min(t + 2, 10), height: Math.min(t + 2, 10) }} />
               </button>
             ))}
           </div>
 
           <div className="flex items-center gap-1.5">
             <button type="button" onClick={handleUndo} disabled={localHistory.length === 0}
-              className="px-2 py-1.5 text-xs text-slate-300 hover:text-white font-medium rounded-lg hover:bg-slate-800 disabled:opacity-30 transition inline-flex items-center gap-1"
+              className="px-2 py-1.5 text-xs text-ink-muted hover:text-ink font-medium rounded-lg hover:bg-panel-2 disabled:opacity-30 transition-colors inline-flex items-center gap-1"
               title="Undo (Ctrl+Z)">
               <Undo2 className="w-3.5 h-3.5" />
             </button>
             <button type="button" onClick={handleRedo} disabled={redoHistory.length === 0}
-              className="px-2 py-1.5 text-xs text-slate-300 hover:text-white font-medium rounded-lg hover:bg-slate-800 disabled:opacity-30 transition inline-flex items-center gap-1"
+              className="px-2 py-1.5 text-xs text-ink-muted hover:text-ink font-medium rounded-lg hover:bg-panel-2 disabled:opacity-30 transition-colors inline-flex items-center gap-1"
               title="Redo (Ctrl+Shift+Z)">
               <Redo2 className="w-3.5 h-3.5" />
             </button>
             <button type="button" onClick={handleDeleteSelected} disabled={!selectedId}
-              className="px-2 py-1.5 text-xs text-slate-300 hover:text-white font-medium rounded-lg hover:bg-slate-800 disabled:opacity-30 transition inline-flex items-center gap-1"
+              className="px-2 py-1.5 text-xs text-ink-muted hover:text-ink font-medium rounded-lg hover:bg-panel-2 disabled:opacity-30 transition-colors inline-flex items-center gap-1"
               title="Delete selected (Del)">
               <Trash2 className="w-3.5 h-3.5" />
             </button>
             <button type="button" onClick={handleClear}
-              className="px-2.5 py-1.5 text-xs text-red-400 hover:text-red-300 font-semibold rounded-lg hover:bg-red-950/20 transition"
+              className="px-2.5 py-1.5 text-xs text-danger hover:text-danger font-semibold rounded-lg hover:bg-danger/10 transition-colors"
               title="Clear all marks on this frame">
               Clear
             </button>
@@ -791,7 +791,7 @@ export function AnnotationCanvas({
       )}
 
       {isCoach && hoveredJoint && activeTool !== 'select' && (
-        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-slate-900/90 border border-indigo-800 text-indigo-300 text-[11px] font-mono px-2.5 py-1 rounded-md z-20">
+        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-panel/90 backdrop-blur-glass border border-brand-indigo/30 text-brand-violet text-[11px] font-mono px-2.5 py-1 rounded-full z-20">
           snap: {hoveredJoint}
         </div>
       )}

@@ -80,28 +80,28 @@ export function Roster({ sessionId, isCoach }: RosterProps) {
 
   return (
     <div className="absolute left-3 sm:left-6 top-20 z-40 flex flex-col items-start gap-2 max-w-[calc(100vw-1.5rem)]">
-      <div className="bg-slate-900/95 border border-slate-800 rounded-xl shadow-xl backdrop-blur">
+      <div className="bg-panel/70 backdrop-blur-glass border border-hairline rounded-lg shadow-xl">
         <button
           onClick={() => setExpanded((e) => !e)}
-          className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-slate-200"
+          className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-ink"
         >
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+          <span className="w-1.5 h-1.5 rounded-full bg-live" />
           {realParticipants.length} in call
-          <span className="text-slate-500">{expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}</span>
+          <span className="text-ink-faint">{expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}</span>
         </button>
         {expanded && (
-          <ul className="border-t border-slate-800 px-3 py-2 flex flex-col gap-1 max-h-52 overflow-y-auto min-w-[10rem]">
+          <ul className="border-t border-hairline px-3 py-2 flex flex-col gap-1 max-h-52 overflow-y-auto min-w-[10rem]">
             {realParticipants.map((p) => (
-              <li key={p.identity} className="text-xs text-slate-300 truncate flex items-center justify-between gap-2">
+              <li key={p.identity} className="text-xs text-ink-muted truncate flex items-center justify-between gap-2">
                 <span className="truncate">
                   {p.name || p.identity}
-                  {p.isLocal && <span className="text-slate-500"> (you)</span>}
+                  {p.isLocal && <span className="text-ink-faint"> (you)</span>}
                 </span>
                 {isCoach && !p.isLocal && (
                   <button
                     onClick={() => handleRemove(p.identity)}
                     disabled={removingId === p.identity}
-                    className="shrink-0 text-slate-500 hover:text-red-400 disabled:opacity-40 transition"
+                    className="shrink-0 text-ink-faint hover:text-danger disabled:opacity-40 transition-colors"
                     title={`Remove ${p.name || p.identity}`}
                   >
                     <UserX className="w-3.5 h-3.5" />
@@ -117,7 +117,7 @@ export function Roster({ sessionId, isCoach }: RosterProps) {
         {toasts.map((t) => (
           <div
             key={t.id}
-            className="bg-slate-900/95 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-300 shadow-lg animate-pulse"
+            className="bg-panel/70 backdrop-blur-glass border border-hairline rounded-lg px-3 py-1.5 text-xs text-ink-muted shadow-lg animate-rise"
           >
             {t.message}
           </div>

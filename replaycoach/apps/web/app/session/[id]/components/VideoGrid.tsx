@@ -59,7 +59,7 @@ export function VideoGrid({
     : trackRefs;
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-slate-950 p-4 overflow-hidden relative">
+    <div className="flex-1 flex flex-col h-full bg-canvas p-4 overflow-hidden relative">
       {/* Invisible Audio Elements */}
       {audioTracks.map((trackRef) => (
         <AudioTrack
@@ -71,7 +71,7 @@ export function VideoGrid({
       {activeFocusTrack ? (
         <div className="flex-1 flex flex-col md:flex-row gap-4 h-full min-h-0">
           {/* Spotlight Active Panel */}
-          <div className="flex-[3] relative rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 shadow-2xl flex items-center justify-center group h-full">
+          <div className="flex-[3] relative rounded-lg overflow-hidden bg-panel-2 border border-hairline shadow-2xl flex items-center justify-center group h-full">
             <ParticipantVideoTile
               sessionId={sessionId}
               startedAt={startedAt}
@@ -89,7 +89,7 @@ export function VideoGrid({
               return (
                 <div
                   key={trackSid}
-                  className="relative aspect-video rounded-xl overflow-hidden bg-slate-900 border border-slate-800 flex-shrink-0 w-[180px] md:w-full group"
+                  className="relative aspect-video rounded-lg overflow-hidden bg-panel-2 border border-hairline flex-shrink-0 w-[180px] md:w-full group"
                 >
                   <ParticipantVideoTile
                     sessionId={sessionId}
@@ -112,7 +112,7 @@ export function VideoGrid({
             return (
               <div
                 key={trackSid}
-                className="relative aspect-video rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 shadow-lg flex items-center justify-center group"
+                className="rc-tile relative aspect-video rounded-lg overflow-hidden bg-panel-2 border border-hairline shadow-lg flex items-center justify-center group transition-colors"
               >
                 <ParticipantVideoTile
                   sessionId={sessionId}
@@ -290,8 +290,8 @@ export function ParticipantVideoTile({
       />
 
       {/* Display user label */}
-      <div className="absolute bottom-3 left-3 bg-slate-950/80 backdrop-blur-md px-3 py-1 rounded-lg border border-slate-800 text-white text-xs font-medium flex items-center gap-1.5 z-10">
-        <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+      <div className="absolute bottom-3 left-3 bg-panel/70 backdrop-blur-glass px-2.5 py-1 rounded-full border border-hairline text-ink text-xs font-medium flex items-center gap-1.5 z-10">
+        <span className="w-1.5 h-1.5 rounded-full bg-live"></span>
         {trackRef.participant.name || trackRef.participant.identity}
         {trackRef.participant.isLocal && ' (You)'}
       </div>
@@ -300,33 +300,33 @@ export function ParticipantVideoTile({
           Always visible rather than hover-only — hover doesn't exist on
           touch devices, which made these completely unreachable on mobile. */}
       {isCoach && !trackRef.participant.isLocal && (
-        <div className="absolute top-3 right-3 flex items-center gap-2 z-10">
+        <div className="rc-tile-actions absolute top-3 right-3 flex items-center gap-1.5 z-10 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
           <button
             type="button"
             onClick={handleInstantReplay}
             disabled={isStartingInstantReplay}
-            className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-semibold px-2.5 py-1.5 rounded-md transition shadow"
+            className="bg-panel/80 backdrop-blur-glass hover:bg-panel-2 disabled:opacity-50 border border-hairline text-ink text-xs font-semibold px-2.5 py-1.5 rounded-full transition-colors"
             title="Instant replay — opens for everyone right now, meeting keeps running"
           >
-            {isStartingInstantReplay ? 'Opening...' : 'Replay'}
+            {isStartingInstantReplay ? 'Opening…' : '⟳ Replay'}
           </button>
 
           <button
             type="button"
             onClick={handleAnalyzeClip}
             disabled={isReplaying}
-            className="bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-semibold px-2.5 py-1.5 rounded-md transition shadow"
+            className="bg-replay/15 hover:bg-replay/25 disabled:opacity-50 border border-replay/35 text-replay text-xs font-semibold px-2.5 py-1.5 rounded-full transition-colors"
             title="Save as a permanent, joint-tracked clip"
           >
-            {isReplaying ? 'Analyzing...' : 'Analyze Last 10s'}
+            {isReplaying ? 'Analyzing…' : 'Analyze 10s'}
           </button>
 
           <button
             type="button"
             onClick={() => onPinTrack(isPinned ? null : trackSid)}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-2.5 py-1.5 rounded-md transition shadow"
+            className="bg-brand-indigo/15 hover:bg-brand-indigo/25 border border-brand-indigo/35 text-[#A5A9F5] text-xs font-semibold px-2.5 py-1.5 rounded-full transition-colors"
           >
-            {isPinned ? 'Unpin' : 'Spotlight Pin'}
+            {isPinned ? 'Unpin' : 'Spotlight'}
           </button>
         </div>
       )}
@@ -335,7 +335,7 @@ export function ParticipantVideoTile({
           (e.g. Analyze clicked moments after the meeting started) — not
           gated by group-hover so it stays visible after the pointer moves. */}
       {insufficientFootage && (
-        <div className="absolute top-3 right-3 z-20 max-w-[220px] bg-slate-900/95 border border-amber-800 text-amber-300 text-xs font-medium px-3 py-2 rounded-lg shadow-xl">
+        <div className="absolute top-3 right-3 z-20 max-w-[220px] bg-panel/95 backdrop-blur-glass border border-replay/30 text-replay text-xs font-medium px-3 py-2 rounded-lg shadow-xl animate-rise">
           Not enough recorded video yet — wait a few more seconds and try again.
         </div>
       )}

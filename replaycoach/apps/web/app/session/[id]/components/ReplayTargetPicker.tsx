@@ -31,18 +31,18 @@ export function ReplayTargetPicker({ selectedStudentIds, onChange }: ReplayTarge
   };
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col gap-4 shadow-xl">
-      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-        <h3 className="text-sm font-semibold text-white tracking-wide uppercase inline-flex items-center gap-1.5">
-          <Settings2 className="w-3.5 h-3.5" /> Replay Sync Targets
+    <div className="bg-panel border border-hairline rounded-lg p-5 flex flex-col gap-4">
+      <div className="flex items-center justify-between border-b border-hairline pb-3">
+        <h3 className="text-sm font-display font-semibold text-ink tracking-wide uppercase inline-flex items-center gap-1.5">
+          <Settings2 className="w-3.5 h-3.5" /> Sync replay to
         </h3>
-        <span className="text-xs font-semibold px-2 py-0.5 rounded bg-indigo-900/50 text-indigo-300 border border-indigo-800">
-          {students.length} active students
+        <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-full bg-brand-indigo/10 text-brand-violet border border-brand-indigo/30">
+          {students.length} active
         </span>
       </div>
 
       {students.length === 0 ? (
-        <div className="text-center py-6 text-slate-500 text-xs">
+        <div className="text-center py-6 text-ink-faint text-xs">
           No other participants in session.
         </div>
       ) : (
@@ -52,10 +52,10 @@ export function ReplayTargetPicker({ selectedStudentIds, onChange }: ReplayTarge
             return (
               <label
                 key={student.identity}
-                className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl border transition cursor-pointer select-none ${
+                className={`flex items-center justify-between px-3.5 py-2.5 rounded-lg border transition-colors cursor-pointer select-none ${
                   isChecked
-                    ? 'bg-indigo-950/40 border-indigo-800 text-white'
-                    : 'bg-slate-950/40 border-slate-900 text-slate-400 hover:bg-slate-950 hover:border-slate-800 hover:text-slate-200'
+                    ? 'bg-brand-indigo/10 border-brand-indigo/35 text-ink'
+                    : 'bg-panel-2/40 border-hairline text-ink-muted hover:bg-panel-2 hover:text-ink'
                 }`}
               >
                 <div className="flex items-center gap-2.5">
@@ -63,13 +63,13 @@ export function ReplayTargetPicker({ selectedStudentIds, onChange }: ReplayTarge
                     type="checkbox"
                     checked={isChecked}
                     onChange={() => toggleStudent(student.identity)}
-                    className="w-4 h-4 accent-indigo-500 rounded border-slate-800 bg-slate-900 cursor-pointer"
+                    className="w-4 h-4 accent-brand-indigo rounded border-hairline bg-panel-2 cursor-pointer"
                   />
                   <span className="text-xs font-semibold">
                     {student.name || student.identity}
                   </span>
                 </div>
-                <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400">
+                <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded-full bg-panel-2 border border-hairline text-ink-faint">
                   Student
                 </span>
               </label>
@@ -79,18 +79,18 @@ export function ReplayTargetPicker({ selectedStudentIds, onChange }: ReplayTarge
       )}
 
       {students.length > 0 && (
-        <div className="grid grid-cols-2 gap-2 mt-2 pt-3 border-t border-slate-900">
+        <div className="grid grid-cols-2 gap-2 mt-2 pt-3 border-t border-hairline">
           <button
             type="button"
             onClick={selectAll}
-            className="px-3 py-2 text-[11px] font-bold rounded-lg border border-slate-800 bg-slate-950 hover:bg-slate-900 hover:text-white text-slate-300 transition"
+            className="px-3 py-2 text-[11px] font-bold rounded-full border border-hairline bg-panel-2 hover:bg-panel-2/60 hover:text-ink text-ink-muted transition-colors"
           >
             Select All
           </button>
           <button
             type="button"
             onClick={selectNone}
-            className="px-3 py-2 text-[11px] font-bold rounded-lg border border-slate-800 bg-slate-950 hover:bg-slate-900 hover:text-white text-slate-300 transition"
+            className="px-3 py-2 text-[11px] font-bold rounded-full border border-hairline bg-panel-2 hover:bg-panel-2/60 hover:text-ink text-ink-muted transition-colors"
           >
             Clear Selected
           </button>

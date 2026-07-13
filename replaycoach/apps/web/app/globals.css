@@ -130,4 +130,39 @@
     background: linear-gradient(135deg, rgba(99, 102, 241, 0.4), rgba(139, 92, 246, 0.4));
     z-index: -1;
   }
+
+  /* Amber DVR scrubber — reserved strictly for replay/DVR transport, never
+     used for any other range input in the app. */
+  .rc-scrubber {
+    -webkit-appearance: none;
+    appearance: none;
+    background: rgba(251, 191, 36, 0.15);
+    border-radius: 9999px;
+    height: 4px;
+  }
+  .rc-scrubber::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 13px;
+    height: 13px;
+    border-radius: 9999px;
+    background: #fbbf24;
+    box-shadow: 0 0 10px rgba(251, 191, 36, 0.7);
+    cursor: pointer;
+    margin-top: 0;
+  }
+  .rc-scrubber::-moz-range-thumb {
+    width: 13px;
+    height: 13px;
+    border: none;
+    border-radius: 9999px;
+    background: #fbbf24;
+    box-shadow: 0 0 10px rgba(251, 191, 36, 0.7);
+    cursor: pointer;
+  }
+  .rc-scrubber::-moz-range-track {
+    background: rgba(251, 191, 36, 0.15);
+    border-radius: 9999px;
+    height: 4px;
+  }
 }

@@ -38,14 +38,14 @@ export function RecordingStatusIndicator() {
 
   const className =
     status === 'active'
-      ? 'border-emerald-900 bg-emerald-950/30 text-emerald-300'
+      ? 'border-live/30 bg-live/10 text-live'
       : status === 'degraded'
-        ? 'border-amber-900 bg-amber-950/30 text-amber-300'
-        : 'border-slate-700 bg-slate-900 text-slate-400';
+        ? 'border-replay/30 bg-replay/10 text-replay'
+        : 'border-hairline bg-panel-2 text-ink-faint';
 
   return (
     <span
-      className={`text-[10px] font-bold border px-2 py-0.5 rounded uppercase ${className}`}
+      className={`text-[10px] font-mono font-semibold border px-2 py-0.5 rounded-full uppercase ${className}`}
       title={reason ?? label}
     >
       {label}

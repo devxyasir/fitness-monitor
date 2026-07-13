@@ -3,10 +3,12 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useAuthStore } from '../stores/auth-store';
+import DemoVideoModal from './components/DemoVideoModal';
 
 export default function LandingPage() {
   const { user } = useAuthStore();
   const [mounted, setMounted] = useState(false);
+  const [demoOpen, setDemoOpen] = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -73,12 +75,16 @@ export default function LandingPage() {
               >
                 Start free
               </Link>
-              <a
-                href="#how"
-                className="inline-flex items-center px-7 py-3.5 rounded-full font-semibold text-ink border border-hairline hover:bg-panel-2 transition-colors"
+              <button
+                type="button"
+                onClick={() => setDemoOpen(true)}
+                className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full font-semibold text-ink border border-hairline hover:bg-panel-2 transition-colors"
               >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                  <path d="M8 5v14l11-7z" />
+                </svg>
                 Watch demo
-              </a>
+              </button>
             </div>
             <div className="mt-12 flex items-center gap-5 flex-wrap">
               <span className="font-mono text-[0.6875rem] text-ink-faint uppercase tracking-widest">Used by coaching programs at</span>
@@ -117,6 +123,39 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      {/* Demo showcase */}
+      <section className="relative z-10 max-w-6xl mx-auto px-8 pb-20">
+        <button
+          type="button"
+          onClick={() => setDemoOpen(true)}
+          className="group relative w-full rounded-lg overflow-hidden border border-hairline bg-panel block text-left"
+          aria-label="Play product demo video"
+        >
+          <div
+            aria-hidden
+            className="absolute inset-0 z-0"
+            style={{
+              background:
+                'radial-gradient(600px 300px at 30% 20%, rgba(99,102,241,0.18), transparent 60%), radial-gradient(500px 300px at 80% 80%, rgba(139,92,246,0.14), transparent 60%)',
+            }}
+          />
+          <div className="relative z-10 aspect-video flex items-center justify-center">
+            <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(7,11,20,0.2), rgba(7,11,20,0.55))' }} />
+            <span className="absolute top-5 left-6 font-mono text-xs tracking-[0.14em] text-brand-violet uppercase">Product demo</span>
+            <div className="relative flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-brand-indigo to-brand-violet shadow-glow group-hover:scale-105 transition-transform duration-200">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="#070B14" aria-hidden>
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            </div>
+            <span className="absolute bottom-6 left-6 right-6 font-display font-semibold text-lg sm:text-xl text-ink">
+              Watch a live coaching session — replay, skeleton overlay, and annotations in real time.
+            </span>
+          </div>
+        </button>
+      </section>
+
+      <DemoVideoModal open={demoOpen} onClose={() => setDemoOpen(false)} />
 
       {/* Features */}
       <section id="features" className="relative z-10 max-w-6xl mx-auto px-8 py-20">

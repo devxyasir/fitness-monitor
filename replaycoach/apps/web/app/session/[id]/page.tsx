@@ -272,10 +272,10 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-slate-200 p-6">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-canvas text-ink p-6">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-indigo-600 border-t-indigo-400 rounded-full animate-spin"></div>
-          <p className="text-lg font-medium animate-pulse">Entering session room...</p>
+          <div className="w-12 h-12 border-4 border-brand-indigo/25 border-t-brand-indigo rounded-full animate-spin"></div>
+          <p className="text-lg font-medium animate-pulse text-ink-muted">Entering session room...</p>
         </div>
       </div>
     );
@@ -283,18 +283,18 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
 
   if (error || !token || !url) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-slate-200 p-6">
-        <div className="max-w-md w-full bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-xl text-center">
-          <div className="w-16 h-16 bg-red-950 border border-red-800 rounded-full flex items-center justify-center mx-auto mb-6 text-red-500">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-canvas text-ink p-6">
+        <div className="max-w-md w-full bg-panel border border-hairline p-8 rounded-lg shadow-xl text-center">
+          <div className="w-16 h-16 bg-danger/10 border border-danger/30 rounded-full flex items-center justify-center mx-auto mb-6 text-danger">
             <AlertTriangle className="w-8 h-8" />
           </div>
-          <h2 className="text-xl font-bold text-white mb-2">Connection Failed</h2>
-          <p className="text-slate-400 mb-6 text-sm">
+          <h2 className="text-xl font-display font-bold text-ink mb-2">Connection Failed</h2>
+          <p className="text-ink-muted mb-6 text-sm">
             {error || 'Unable to retrieve LiveKit connection details.'}
           </p>
           <Link
             href="/dashboard"
-            className="inline-flex justify-center items-center w-full px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-800 border border-slate-700 text-white font-medium transition"
+            className="inline-flex justify-center items-center w-full px-5 py-2.5 rounded-full bg-panel-2 hover:bg-panel-2/70 border border-hairline text-ink font-semibold transition-colors"
           >
             Return to Dashboard
           </Link>
@@ -305,18 +305,18 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
 
   if (sessionEnded) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-slate-200 p-6">
-        <div className="max-w-md w-full bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-xl text-center">
-          <div className="w-16 h-16 bg-slate-800 border border-slate-700 rounded-full flex items-center justify-center mx-auto mb-6 text-slate-400">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-canvas text-ink p-6">
+        <div className="max-w-md w-full bg-panel border border-hairline p-8 rounded-lg shadow-xl text-center">
+          <div className="w-16 h-16 bg-panel-2 border border-hairline rounded-full flex items-center justify-center mx-auto mb-6 text-ink-muted">
             <Flag className="w-8 h-8" />
           </div>
-          <h2 className="text-xl font-bold text-white mb-2">This session has ended</h2>
-          <p className="text-slate-400 mb-6 text-sm">
+          <h2 className="text-xl font-display font-bold text-ink mb-2">This session has ended</h2>
+          <p className="text-ink-muted mb-6 text-sm">
             The coach has ended this coaching session for everyone.
           </p>
           <Link
             href="/dashboard"
-            className="inline-flex justify-center items-center w-full px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-800 border border-slate-700 text-white font-medium transition"
+            className="inline-flex justify-center items-center w-full px-5 py-2.5 rounded-full bg-panel-2 hover:bg-panel-2/70 border border-hairline text-ink font-semibold transition-colors"
           >
             Back to Dashboard
           </Link>
@@ -326,48 +326,48 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
   }
 
   return (
-    <div className="relative flex flex-col h-screen bg-slate-950 text-slate-100 overflow-hidden font-sans">
+    <div className="relative flex flex-col h-screen bg-canvas text-ink overflow-hidden font-sans">
       {/* Session Title Header */}
-      <header className="flex items-center justify-between flex-wrap gap-2 px-3 sm:px-6 py-3 sm:py-4 bg-slate-900 border-b border-slate-900 z-10 shadow-md">
+      <header className="flex items-center justify-between flex-wrap gap-2 px-3 sm:px-6 py-3 bg-panel/60 backdrop-blur-glass border-b border-hairline z-10">
         <div className="flex items-center gap-3">
-          <div className={`w-2.5 h-2.5 rounded-full ${mode === 'playing' ? 'bg-amber-500 animate-pulse' : 'bg-red-600 animate-ping'}`} />
-          <h1 className="text-sm font-semibold tracking-tight text-white flex items-center gap-2">
+          <div className={`w-2.5 h-2.5 rounded-full ${mode === 'playing' ? 'bg-replay animate-pulse' : 'bg-live animate-pulse'}`} />
+          <h1 className="text-sm font-semibold tracking-tight text-ink flex items-center gap-2 flex-wrap">
             <span>Session: {sessionId.substring(0, 8)}</span>
             {elapsedLabel && (
-              <span className="text-[10px] font-mono font-semibold text-slate-400 bg-slate-950/60 border border-slate-800 px-2 py-0.5 rounded tabular-nums">
+              <span className="text-[10px] font-mono font-semibold text-ink-faint bg-panel-2 border border-hairline px-2 py-0.5 rounded tabular-nums">
                 {elapsedLabel}
               </span>
             )}
             {isCoach && <RecordingStatusIndicator />}
             {mode === 'playing' && (
-              <span className="text-[10px] font-bold text-amber-500 border border-amber-950 bg-amber-950/20 px-2 py-0.5 rounded uppercase">
-                DVR REPLAY ACTIVE
+              <span className="text-[10px] font-mono font-semibold text-replay border border-replay/30 bg-replay/10 px-2 py-0.5 rounded-full uppercase tracking-wide">
+                ◍ DVR replay active
               </span>
             )}
           </h1>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           {isCoach && session?.inviteCode && (
             <button
               onClick={handleCopyMeetingLink}
-              className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs px-2.5 py-1 rounded-md font-medium tracking-wide transition inline-flex items-center gap-1.5"
+              className="bg-panel-2 hover:bg-panel-2/70 border border-hairline text-ink text-xs px-3 py-1.5 rounded-full font-semibold tracking-wide transition-colors inline-flex items-center gap-1.5"
               title="Copy meeting link"
             >
               {linkCopied ? (
-                <><Check className="w-3.5 h-3.5 text-emerald-400" /> Copied</>
+                <><Check className="w-3.5 h-3.5 text-live" /> Copied</>
               ) : (
                 <><LinkIcon className="w-3.5 h-3.5" /> Copy Link</>
               )}
             </button>
           )}
-          <span className="bg-slate-800 border border-slate-700 text-slate-300 text-xs px-2.5 py-1 rounded-md font-medium tracking-wide inline-flex items-center gap-1.5">
+          <span className="bg-brand-violet/10 border border-brand-violet/30 text-brand-violet text-xs px-3 py-1.5 rounded-full font-mono font-medium tracking-wide inline-flex items-center gap-1.5">
             {isCoach ? (
               <>
-                <Circle className="w-2.5 h-2.5 fill-emerald-500 text-emerald-500" /> COACH ROLE
+                <Circle className="w-2 h-2 fill-live text-live" /> COACH
               </>
             ) : (
               <>
-                <Pencil className="w-3 h-3" /> STUDENT ROLE
+                <Pencil className="w-3 h-3" /> STUDENT
               </>
             )}
           </span>
@@ -379,13 +379,13 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
                 leaveAndExit();
               }
             }}
-            className="px-4 py-1.5 rounded-lg bg-red-700 hover:bg-red-700 text-white text-xs font-semibold tracking-wide transition shadow-sm"
+            className="px-4 py-1.5 rounded-full bg-danger/10 border border-danger/35 hover:bg-danger/20 text-danger text-xs font-semibold tracking-wide transition-colors"
           >
             Leave Room
           </button>
         </div>
       </header>
- 
+
       {/* LiveKit Video/Audio Session Room Wrapper */}
       <LiveKitRoom
         token={token ?? undefined}
@@ -422,7 +422,7 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
           isCoach ? (
             <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
               {/* Main Replay screen panel */}
-              <div className="flex-[3] flex flex-col min-h-0 relative bg-slate-950">
+              <div className="flex-[3] flex flex-col min-h-0 relative bg-canvas">
                 <ReplayPanel
                   sessionId={sessionId}
                   isCoach={true}
@@ -433,14 +433,14 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
               </div>
 
               {/* Coach Replay controls sidebar */}
-              <div className="flex-1 lg:max-w-xs border-t lg:border-t-0 lg:border-l border-slate-900 bg-slate-900/60 p-4 flex flex-col gap-4 overflow-y-auto min-h-0 shadow-lg">
+              <div className="flex-1 lg:max-w-xs border-t lg:border-t-0 lg:border-l border-hairline bg-panel/60 backdrop-blur-glass p-4 flex flex-col gap-4 overflow-y-auto min-h-0">
                 <ReplayTargetPicker
                   selectedStudentIds={selectedStudentIds}
                   onChange={setSelectedStudentIds}
                 />
 
                 <div className="flex-1 flex flex-col gap-3 min-h-0">
-                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">
+                  <h4 className="text-[10px] font-mono font-semibold text-ink-faint uppercase tracking-widest px-1">
                     Live Student Feeds
                   </h4>
                   <div className="flex-1 overflow-y-auto min-h-0">
@@ -474,7 +474,7 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
             />
 
             {/* Control Toolbar */}
-            <div className="bg-slate-900 border-t border-slate-900 px-3 sm:px-6 py-3 sm:py-4 flex items-center justify-between flex-wrap gap-3 z-10 shadow-inner">
+            <div className="bg-panel/60 backdrop-blur-glass border-t border-hairline px-3 sm:px-6 py-3 flex items-center justify-between flex-wrap gap-3 z-10">
               <ControlsArea
                 isCoach={isCoach}
                 sessionId={sessionId}
@@ -498,36 +498,36 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
       </LiveKitRoom>
 
       {isCoach && lobbyRequests.length > 0 && (
-        <div className="absolute right-3 sm:right-6 top-20 z-50 w-80 max-w-[calc(100vw-1.5rem)] bg-slate-900/95 border border-slate-800 rounded-xl shadow-2xl p-4 backdrop-blur max-h-[400px] flex flex-col gap-3">
+        <div className="absolute right-3 sm:right-6 top-20 z-50 w-80 max-w-[calc(100vw-1.5rem)] bg-panel/90 border border-hairline rounded-lg shadow-2xl p-4 backdrop-blur-glass max-h-[400px] flex flex-col gap-3 animate-rise">
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+            <h3 className="text-xs font-mono font-semibold text-ink uppercase tracking-wider flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-replay animate-pulse" />
               Lobby: Join Requests ({lobbyRequests.length})
             </h3>
           </div>
-          <div className="h-px bg-slate-800" />
+          <div className="h-px bg-hairline" />
           <div className="flex-1 overflow-y-auto flex flex-col gap-2.5 max-h-[300px] pr-1">
             {lobbyRequests.map((req) => (
-              <div key={req.userId} className="bg-slate-950 border border-slate-900 p-2.5 rounded-lg flex items-center justify-between gap-3">
+              <div key={req.userId} className="bg-panel-2 border border-hairline p-2.5 rounded-lg flex items-center justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-medium text-slate-200 truncate">
+                  <p className="text-xs font-medium text-ink truncate">
                     {req.user?.email || req.userId.substring(0, 8)}
                   </p>
-                  <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
+                  <p className="text-[10px] text-ink-faint font-semibold uppercase tracking-wider">
                     Student
                   </p>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <button
                     onClick={() => handleApproveLobby(req.userId)}
-                    className="w-7 h-7 bg-emerald-950 border border-emerald-900/50 hover:bg-emerald-900 text-emerald-400 rounded-md flex items-center justify-center text-xs transition font-bold"
+                    className="w-7 h-7 bg-live/10 border border-live/30 hover:bg-live/20 text-live rounded-full flex items-center justify-center text-xs transition-colors font-bold"
                     title="Approve student"
                   >
                     <Check className="w-3.5 h-3.5" />
                   </button>
                   <button
                     onClick={() => handleRejectLobby(req.userId)}
-                    className="w-7 h-7 bg-red-950 border border-red-900/50 hover:bg-red-900 text-red-400 rounded-md flex items-center justify-center text-xs transition font-bold"
+                    className="w-7 h-7 bg-danger/10 border border-danger/30 hover:bg-danger/20 text-danger rounded-full flex items-center justify-center text-xs transition-colors font-bold"
                     title="Decline student"
                   >
                     <X className="w-3.5 h-3.5" />
@@ -540,13 +540,13 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
       )}
 
       {showExitModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm">
-          <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl max-w-sm w-full shadow-2xl flex flex-col gap-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-canvas/80 backdrop-blur-md">
+          <div className="bg-panel border border-hairline p-6 rounded-lg max-w-sm w-full shadow-2xl flex flex-col gap-4 animate-settle">
             <div>
-              <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+              <h3 className="text-sm font-display font-semibold text-ink uppercase tracking-wider">
                 Exit Options
               </h3>
-              <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+              <p className="text-xs text-ink-muted mt-1.5 leading-relaxed">
                 Would you like to leave the session or end this meeting permanently for everyone?
               </p>
             </div>
@@ -560,19 +560,19 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
                     console.error('Failed to end meeting:', err);
                   }
                 }}
-                className="w-full py-2 bg-red-700 hover:bg-red-700 text-white text-xs font-semibold rounded-lg shadow transition"
+                className="w-full py-2.5 bg-danger/10 border border-danger/35 hover:bg-danger/20 text-danger text-xs font-semibold rounded-full transition-colors"
               >
                 End Meeting for Everyone
               </button>
               <button
                 onClick={leaveAndExit}
-                className="w-full py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-200 text-xs font-semibold rounded-lg shadow transition"
+                className="w-full py-2.5 bg-panel-2 hover:bg-panel-2/70 border border-hairline text-ink text-xs font-semibold rounded-full transition-colors"
               >
                 Just Leave Meeting
               </button>
               <button
                 onClick={() => setShowExitModal(false)}
-                className="w-full py-2 bg-transparent text-slate-400 hover:text-slate-300 text-xs font-semibold rounded-lg transition"
+                className="w-full py-2.5 bg-transparent text-ink-faint hover:text-ink-muted text-xs font-semibold rounded-full transition-colors"
               >
                 Cancel
               </button>
@@ -604,7 +604,7 @@ function LiveMiniGrid({
 
   if (studentTracks.length === 0) {
     return (
-      <div className="text-center py-6 border border-dashed border-slate-800 rounded-xl text-slate-500 text-xs italic">
+      <div className="text-center py-6 border border-dashed border-hairline rounded-lg text-ink-faint text-xs italic">
         No students connected.
       </div>
     );
@@ -617,7 +617,7 @@ function LiveMiniGrid({
         return (
           <div
             key={trackSid}
-            className="relative aspect-video rounded-xl bg-slate-900 border border-slate-800 overflow-hidden flex items-center justify-center group"
+            className="relative aspect-video rounded-lg bg-panel-2 border border-hairline overflow-hidden flex items-center justify-center group"
           >
             <ParticipantVideoTile
               sessionId={sessionId}
@@ -731,14 +731,14 @@ function ControlsArea({
 
   return (
     <>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2.5">
         <button
           type="button"
           onClick={toggleMic}
-          className={`flex items-center justify-center w-11 h-11 rounded-full transition border shadow-sm ${
+          className={`flex items-center justify-center w-11 h-11 rounded-full transition-colors border ${
             isMicrophoneEnabled
-              ? 'bg-slate-800 border-slate-800 hover:bg-slate-700 text-white'
-              : 'bg-red-950 border-red-900 text-red-500 hover:bg-red-900'
+              ? 'bg-panel-2 border-hairline hover:bg-panel-2/60 text-ink'
+              : 'bg-danger/10 border-danger/30 text-danger hover:bg-danger/20'
           }`}
           title={isMicrophoneEnabled ? 'Mute Microphone' : 'Unmute Microphone'}
         >
@@ -748,10 +748,10 @@ function ControlsArea({
         <button
           type="button"
           onClick={toggleCam}
-          className={`flex items-center justify-center w-11 h-11 rounded-full transition border shadow-sm ${
+          className={`flex items-center justify-center w-11 h-11 rounded-full transition-colors border ${
             isCameraEnabled
-              ? 'bg-slate-800 border-slate-800 hover:bg-slate-700 text-white'
-              : 'bg-red-950 border-red-900 text-red-500 hover:bg-red-900'
+              ? 'bg-panel-2 border-hairline hover:bg-panel-2/60 text-ink'
+              : 'bg-danger/10 border-danger/30 text-danger hover:bg-danger/20'
           }`}
           title={isCameraEnabled ? 'Disable Camera' : 'Enable Camera'}
         >
@@ -761,7 +761,7 @@ function ControlsArea({
         <button
           type="button"
           onClick={toggleFullscreen}
-          className="flex items-center justify-center w-11 h-11 rounded-full transition border shadow-sm bg-slate-800 border-slate-800 hover:bg-slate-700 text-white"
+          className="flex items-center justify-center w-11 h-11 rounded-full transition-colors border bg-panel-2 border-hairline hover:bg-panel-2/60 text-ink"
           title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
         >
           {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
@@ -772,16 +772,16 @@ function ControlsArea({
         </span>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2.5">
         {/* Toggle Screen Share: Coach Only */}
         {isCoach && (
           <button
             type="button"
             onClick={toggleScreen}
-            className={`flex items-center px-4 py-2 text-xs font-semibold rounded-lg transition border shadow-sm ${
+            className={`flex items-center px-4 py-2 text-xs font-semibold rounded-full transition-colors border ${
               isScreenShareEnabled
-                ? 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-500 shadow'
-                : 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-300'
+                ? 'bg-gradient-to-r from-brand-indigo to-brand-violet text-canvas border-transparent shadow-glow'
+                : 'bg-panel-2 border-hairline hover:bg-panel-2/60 text-ink-muted'
             }`}
           >
             <ScreenShare className="w-3.5 h-3.5 mr-1.5" /> {isScreenShareEnabled ? 'Stop Sharing' : 'Share Screen'}
@@ -804,7 +804,7 @@ function ControlsArea({
               <button
                 type="button"
                 disabled
-                className="flex items-center px-4 py-2 text-xs font-semibold rounded-lg bg-slate-800 border border-slate-700 text-slate-300 shadow-sm opacity-70 cursor-not-allowed"
+                className="flex items-center px-4 py-2 text-xs font-semibold rounded-full bg-panel-2 border border-hairline text-ink-muted opacity-70 cursor-not-allowed"
               >
                 <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
                 Uploading...
@@ -820,7 +820,7 @@ function ControlsArea({
                 <button
                   type="button"
                   onClick={() => { uploadModeRef.current = 'annotation_tracking'; fileInputRef.current?.click(); }}
-                  className="flex items-center px-4 py-2 text-xs font-semibold rounded-lg bg-indigo-600 border border-indigo-500 hover:bg-indigo-500 text-white transition shadow-sm"
+                  className="flex items-center px-4 py-2 text-xs font-semibold rounded-full bg-brand-indigo/15 border border-brand-indigo/40 hover:bg-brand-indigo/25 text-[#A5A9F5] transition-colors"
                   title="Upload a video and draw coaching annotations between joints that follow the body"
                 >
                   <Upload className="w-3.5 h-3.5 mr-1.5" /> Annotate Video
@@ -829,7 +829,7 @@ function ControlsArea({
                 <button
                   type="button"
                   onClick={() => { uploadModeRef.current = 'full_body'; fileInputRef.current?.click(); }}
-                  className="flex items-center px-3 py-2 text-xs font-semibold rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 transition shadow-sm"
+                  className="flex items-center px-3 py-2 text-xs font-semibold rounded-full bg-panel-2 border border-hairline hover:bg-panel-2/60 text-ink-muted transition-colors"
                   title="Full Body Analysis — process the whole video and replay it with the skeleton drawn in"
                 >
                   Full Body
@@ -837,7 +837,7 @@ function ControlsArea({
               </div>
             )}
             {uploadingVideo && uploadProgress && uploadProgress.total > 0 && (
-              <div className="absolute bottom-full mb-2 left-0 z-20 w-56 max-w-[calc(100vw-2rem)] bg-slate-900/95 border border-slate-700 text-slate-200 text-xs font-medium px-3 py-2 rounded-lg shadow-xl">
+              <div className="absolute bottom-full mb-2 left-0 z-20 w-56 max-w-[calc(100vw-2rem)] bg-panel/95 backdrop-blur-glass border border-hairline text-ink text-xs font-medium px-3 py-2 rounded-lg shadow-xl">
                 <div className="flex justify-between mb-1">
                   <span>
                     {formatMB(uploadProgress.loaded)} / {formatMB(uploadProgress.total)} MB
@@ -846,21 +846,21 @@ function ControlsArea({
                     {Math.min(100, Math.round((uploadProgress.loaded / uploadProgress.total) * 100))}%
                   </span>
                 </div>
-                <div className="h-1.5 w-full bg-slate-700 rounded-full overflow-hidden">
+                <div className="h-1.5 w-full bg-panel-2 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-indigo-500 transition-all"
+                    className="h-full bg-gradient-to-r from-brand-indigo to-brand-violet transition-all"
                     style={{
                       width: `${Math.min(100, (uploadProgress.loaded / uploadProgress.total) * 100)}%`,
                     }}
                   />
                 </div>
-                <div className="mt-1 text-slate-400">
+                <div className="mt-1 text-ink-faint">
                   {formatMB(uploadProgress.speedBps)} MB/s
                 </div>
               </div>
             )}
             {uploadError && (
-              <div className="absolute bottom-full mb-2 left-0 z-20 whitespace-nowrap bg-red-950/95 border border-red-800 text-red-300 text-xs font-medium px-3 py-2 rounded-lg shadow-xl">
+              <div className="absolute bottom-full mb-2 left-0 z-20 whitespace-nowrap bg-danger/10 backdrop-blur-glass border border-danger/30 text-danger text-xs font-medium px-3 py-2 rounded-lg shadow-xl">
                 {uploadError}
               </div>
             )}

@@ -459,21 +459,21 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      <div className="w-full max-w-6xl h-[85vh] bg-slate-950 border border-slate-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+      <div className="w-full max-w-6xl h-[85vh] bg-panel border border-hairline rounded-lg shadow-2xl flex flex-col overflow-hidden animate-settle">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-900 bg-slate-900">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-hairline bg-panel-2">
           <div className="flex items-center gap-3">
-            <h2 className="text-sm font-bold text-white uppercase tracking-wide">Reference Analysis</h2>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-950/40 border border-emerald-800 text-emerald-400 uppercase tracking-wider inline-flex items-center gap-1">
+            <h2 className="text-sm font-display font-bold text-ink uppercase tracking-wide">Reference Analysis</h2>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-live/10 border border-live/30 text-live uppercase tracking-wider inline-flex items-center gap-1">
               <CircleIcon className="w-2 h-2 fill-current" /> Synced to room
             </span>
             {status === 'processing' && (
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-950/40 border border-amber-800 text-amber-400 uppercase tracking-wider animate-pulse">
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-replay/10 border border-replay/30 text-replay uppercase tracking-wider animate-pulse">
                 Analyzing…
               </span>
             )}
             {status === 'failed' && (
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-red-950/40 border border-red-800 text-red-400 uppercase tracking-wider">
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-danger/10 border border-danger/30 text-danger uppercase tracking-wider">
                 Skeleton unavailable
               </span>
             )}
@@ -485,7 +485,7 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
               <button
                 onClick={handleDownloadVideo}
                 disabled={downloadingVideo}
-                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold transition inline-flex items-center gap-1.5"
+                className="px-3 py-1.5 rounded-full bg-gradient-to-r from-brand-indigo to-brand-violet hover:shadow-glow disabled:opacity-50 text-canvas text-xs font-semibold transition-colors inline-flex items-center gap-1.5"
                 title="Download this video"
               >
                 <Download className="w-3.5 h-3.5" /> {downloadingVideo ? 'Preparing…' : 'Download'}
@@ -496,7 +496,7 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
             {isCoach && (
               <button
                 onClick={handleClose}
-                className="text-slate-400 hover:text-white leading-none px-2"
+                className="text-ink-faint hover:text-ink leading-none px-2 transition-colors"
                 aria-label="Close reference analysis"
               >
                 <X className="w-5 h-5" />
@@ -544,10 +544,10 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
                 still reveals the raw video (just without a skeleton) rather
                 than blocking the feature entirely. */}
             {status === 'processing' && (
-              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-slate-950">
-                <Loader2 className="w-8 h-8 text-amber-400 animate-spin" />
-                <p className="text-sm font-semibold text-slate-300">Analyzing video…</p>
-                <p className="text-xs text-slate-500">The video will appear once pose detection finishes.</p>
+              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-canvas">
+                <Loader2 className="w-8 h-8 text-replay animate-spin" />
+                <p className="text-sm font-semibold text-ink-muted">Analyzing video…</p>
+                <p className="text-xs text-ink-faint">The video will appear once pose detection finishes.</p>
               </div>
             )}
           </div>
@@ -555,35 +555,35 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
           {/* Draw tools side panel — coach only. Below the video (capped
               height, scrollable) on mobile; a fixed-width sidebar from sm+ */}
           {isCoach && (
-            <div className="w-full sm:w-56 max-h-[35vh] sm:max-h-none border-t sm:border-t-0 sm:border-l border-slate-900 bg-slate-900 p-4 flex flex-col gap-4 overflow-y-auto">
+            <div className="w-full sm:w-56 max-h-[35vh] sm:max-h-none border-t sm:border-t-0 sm:border-l border-hairline bg-panel-2 p-4 flex flex-col gap-4 overflow-y-auto">
               {students.length > 0 && (
                 <div>
-                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center justify-between">
+                  <div className="text-[10px] font-bold text-ink-faint uppercase tracking-wider mb-2 flex items-center justify-between">
                     <span>Show To</span>
-                    <span className="text-slate-600 normal-case font-medium">
+                    <span className="text-ink-faint normal-case font-medium">
                       {targetStudentIds.length === 0 ? 'Everyone' : `${targetStudentIds.length} selected`}
                     </span>
                   </div>
                   <div className="flex flex-col gap-1 max-h-28 overflow-y-auto">
-                    <label className="flex items-center gap-2 text-xs text-slate-300 px-1.5 py-1 rounded hover:bg-slate-900 cursor-pointer">
+                    <label className="flex items-center gap-2 text-xs text-ink-muted px-1.5 py-1 rounded-md hover:bg-panel cursor-pointer">
                       <input
                         type="checkbox"
                         checked={targetStudentIds.length === 0}
                         onChange={() => setTargetStudentIds([])}
-                        className="w-3.5 h-3.5 accent-amber-500"
+                        className="w-3.5 h-3.5 accent-brand-indigo"
                       />
                       All connected
                     </label>
                     {students.map((s) => (
                       <label
                         key={s.identity}
-                        className="flex items-center gap-2 text-xs text-slate-300 px-1.5 py-1 rounded hover:bg-slate-900 cursor-pointer"
+                        className="flex items-center gap-2 text-xs text-ink-muted px-1.5 py-1 rounded-md hover:bg-panel cursor-pointer"
                       >
                         <input
                           type="checkbox"
                           checked={targetStudentIds.includes(s.identity)}
                           onChange={() => toggleStudent(s.identity)}
-                          className="w-3.5 h-3.5 accent-amber-500"
+                          className="w-3.5 h-3.5 accent-brand-indigo"
                         />
                         {s.name || s.identity}
                       </label>
@@ -593,17 +593,17 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
               )}
 
               <div>
-                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Tools</div>
+                <div className="text-[10px] font-bold text-ink-faint uppercase tracking-wider mb-2">Tools</div>
                 <div className="grid grid-cols-3 gap-1.5">
                   {TOOLS.map((t) => (
                     <button
                       key={t.id}
                       onClick={() => setActiveTool(t.id)}
                       title={t.label}
-                      className={`aspect-square rounded-lg text-base flex items-center justify-center border transition ${
+                      className={`aspect-square rounded-lg text-base flex items-center justify-center border transition-colors ${
                         activeTool === t.id
-                          ? 'bg-amber-600 border-amber-500 text-white'
-                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
+                          ? 'bg-gradient-to-r from-brand-indigo to-brand-violet border-transparent text-canvas'
+                          : 'bg-panel border-hairline text-ink-muted hover:text-ink hover:border-hairline'
                       }`}
                     >
                       <t.icon className="w-4 h-4" />
@@ -613,15 +613,15 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
               </div>
 
               <div>
-                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Color</div>
+                <div className="text-[10px] font-bold text-ink-faint uppercase tracking-wider mb-2">Color</div>
                 <div className="flex items-center gap-1.5 flex-wrap">
                   {COLORS.map((c) => (
                     <button
                       key={c}
                       onClick={() => setActiveColor(c)}
                       style={{ backgroundColor: c }}
-                      className={`w-6 h-6 rounded-full border-2 transition ${
-                        activeColor === c ? 'border-white scale-110' : 'border-transparent hover:scale-105'
+                      className={`w-6 h-6 rounded-full border-2 transition-colors ${
+                        activeColor === c ? 'border-ink scale-110' : 'border-transparent hover:scale-105'
                       }`}
                     />
                   ))}
@@ -629,16 +629,16 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
               </div>
 
               <div>
-                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Stroke Width</div>
+                <div className="text-[10px] font-bold text-ink-faint uppercase tracking-wider mb-2">Stroke Width</div>
                 <div className="flex items-center gap-1.5">
                   {WIDTHS.map((w) => (
                     <button
                       key={w}
                       onClick={() => setActiveWidth(w)}
-                      className={`flex-1 py-1.5 rounded-lg text-xs font-semibold border transition ${
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
                         activeWidth === w
-                          ? 'bg-amber-600 border-amber-500 text-white'
-                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                          ? 'bg-gradient-to-r from-brand-indigo to-brand-violet border-transparent text-canvas'
+                          : 'bg-panel border-hairline text-ink-muted hover:text-ink'
                       }`}
                     >
                       {w}px
@@ -647,16 +647,16 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
                 </div>
               </div>
 
-              <div className="flex flex-col gap-1.5 pt-2 border-t border-slate-900">
-                <button onClick={handleUndo} className="text-xs text-left px-2 py-1.5 rounded-lg text-slate-300 hover:bg-slate-900 hover:text-white transition inline-flex items-center gap-1.5">
+              <div className="flex flex-col gap-1.5 pt-2 border-t border-hairline">
+                <button onClick={handleUndo} className="text-xs text-left px-2 py-1.5 rounded-lg text-ink-muted hover:bg-panel hover:text-ink transition-colors inline-flex items-center gap-1.5">
                   <Undo2 className="w-3.5 h-3.5" /> Undo
                 </button>
-                <button onClick={handleClear} className="text-xs text-left px-2 py-1.5 rounded-lg text-red-400 hover:bg-red-950/20 hover:text-red-300 transition inline-flex items-center gap-1.5">
+                <button onClick={handleClear} className="text-xs text-left px-2 py-1.5 rounded-lg text-danger hover:bg-danger/10 hover:text-danger transition-colors inline-flex items-center gap-1.5">
                   <Trash2 className="w-3.5 h-3.5" /> Clear Frame
                 </button>
               </div>
 
-              <div className="pt-2 border-t border-slate-900 text-[10px] text-slate-500 leading-snug">
+              <div className="pt-2 border-t border-hairline text-[10px] text-ink-faint leading-snug">
                 Automatically saved and shared with students in this session once analysis finishes.
               </div>
             </div>
@@ -665,7 +665,7 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
 
         {/* Frame bar — playback controls are coach-only; students just watch
             in sync with whatever the coach does. */}
-        <div className="border-t border-slate-900 bg-slate-900 px-5 py-3 flex flex-col gap-2">
+        <div className="border-t border-hairline bg-panel-2 px-5 py-3 flex flex-col gap-2">
           {isCoach && (
             <input
               type="range"
@@ -674,7 +674,7 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
               step={1}
               value={frameIndex}
               onChange={(e) => seekToFrame(parseInt(e.target.value, 10))}
-              className="w-full accent-amber-500 h-1.5 cursor-pointer"
+              className="w-full accent-brand-indigo h-1.5 cursor-pointer"
             />
           )}
           <div className="flex items-center justify-between flex-wrap gap-3">
@@ -683,25 +683,25 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
                 <>
                   <button
                     onClick={() => seekToFrame(frameIndex - 1)}
-                    className="bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-white text-xs px-2.5 py-1.5 rounded-md transition"
+                    className="bg-panel hover:bg-panel/70 border border-hairline disabled:opacity-40 text-ink text-xs px-2.5 py-1.5 rounded-full transition-colors"
                   >
                     <StepBack className="w-3.5 h-3.5 fill-current" />
                   </button>
                   <button
                     onClick={togglePlay}
-                    className="bg-amber-600 hover:bg-amber-700 disabled:opacity-40 text-white text-xs font-semibold px-3 py-1.5 rounded-md transition inline-flex items-center gap-1.5"
+                    className="bg-gradient-to-r from-brand-indigo to-brand-violet hover:shadow-glow disabled:opacity-40 text-canvas text-xs font-semibold px-3 py-1.5 rounded-full transition-colors inline-flex items-center gap-1.5"
                   >
                     {playing ? (<><Pause className="w-3.5 h-3.5 fill-current" /> Pause</>) : (<><Play className="w-3.5 h-3.5 fill-current" /> Play</>)}
                   </button>
                   <button
                     onClick={() => seekToFrame(frameIndex + 1)}
-                    className="bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-white text-xs px-2.5 py-1.5 rounded-md transition"
+                    className="bg-panel hover:bg-panel/70 border border-hairline disabled:opacity-40 text-ink text-xs px-2.5 py-1.5 rounded-full transition-colors"
                   >
                     <StepForward className="w-3.5 h-3.5 fill-current" />
                   </button>
                 </>
               )}
-              <span className="text-slate-400 text-xs font-mono tabular-nums ml-2">
+              <span className="text-ink-muted text-xs font-mono tabular-nums ml-2">
                 {formatTime(frameIndex / fps)} / {formatTime(frameCount / fps)} · f{frameIndex}
               </span>
             </div>
@@ -715,8 +715,8 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
                       setPlaybackRate(s);
                       if (videoRef.current) videoRef.current.playbackRate = s;
                     }}
-                    className={`text-xs px-2 py-1 rounded transition ${
-                      playbackRate === s ? 'bg-amber-600 text-white' : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                    className={`text-xs font-mono px-2 py-1 rounded-full transition-colors ${
+                      playbackRate === s ? 'bg-gradient-to-r from-brand-indigo to-brand-violet text-canvas' : 'bg-panel hover:bg-panel/70 border border-hairline text-ink-muted'
                     }`}
                   >
                     {s}×
