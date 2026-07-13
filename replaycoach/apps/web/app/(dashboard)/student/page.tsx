@@ -11,10 +11,16 @@ interface StudentStats {
   clipsShared: number;
 }
 
+interface StudentOverviewResponse {
+  stats: StudentStats;
+  recentSessions: { id: string; title: string; date: string }[];
+}
+
 export default function StudentOverviewPage() {
   const [stats, setStats] = useState<StudentStats | null>(null);
   const [recentSessions, setRecentSessions] = useState<{ id: string; title: string; date: string }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchOverview();
@@ -23,10 +29,13 @@ export default function StudentOverviewPage() {
   const fetchOverview = async () => {
     try {
       setLoading(true);
-      setStats({ sessionsAttended: 0, nextSession: null, clipsShared: 0 });
-      setRecentSessions([]);
+      setError(null);
+      const data = await apiClient.get<StudentOverviewResponse>('/dashboard/student/overview');
+      setStats(data.stats);
+      setRecentSessions(data.recentSessions);
     } catch (err) {
       console.error(err);
+      setError('Could not load your dashboard. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -34,6 +43,12 @@ export default function StudentOverviewPage() {
 
   return (
     <div className="space-y-6">
+      {error && (
+        <div role="alert" className="bg-danger/10 border border-danger/30 text-danger text-sm rounded-lg px-4 py-3 animate-rise">
+          {error}
+        </div>
+      )}
+
       {/* Stat row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-panel border border-hairline rounded-lg p-5">

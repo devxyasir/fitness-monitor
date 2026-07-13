@@ -44,6 +44,7 @@ import { PoseModule } from './pose/pose.module';
 import { ClipsModule } from './clips/clips.module';
 import { RecordingsModule } from './recordings/recordings.module';
 import { ReferenceModule } from './reference/reference.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -106,6 +107,7 @@ import { ReferenceModule } from './reference/reference.module';
     ClipsModule,
     RecordingsModule,
     ReferenceModule,
+    DashboardModule,
   ],
   providers: [
     // Global by default: every route requires a valid access token and
