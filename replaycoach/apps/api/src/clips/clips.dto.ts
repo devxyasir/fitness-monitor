@@ -45,6 +45,10 @@ export interface ClipListItem {
   /** True when a single-file video exists to download (reference/overlay
    * clips); recording clips are HLS-segmented and not downloadable as one file. */
   downloadable: boolean;
+  /** Present only for clipType 'reference' — lets the client re-run the
+   * server-side export with a chosen mode (full skeleton vs. annotations
+   * only) via POST /sessions/:id/reference/:referenceVideoId/export. */
+  referenceVideoId: string | null;
   /** How many students this clip is shared with — for the coach share button. */
   sharesCount: number;
   meeting: {

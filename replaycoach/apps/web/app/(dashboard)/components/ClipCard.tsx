@@ -45,10 +45,10 @@ export function ClipCard({ clip, onPlay, onShare }: ClipCardProps) {
   };
 
   return (
-    <div className="bg-slate-900/60 border border-slate-900 rounded-3xl p-5 flex flex-col justify-between hover:border-slate-800 transition group shadow-md">
+    <div className="bg-panel border border-hairline rounded-lg p-5 flex flex-col justify-between hover:border-brand-indigo/25 transition-colors group">
       <div>
         <div
-          className="aspect-video w-full rounded-2xl mb-4 bg-gradient-to-tr from-slate-950 to-indigo-950/20 flex items-center justify-center relative border border-slate-800 overflow-hidden cursor-pointer"
+          className="aspect-video w-full rounded-lg mb-4 bg-gradient-to-tr from-panel-2 to-brand-indigo/10 flex items-center justify-center relative border border-hairline overflow-hidden cursor-pointer"
           onClick={() => onPlay(clip)}
         >
           {clip.videoUrl ? (
@@ -62,26 +62,26 @@ export function ClipCard({ clip, onPlay, onShare }: ClipCardProps) {
               className="w-full h-full object-cover"
             />
           ) : (
-            <Video className="w-6 h-6 opacity-60" />
+            <Video className="w-6 h-6 text-ink-faint opacity-60" />
           )}
 
-          <div className="absolute inset-0 bg-slate-900/25 opacity-0 group-hover:opacity-100 transition flex items-center justify-center backdrop-blur-[2px]">
+          <div className="absolute inset-0 bg-canvas/25 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 onPlay(clip);
               }}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white p-3 rounded-full shadow-lg transform scale-90 group-hover:scale-100 transition duration-300"
+              className="bg-gradient-to-br from-brand-indigo to-brand-violet text-canvas p-3 rounded-full shadow-lg transform scale-90 group-hover:scale-100 transition-transform duration-300"
             >
               <Play className="w-5 h-5 fill-current" />
             </button>
           </div>
-          <span className="absolute bottom-2 right-2 bg-slate-950/80 px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold text-slate-300 tracking-wider">
+          <span className="absolute bottom-2 right-2 bg-panel/80 backdrop-blur-glass px-2 py-0.5 rounded-full text-[10px] font-mono font-bold text-ink-muted tracking-wider">
             {formatDuration(clip.startMs, clip.endMs)}
           </span>
         </div>
 
-        <h3 className="text-sm font-bold text-white group-hover:text-indigo-400 transition truncate">
+        <h3 className="text-sm font-display font-semibold text-ink group-hover:text-brand-violet transition-colors truncate">
           {clip.title}
         </h3>
       </div>
@@ -89,7 +89,7 @@ export function ClipCard({ clip, onPlay, onShare }: ClipCardProps) {
       <div className="flex gap-2.5 mt-4">
         <button
           onClick={() => onPlay(clip)}
-          className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold tracking-wide transition border border-slate-700 inline-flex items-center justify-center gap-1.5"
+          className="flex-1 py-2 bg-panel-2 hover:bg-panel-2/60 text-ink rounded-full text-xs font-semibold tracking-wide transition-colors border border-hairline inline-flex items-center justify-center gap-1.5"
         >
           <Play className="w-3.5 h-3.5 fill-current" /> Play
         </button>
@@ -97,7 +97,7 @@ export function ClipCard({ clip, onPlay, onShare }: ClipCardProps) {
           <button
             onClick={handleDownload}
             disabled={downloading}
-            className="py-2 px-3 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white rounded-xl text-xs font-semibold transition border border-slate-700 inline-flex items-center justify-center gap-1.5"
+            className="py-2 px-3 bg-panel-2 hover:bg-panel-2/60 disabled:opacity-50 text-ink rounded-full text-xs font-semibold transition-colors border border-hairline inline-flex items-center justify-center gap-1.5"
             title="Download video"
           >
             <Download className="w-3.5 h-3.5" /> {downloading ? '…' : ''}
@@ -106,7 +106,7 @@ export function ClipCard({ clip, onPlay, onShare }: ClipCardProps) {
         {onShare && (
           <button
             onClick={() => onShare(clip)}
-            className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold tracking-wide transition inline-flex items-center justify-center gap-1.5"
+            className="flex-1 py-2 bg-gradient-to-r from-brand-indigo to-brand-violet hover:shadow-glow text-canvas rounded-full text-xs font-semibold tracking-wide transition-all inline-flex items-center justify-center gap-1.5"
           >
             <Share2 className="w-3.5 h-3.5" /> Share ({clip.sharesCount ?? 0})
           </button>

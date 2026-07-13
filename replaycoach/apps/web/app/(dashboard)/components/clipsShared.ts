@@ -15,6 +15,7 @@ export interface ClipItem {
   clipType?: 'recording' | 'reference';
   videoUrl?: string | null;
   downloadable?: boolean;
+  referenceVideoId?: string | null;
   sharesCount?: number;
   meeting: {
     sessionId: string;

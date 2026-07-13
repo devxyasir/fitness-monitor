@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
 import type { ClientAnnotation } from '../../../stores/annotation-store';
 import { getVisibleAnnotations } from '../../../stores/annotation-store';
-import { X, Play, Pause, Palette, Download } from 'lucide-react';
+import { X, Play, Pause, Palette, Download, Bone, PenLine, Loader2 } from 'lucide-react';
+import { apiClient } from '../../../lib/api-client';
 import { downloadClipVideo } from './downloadClip';
 
 interface ClipPlaybackModalProps {
@@ -16,15 +17,27 @@ interface ClipPlaybackModalProps {
     sessionId: string;
     clipType?: 'recording' | 'reference';
     downloadable?: boolean;
+    referenceVideoId?: string | null;
     meeting?: { startedAt: string };
   };
   playUrl: string;
   annotations: ClientAnnotation[];
   onClose: () => void;
+  /** Only the coach can trigger a server-side re-export (assertCoach on the
+   * API); students can still download whatever was last exported. */
+  isCoach?: boolean;
 }
 
-export function ClipPlaybackModal({ clip, playUrl, annotations, onClose }: ClipPlaybackModalProps) {
+const EXPORT_POLL_INTERVAL_MS = 2500;
+const EXPORT_POLL_TIMEOUT_MS = 90_000;
+
+export function ClipPlaybackModal({ clip, playUrl, annotations, onClose, isCoach = false }: ClipPlaybackModalProps) {
   const [downloading, setDownloading] = useState(false);
+  // Re-export flow (only for reference clips with a referenceVideoId): the
+  // coach/student picks a mode, we kick off a fresh server-side render, poll
+  // until the clip's underlying file changes, then download that result.
+  const [exportingMode, setExportingMode] = useState<'skeleton' | 'annotations' | null>(null);
+  const [showModeChooser, setShowModeChooser] = useState(false);
 
   const handleDownload = async () => {
     if (downloading) return;
@@ -39,6 +52,43 @@ export function ClipPlaybackModal({ clip, playUrl, annotations, onClose }: ClipP
       setDownloading(false);
     }
   };
+
+  const exportKeyOf = (url: string) => {
+    try {
+      return new URL(url).pathname;
+    } catch {
+      return url;
+    }
+  };
+
+  const handleExportAndDownload = async (drawSkeleton: boolean) => {
+    if (exportingMode || !clip.referenceVideoId) return;
+    setShowModeChooser(false);
+    setExportingMode(drawSkeleton ? 'skeleton' : 'annotations');
+    const priorKey = exportKeyOf(playUrl);
+    try {
+      await apiClient.post(`/sessions/${clip.sessionId}/reference/${clip.referenceVideoId}/export`, { drawSkeleton });
+
+      const deadline = Date.now() + EXPORT_POLL_TIMEOUT_MS;
+      let freshUrl: string | null = null;
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, EXPORT_POLL_INTERVAL_MS));
+        const res = await apiClient.get<{ playUrl: string }>(`/clips/${clip.id}`);
+        if (exportKeyOf(res.playUrl) !== priorKey) {
+          freshUrl = res.playUrl;
+          break;
+        }
+      }
+      if (!freshUrl) throw new Error('Export is taking longer than expected. Try downloading again shortly.');
+      await downloadClipVideo({ clipId: clip.id, startedAt: clip.meeting?.startedAt, playUrl: freshUrl });
+    } catch (err) {
+      console.error('[ClipPlaybackModal] Export/download failed:', err);
+      alert(err instanceof Error ? err.message : 'Export failed. Please try again.');
+    } finally {
+      setExportingMode(null);
+    }
+  };
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -245,14 +295,16 @@ export function ClipPlaybackModal({ clip, playUrl, annotations, onClose }: ClipP
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
+  const canReExport = isCoach && Boolean(clip.referenceVideoId);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4">
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-canvas/80 backdrop-blur-md p-4">
+      <div className="bg-panel border border-hairline rounded-lg w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh] animate-settle">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900/50">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-hairline bg-panel-2/50">
           <div>
-            <h3 className="text-lg font-bold text-white leading-snug">{clip.title}</h3>
-            <p className="text-xs text-slate-400 mt-1">
+            <h3 className="text-lg font-display font-bold text-ink leading-snug">{clip.title}</h3>
+            <p className="text-xs text-ink-faint mt-1 font-mono">
               Length: {formatTime((clip.endMs - clip.startMs) / 1000)} | Session:{' '}
               {clip.sessionId.substring(0, 8)}
             </p>
@@ -262,18 +314,53 @@ export function ClipPlaybackModal({ clip, playUrl, annotations, onClose }: ClipP
                 burned in). Only for reference/overlay clips — recording clips
                 are HLS-segmented and have no single downloadable file. */}
             {clip.downloadable && (
-              <button
-                onClick={handleDownload}
-                disabled={downloading}
-                className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold transition inline-flex items-center gap-1.5"
-                title="Download this video"
-              >
-                <Download className="w-4 h-4" /> {downloading ? 'Preparing…' : 'Download'}
-              </button>
+              exportingMode ? (
+                <button disabled className="px-3 py-2 rounded-full bg-panel-2 border border-hairline text-ink-muted text-xs font-semibold opacity-70 cursor-not-allowed inline-flex items-center gap-1.5">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Rendering {exportingMode === 'skeleton' ? 'skeleton' : 'annotations'}…
+                </button>
+              ) : canReExport && showModeChooser ? (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-mono text-ink-faint uppercase tracking-wide mr-0.5 hidden sm:inline">Download:</span>
+                  <button
+                    onClick={() => handleExportAndDownload(true)}
+                    title="Burn in the full skeleton overlay"
+                    className="px-3 py-2 rounded-full bg-brand-indigo/15 hover:bg-brand-indigo/25 border border-brand-indigo/40 text-[#A5A9F5] text-xs font-semibold transition-colors inline-flex items-center gap-1.5"
+                  >
+                    <Bone className="w-3.5 h-3.5" /> Full skeleton
+                  </button>
+                  <button
+                    onClick={() => handleExportAndDownload(false)}
+                    title="Just the joint-attached annotations over the raw video"
+                    className="px-3 py-2 rounded-full bg-panel-2 hover:bg-panel-2/60 border border-hairline text-ink-muted text-xs font-semibold transition-colors inline-flex items-center gap-1.5"
+                  >
+                    <PenLine className="w-3.5 h-3.5" /> Annotations only
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <button
+                    onClick={handleDownload}
+                    disabled={downloading}
+                    className="px-3 py-2 rounded-full bg-gradient-to-r from-brand-indigo to-brand-violet hover:shadow-glow disabled:opacity-50 text-canvas text-xs font-semibold transition-colors inline-flex items-center gap-1.5"
+                    title="Download this video"
+                  >
+                    <Download className="w-4 h-4" /> {downloading ? 'Preparing…' : 'Download'}
+                  </button>
+                  {canReExport && (
+                    <button
+                      onClick={() => setShowModeChooser(true)}
+                      title="Choose full skeleton or annotations-only"
+                      className="text-[10px] font-mono text-ink-faint hover:text-ink-muted underline decoration-dotted transition-colors hidden sm:inline"
+                    >
+                      other mode?
+                    </button>
+                  )}
+                </>
+              )
             )}
             <button
               onClick={onClose}
-              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
+              className="p-2 rounded-full bg-panel-2 hover:bg-panel-2/60 border border-hairline text-ink-muted hover:text-ink transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
@@ -281,10 +368,10 @@ export function ClipPlaybackModal({ clip, playUrl, annotations, onClose }: ClipP
         </div>
 
         {/* Video Player + Canvas Box */}
-        <div className="flex-1 min-h-0 bg-slate-950 flex items-center justify-center p-4">
+        <div className="flex-1 min-h-0 bg-canvas flex items-center justify-center p-4">
           <div
             ref={containerRef}
-            className="relative aspect-video w-full max-h-[60vh] rounded-2xl overflow-hidden bg-slate-900 border border-slate-900 flex items-center justify-center group shadow-md"
+            className="relative aspect-video w-full max-h-[60vh] rounded-lg overflow-hidden bg-panel-2 border border-hairline flex items-center justify-center group shadow-md"
           >
             <video
               ref={videoRef}
@@ -298,7 +385,7 @@ export function ClipPlaybackModal({ clip, playUrl, annotations, onClose }: ClipP
             {!isPlaying && (
               <button
                 onClick={togglePlay}
-                className="absolute p-5 rounded-full bg-slate-950/80 hover:bg-slate-900 border border-slate-800 hover:scale-105 backdrop-blur-sm text-white transition cursor-pointer shadow-lg"
+                className="absolute p-5 rounded-full bg-panel/80 hover:bg-panel-2 border border-hairline hover:scale-105 backdrop-blur-glass text-ink transition-all cursor-pointer shadow-lg"
               >
                 <Play className="w-7 h-7 fill-current" />
               </button>
@@ -307,10 +394,10 @@ export function ClipPlaybackModal({ clip, playUrl, annotations, onClose }: ClipP
         </div>
 
         {/* Controls Panel */}
-        <div className="bg-slate-900/90 border-t border-slate-800 px-6 py-4 flex flex-col gap-3">
+        <div className="bg-panel-2/60 border-t border-hairline px-6 py-4 flex flex-col gap-3">
           {/* Progress row */}
           <div className="flex items-center gap-3">
-            <span className="text-xs font-mono text-slate-400">{formatTime(currentTime)}</span>
+            <span className="text-xs font-mono text-ink-faint">{formatTime(currentTime)}</span>
             <input
               type="range"
               min={0}
@@ -322,27 +409,27 @@ export function ClipPlaybackModal({ clip, playUrl, annotations, onClose }: ClipP
                 if (videoRef.current) videoRef.current.currentTime = val;
                 setCurrentTime(val);
               }}
-              className="flex-1 accent-indigo-500 bg-slate-800 h-1.5 rounded-lg cursor-pointer"
+              className="flex-1 accent-brand-indigo bg-panel-2 h-1.5 rounded-full cursor-pointer"
             />
-            <span className="text-xs font-mono text-slate-400">{formatTime(duration)}</span>
+            <span className="text-xs font-mono text-ink-faint">{formatTime(duration)}</span>
           </div>
 
           {/* Action Row */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2.5">
               <button
                 onClick={togglePlay}
-                className="bg-slate-800 hover:bg-slate-700 text-white rounded-xl px-4 py-2 text-xs font-semibold transition inline-flex items-center gap-1.5"
+                className="bg-panel-2 hover:bg-panel-2/60 border border-hairline text-ink rounded-full px-4 py-2 text-xs font-semibold transition-colors inline-flex items-center gap-1.5"
               >
                 {isPlaying ? (<><Pause className="w-3.5 h-3.5 fill-current" /> Pause</>) : (<><Play className="w-3.5 h-3.5 fill-current" /> Play</>)}
               </button>
 
               <button
                 onClick={() => setShowAnnotations(!showAnnotations)}
-                className={`rounded-xl px-4 py-2 text-xs font-semibold transition inline-flex items-center gap-1.5 ${
+                className={`rounded-full px-4 py-2 text-xs font-semibold transition-colors inline-flex items-center gap-1.5 border ${
                   showAnnotations
-                    ? 'bg-indigo-700 text-white shadow'
-                    : 'bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                    ? 'bg-gradient-to-r from-brand-indigo to-brand-violet text-canvas border-transparent'
+                    : 'bg-panel-2 text-ink-muted hover:bg-panel-2/60 border-hairline'
                 }`}
               >
                 <Palette className="w-3.5 h-3.5" /> Annotations: {showAnnotations ? 'ON' : 'OFF'}
@@ -350,15 +437,15 @@ export function ClipPlaybackModal({ clip, playUrl, annotations, onClose }: ClipP
             </div>
 
             {/* Speeds */}
-            <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800">
+            <div className="flex items-center gap-1 bg-panel p-1 rounded-full border border-hairline">
               {[0.5, 0.75, 1, 1.5].map((speed) => (
                 <button
                   key={speed}
                   onClick={() => changeSpeed(speed)}
-                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${
+                  className={`px-3 py-1 rounded-full text-xs font-mono font-semibold transition-colors ${
                     playbackRate === speed
-                      ? 'bg-slate-800 text-white shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
+                      ? 'bg-gradient-to-r from-brand-indigo to-brand-violet text-canvas'
+                      : 'text-ink-muted hover:text-ink'
                   }`}
                 >
                   {speed}x

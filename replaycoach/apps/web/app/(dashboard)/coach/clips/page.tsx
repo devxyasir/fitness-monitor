@@ -155,7 +155,7 @@ export default function CoachClipsPage() {
 
       {/* Playback Modal */}
       {playingClip && playData && (
-        <ClipPlaybackModal clip={playingClip} playUrl={playData.playUrl} annotations={playData.annotations} onClose={() => { setPlayingClip(null); setPlayData(null); }} />
+        <ClipPlaybackModal clip={playingClip} playUrl={playData.playUrl} annotations={playData.annotations} onClose={() => { setPlayingClip(null); setPlayData(null); }} isCoach />
       )}
 
       {playingClip && loadingPlay && (

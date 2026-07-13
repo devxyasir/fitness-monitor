@@ -222,6 +222,7 @@ export class ClipsService {
         clipType: clip.clipType,
         videoUrl: videoUrlByClip.get(clip.id) ?? null,
         downloadable: clip.clipType === 'reference',
+        referenceVideoId: clip.referenceVideoId ?? null,
         sharesCount: sharesByClip.get(clip.id) ?? 0,
         meeting: {
           sessionId: clip.sessionId,
