@@ -79,12 +79,22 @@ export function useAnnotationTrackingSocket(sessionId: string) {
       }
     };
 
+    // Previously nothing listened for export failure at all — the
+    // pose-service's export job could throw and the coach's "Exporting…"
+    // spinner would just spin forever with no error and no way to retry.
+    const onExportFailed = (p: { refId: string; reason?: string }) => {
+      const st = store.getState();
+      if (st.refId !== p.refId) return;
+      st.setExportError(p.reason || 'Export failed. Please try again.');
+    };
+
     socket.on('reference:open', open);
     socket.on('reference:ready', ready);
     socket.on('reference:annotation-create', onCreate);
     socket.on('reference:annotation-update', onUpdate);
     socket.on('reference:annotation-delete', onDelete);
     socket.on('reference:export-ready', onExportReady);
+    socket.on('reference:export-failed', onExportFailed);
 
     return () => {
       socket.off('reference:open', open);
@@ -93,6 +103,7 @@ export function useAnnotationTrackingSocket(sessionId: string) {
       socket.off('reference:annotation-update', onUpdate);
       socket.off('reference:annotation-delete', onDelete);
       socket.off('reference:export-ready', onExportReady);
+      socket.off('reference:export-failed', onExportFailed);
     };
   }, [sessionId, store]);
 }

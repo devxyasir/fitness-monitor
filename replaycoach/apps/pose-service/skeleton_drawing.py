@@ -11,6 +11,7 @@ from __future__ import annotations
 import cv2
 import numpy as np
 
+from config import settings
 from inference import COCO_KEYPOINT_NAMES, HALPE26_KEYPOINT_NAMES
 
 # Index-pair connections, mirroring packages/types/src/pose.ts.
@@ -42,14 +43,17 @@ HALPE26_SKELETON_CONNECTIONS = [
     (16, 25), (16, 21), (21, 23),
 ]
 
-MIN_SCORE = 0.3
+# Tunable via POSE_SKELETON_MIN_SCORE / POSE_SKELETON_LINE_THICKNESS /
+# POSE_SKELETON_JOINT_RADIUS (config.py) — module-level so existing imports
+# of MIN_SCORE/LINE_THICKNESS/JOINT_RADIUS elsewhere keep working unchanged.
+MIN_SCORE = settings.skeleton_min_score
 
 AMBER = (0, 165, 255)  # BGR
 DARK = (40, 40, 40)     # BGR — thin contrast outline so joints read on any background
-LINE_THICKNESS = 2
+LINE_THICKNESS = settings.skeleton_line_thickness
 # A genuine thin ring with clearly open space inside — radius is much larger
 # than the 1px stroke, so the joint reads as a hollow circle, not a dot/bullet.
-JOINT_RADIUS = 7
+JOINT_RADIUS = settings.skeleton_joint_radius
 JOINT_THICKNESS = 1
 
 # Back-compat alias (older imports referenced SKELETON_CONNECTIONS = COCO set).

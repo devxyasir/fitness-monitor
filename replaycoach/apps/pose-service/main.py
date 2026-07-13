@@ -16,7 +16,8 @@ from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator
 
 import redis.asyncio as aioredis
-from fastapi import BackgroundTasks, FastAPI
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from config import settings
@@ -184,6 +185,23 @@ app = FastAPI(
 )
 
 
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(_request: Request, exc: Exception) -> JSONResponse:
+    """
+    Catch-all so an unexpected exception in any endpoint returns the same
+    {"status": "error", "message": ...} shape as every other error response
+    in this service, with a real 500, instead of FastAPI's default bare
+    "Internal Server Error" text body. Endpoint-specific errors (HTTPException,
+    Pydantic 422s) are handled by FastAPI's own machinery before this ever
+    runs — this only catches what nothing else did.
+    """
+    logger.error("Unhandled exception on %s %s: %s", _request.method, _request.url.path, exc, exc_info=exc)
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"status": "error", "message": "Internal server error"},
+    )
+
+
 @app.get("/health")
 async def health() -> dict[str, str]:
     """Basic health check — always returns OK if the process is running."""
@@ -193,11 +211,19 @@ async def health() -> dict[str, str]:
 @app.get("/ready")
 async def ready() -> dict[str, str | bool]:
     """
-    Readiness check — returns OK only if model and Redis are initialized.
-    Used by load balancers / orchestrators to gate traffic.
+    Readiness check — returns OK only if both models actually loaded a
+    usable ONNX session (not just "the constructor ran") and Redis is
+    initialized. Used by load balancers / orchestrators to gate traffic.
+
+    Previously only checked `_model is not None` — but create_model_adapter()
+    always returns a constructed adapter object even when load() failed to
+    download/open the actual ONNX file (see PoseModelAdapter.is_loaded's
+    docstring); that adapter then silently returns empty PoseResult() on
+    every inference forever. /ready would report "ok" the whole time. Now
+    checks is_loaded so that failure mode actually shows up somewhere.
     """
-    model_ready = _model is not None
-    reference_model_ready = _reference_model is not None
+    model_ready = _model is not None and _model.is_loaded
+    reference_model_ready = _reference_model is not None and _reference_model.is_loaded
     redis_ready = _redis_client is not None
 
     if model_ready and reference_model_ready and redis_ready:
@@ -213,13 +239,20 @@ async def ready() -> dict[str, str | bool]:
 
 @app.post("/workers/{session_id}/{participant_id}/start")
 async def start_worker(session_id: str, participant_id: str) -> dict[str, str]:
-    """Start inference for a participant's track (local/dev debugging path)."""
+    """Start inference for a participant's track (local/dev debugging path).
+
+    Previously returned {"status": "error", ...} with an implicit HTTP 200
+    on both failure branches below — indistinguishable from success at the
+    transport level unless a caller specifically parsed the body. Now
+    raises a real HTTPException with a status code that matches the
+    failure (503: not ready yet: 409: a real, expected "try again" state).
+    """
     if not _worker_pool:
-        return {"status": "error", "message": "Worker pool not initialized"}
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Worker pool not initialized")
 
     accepted = await _worker_pool.add_worker(session_id, participant_id)
     if not accepted:
-        return {"status": "error", "message": "Worker pool at capacity"}
+        raise HTTPException(status.HTTP_409_CONFLICT, "Worker pool at capacity")
     return {"status": "ok"}
 
 
@@ -227,7 +260,7 @@ async def start_worker(session_id: str, participant_id: str) -> dict[str, str]:
 async def stop_worker(session_id: str, participant_id: str) -> dict[str, str]:
     """Stop inference for a participant's track."""
     if not _worker_pool:
-        return {"status": "error", "message": "Worker pool not initialized"}
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Worker pool not initialized")
 
     await _worker_pool.remove_worker(session_id, participant_id)
     return {"status": "ok"}
@@ -267,8 +300,13 @@ async def process_reference(
     status='failed' via callback instead of raising, so the coach can still
     present the raw video without a skeleton overlay.
     """
-    if not _reference_model:
-        return {"status": "error", "message": "Reference pose model not initialized"}
+    if not _reference_model or not _reference_model.is_loaded:
+        # Reject upfront with a real status code, rather than silently
+        # accepting a job whose model never actually loaded — that job
+        # would previously "succeed" and produce a video with zero
+        # keypoints on every frame instead of failing clearly (see
+        # PoseModelAdapter.is_loaded).
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Reference pose model not ready")
 
     background_tasks.add_task(
         process_reference_video,
@@ -293,6 +331,10 @@ class ReferenceExportRequest(BaseModel):
     annotations: list[dict]
     keypointFormat: str = "halpe26"
     drawSkeleton: bool = False
+    # Optional — if the API didn't send one (older client), export_annotated_video
+    # just logs on failure instead of posting anywhere, same as before this field
+    # existed. When present, a failure gets reported instead of silently vanishing.
+    callbackUrl: str | None = None
 
 
 @app.post("/reference/export")
@@ -315,6 +357,7 @@ async def export_reference(
         req.annotations,
         req.keypointFormat,
         req.drawSkeleton,
+        req.callbackUrl,
     )
     return {"status": "accepted"}
 

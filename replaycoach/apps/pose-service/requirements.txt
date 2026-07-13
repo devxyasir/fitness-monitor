@@ -1,5 +1,14 @@
 fastapi>=0.111.0
 uvicorn[standard]>=0.30.0
+# CPU-only wheel. Every adapter in inference.py already builds its ONNX
+# Runtime session with providers=["CUDAExecutionProvider", "CPUExecutionProvider"]
+# (whichever are actually available), so GPU support is code-complete —
+# it's gated purely on which onnxruntime package is installed. To run on
+# GPU: swap this line for `onnxruntime-gpu>=1.18.0` (mutually exclusive
+# with the CPU package — pip uninstall the other one first) on a host with
+# a CUDA-capable GPU + matching CUDA/cuDNN runtime installed. No code
+# changes needed either way; the provider list is resolved automatically
+# at model-load time. See docs/AI_PIPELINE.md.
 onnxruntime>=1.18.0
 livekit-api>=0.7.0
 redis[hiredis]>=5.0.0

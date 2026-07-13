@@ -268,6 +268,24 @@ export class ReferenceMediaController {
     return { success: true };
   }
 
+  /** Pose-service posts here if /reference/export throws — previously the
+   * export job had no failure-reporting path at all (only success, via
+   * export-upload above), leaving the coach's UI stuck showing "Exporting…"
+   * forever with no error and no way to retry. Callback-token auth, same
+   * pattern as the other pose-service callbacks in this controller. */
+  @Post(':refId/export-failed')
+  async exportFailed(
+    @Param('refId') refId: string,
+    @Headers('x-callback-token') token: string | undefined,
+    @Body() body: { reason?: string },
+  ) {
+    if (!token || !this.referenceService.verifyCallbackToken(refId, token)) {
+      throw new UnauthorizedException('Invalid callback token');
+    }
+    this.realtimeGateway.emitReferenceExportFailed(refId, body.reason || 'Export failed');
+    return { success: true };
+  }
+
   @Get('media/*')
   async streamMedia(
     @Req() req: Request,

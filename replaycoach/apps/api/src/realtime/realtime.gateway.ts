@@ -492,6 +492,14 @@ export class RealtimeGateway implements OnGatewayConnection {
     this.server.emit('reference:export-ready', { refId });
   }
 
+  /** Previously nothing told the frontend an export had failed — the
+   * pose-service job could throw with no notification anywhere, leaving
+   * the coach's "Exporting…" spinner stuck forever. See
+   * ReferenceMediaController.exportFailed / export_renderer.py. */
+  emitReferenceExportFailed(refId: string, reason: string) {
+    this.server.emit('reference:export-failed', { refId, reason });
+  }
+
   private async assertCoach(sessionId: string, user: JwtPayload): Promise<Session> {
     const session = await this.sessionRepository.findOne({ where: { id: sessionId } });
     if (!session) throw new Error('Session not found');

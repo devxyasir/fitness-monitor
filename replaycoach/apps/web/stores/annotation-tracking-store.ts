@@ -19,6 +19,10 @@ interface AnnotationTrackingState {
   videoUrl: string | null;
   keypointsUrl: string | null;
   exportVideoUrl: string | null;
+  /** Set when the pose-service reports export failure via callback —
+   * previously nothing did this, so a failed export left the UI showing
+   * "Exporting…" forever with no feedback. Consumed once by the modal. */
+  exportError: string | null;
   keypointFormat: KeypointFormat;
   status: 'processing' | 'ready' | 'failed';
 
@@ -59,6 +63,7 @@ interface AnnotationTrackingState {
   setKeypoints: (frames: KeypointFrame[], fps?: number, frameCount?: number) => void;
   setReady: (p: { keypointsUrl: string | null; keypointFormat: KeypointFormat; fps: number; frameCount: number }) => void;
   setExportVideoUrl: (url: string | null) => void;
+  setExportError: (reason: string | null) => void;
 
   setAnnotations: (list: TrackedAnnotation[]) => void;
   applyRemoteCreate: (a: TrackedAnnotation) => void;
@@ -85,6 +90,7 @@ const initial = {
   videoUrl: null as string | null,
   keypointsUrl: null as string | null,
   exportVideoUrl: null as string | null,
+  exportError: null as string | null,
   keypointFormat: 'halpe26' as KeypointFormat,
   status: 'processing' as 'processing' | 'ready' | 'failed',
   fps: 30,
@@ -124,6 +130,7 @@ export const useAnnotationTrackingStore = create<AnnotationTrackingState>((set) 
       frameCount: p.frameCount || s.frameCount,
     })),
   setExportVideoUrl: (url) => set({ exportVideoUrl: url }),
+  setExportError: (reason) => set({ exportError: reason }),
 
   setAnnotations: (list) => set({ annotations: list }),
   applyRemoteCreate: (a) =>

@@ -39,7 +39,7 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
 
   const s = useAnnotationTrackingStore();
   const {
-    refId, videoUrl, keypointsUrl, exportVideoUrl, keypointFormat, status, fps, frameCount,
+    refId, videoUrl, keypointsUrl, exportVideoUrl, exportError, keypointFormat, status, fps, frameCount,
     keypointsByFrame, annotations, selectedId, shapeType, color, thickness, showSkeleton,
     pendingJoints, playing, frameIndex,
   } = s;
@@ -601,6 +601,18 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
 
   // When the export URL arrives (socket refresh), stop the spinner.
   useEffect(() => { if (exportVideoUrl) setExporting(false); }, [exportVideoUrl]);
+
+  // Export failure — previously nothing cleared the spinner or surfaced an
+  // error on this path, so a failed export left "Exporting…" spinning
+  // forever. Consume exportError once (reset it) so re-opening/re-exporting
+  // doesn't immediately re-show a stale error.
+  useEffect(() => {
+    if (!exportError) return;
+    setExporting(false);
+    setError(exportError);
+    s.setExportError(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exportError]);
 
   const downloadExport = async () => {
     if (!exportVideoUrl) return;

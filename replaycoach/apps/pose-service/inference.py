@@ -12,12 +12,14 @@ import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Callable
 
 import cv2
 import numpy as np
 
 import model_downloader
 from config import settings
+from keypoint_smoothing import KeypointSmoother
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +43,27 @@ def _build_session_options():
     opts.inter_op_num_threads = 1
     opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
     return opts
+
+
+def _select_providers() -> list[str]:
+    """
+    ONNX Runtime execution provider list, shared by every adapter's load()
+    (RTMPoseAdapter, YOLOPoseAdapter, PersonDetector) — previously
+    duplicated identically in all three. Prefers CUDA when both the
+    `onnxruntime-gpu` package is installed AND a CUDA device is actually
+    visible (`CUDAExecutionProvider` only appears in
+    get_available_providers() when both are true — see requirements.txt for
+    how to enable it); falls back to CPU otherwise. settings.force_cpu is
+    an explicit escape hatch to use CPU even when CUDA is available.
+    """
+    import onnxruntime as ort
+
+    if settings.force_cpu:
+        return ["CPUExecutionProvider"]
+
+    available = ort.get_available_providers()
+    preferred = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+    return [p for p in preferred if p in available]
 
 # COCO-17 keypoint names in canonical order
 COCO_KEYPOINT_NAMES = [
@@ -137,6 +160,22 @@ class PoseModelAdapter(abc.ABC):
     def load(self) -> None:
         """Load model weights into memory."""
 
+    @property
+    @abc.abstractmethod
+    def is_loaded(self) -> bool:
+        """
+        True once load() has produced a usable model.
+
+        load() previously failed silently on a download/load error (logged
+        and returned, leaving the adapter in permanent stub mode — infer()
+        would keep returning empty PoseResult() forever with no visible
+        sign anything was wrong). /ready in main.py checks this on both the
+        live and reference models so that failure mode is actually
+        observable instead of the service reporting healthy while quietly
+        producing nothing. Required on every adapter (not just the ones
+        that happen to have it today) so a new backend can't forget it.
+        """
+
     @abc.abstractmethod
     def infer(self, frame: np.ndarray, track_id: str = "default") -> PoseResult:
         """
@@ -204,9 +243,7 @@ class RTMPoseAdapter(PoseModelAdapter):
                 )
                 return
 
-        providers = ort.get_available_providers()
-        preferred = ["CUDAExecutionProvider", "CPUExecutionProvider"]
-        active = [p for p in preferred if p in providers]
+        active = _select_providers()
 
         self._session = ort.InferenceSession(str(model_file), sess_options=_build_session_options(), providers=active)
         logger.info(
@@ -215,6 +252,10 @@ class RTMPoseAdapter(PoseModelAdapter):
             active,
             self._input_size,
         )
+
+    @property
+    def is_loaded(self) -> bool:
+        return self._session is not None
 
     def _preprocess(self, frame: np.ndarray) -> np.ndarray:
         """Resize, ImageNet-normalize, and transpose frame for ONNX input (RGB, CHW)."""
@@ -308,9 +349,7 @@ class YOLOPoseAdapter(PoseModelAdapter):
                 )
                 return
 
-        providers = ort.get_available_providers()
-        preferred = ["CUDAExecutionProvider", "CPUExecutionProvider"]
-        active = [p for p in preferred if p in providers]
+        active = _select_providers()
 
         self._session = ort.InferenceSession(str(model_file), sess_options=_build_session_options(), providers=active)
         logger.info(
@@ -318,6 +357,10 @@ class YOLOPoseAdapter(PoseModelAdapter):
             self._model_path,
             active,
         )
+
+    @property
+    def is_loaded(self) -> bool:
+        return self._session is not None
 
     def _preprocess(self, frame: np.ndarray) -> np.ndarray:
         """Resize and normalize BGR frame to YOLO RGB input blob."""
@@ -414,11 +457,13 @@ class PersonDetector:
                 )
                 return
 
-        providers = ort.get_available_providers()
-        preferred = ["CUDAExecutionProvider", "CPUExecutionProvider"]
-        active = [p for p in preferred if p in providers]
+        active = _select_providers()
         self._session = ort.InferenceSession(str(model_file), sess_options=_build_session_options(), providers=active)
         logger.info("Person detector loaded from %s (providers: %s)", self._model_path, active)
+
+    @property
+    def is_loaded(self) -> bool:
+        return self._session is not None
 
     def _letterbox(self, frame: np.ndarray) -> tuple[np.ndarray, float, float, float]:
         """Resize preserving aspect ratio and pad to the model's square input."""
@@ -536,6 +581,10 @@ class TopDownPoseEstimator(PoseModelAdapter):
         self._pose = RTMPoseAdapter(rtmpose_path, model_size=model_size, keypoint_format=keypoint_format)
         self._detector = PersonDetector(detector_path, model_size=detector_size)
         self._tracks: dict[str, _TrackState] = {}
+        # EMA smoothing + short-gap hold across frames — see
+        # keypoint_smoothing.py. Toggleable in case a future model/renderer
+        # combination wants raw per-frame output instead.
+        self._smoother = KeypointSmoother() if settings.enable_temporal_smoothing else None
         # Derived from the pose model's own input resolution (H, W) — e.g.
         # 0.75 for both the 256x192 and 384x288 RTMPose variants.
         pose_h, pose_w = self._pose._input_size
@@ -555,8 +604,25 @@ class TopDownPoseEstimator(PoseModelAdapter):
         self._pose.load()
         self._detector.load()
 
+    @property
+    def is_loaded(self) -> bool:
+        # The detector failing is already a handled, documented degrade
+        # path (infer() falls back to whole-frame RTMPose) — so "loaded"
+        # here tracks the pose model itself, the thing that actually
+        # determines whether any real keypoints can come out at all.
+        return self._pose.is_loaded
+
+    @property
+    def detector_loaded(self) -> bool:
+        """Separate from is_loaded — a detector failure degrades crop
+        accuracy but doesn't stop inference entirely, so it's surfaced as
+        its own flag rather than folded into the main readiness gate."""
+        return self._detector.is_loaded
+
     def reset_track(self, track_id: str) -> None:
         self._tracks.pop(track_id, None)
+        if self._smoother:
+            self._smoother.reset_track(track_id)
 
     def _crop_box(self, bbox: BoundingBox, w: int, h: int) -> tuple[int, int, int, int]:
         """Expand bbox by margin, then pad to RTMPose's aspect ratio, in pixel space."""
@@ -581,6 +647,15 @@ class TopDownPoseEstimator(PoseModelAdapter):
         y2 = int(round(min(float(h), cy + bh / 2)))
         return x1, y1, x2, y2
 
+    def _smoothed(self, track_id: str, result: PoseResult) -> PoseResult:
+        """Applies temporal smoothing/short-gap-hold if enabled — every
+        return path goes through this, including the detector-unavailable
+        and degenerate-crop fallbacks, since those are exactly the moments
+        (a missed detection, a bad frame) smoothing is meant to paper over."""
+        if self._smoother:
+            return self._smoother.smooth(track_id, result)
+        return result
+
     def infer(self, frame: np.ndarray, track_id: str = "default") -> PoseResult:
         h, w = frame.shape[:2]
         state = self._tracks.setdefault(track_id, _TrackState())
@@ -596,11 +671,11 @@ class TopDownPoseEstimator(PoseModelAdapter):
 
         bbox = state.last_bbox
         if bbox is None:
-            return self._pose.infer(frame)
+            return self._smoothed(track_id, self._pose.infer(frame))
 
         x1, y1, x2, y2 = self._crop_box(bbox, w, h)
         if x2 <= x1 or y2 <= y1:
-            return self._pose.infer(frame)
+            return self._smoothed(track_id, self._pose.infer(frame))
 
         crop = frame[y1:y2, x1:x2]
         crop_result = self._pose.infer(crop)
@@ -622,7 +697,7 @@ class TopDownPoseEstimator(PoseModelAdapter):
             )
             for kp in crop_result.keypoints
         ]
-        return PoseResult(keypoints=mapped, confidence_avg=crop_result.confidence_avg)
+        return self._smoothed(track_id, PoseResult(keypoints=mapped, confidence_avg=crop_result.confidence_avg))
 
 
 def _rtmpose_model_filename(model_size: str, keypoint_format: str) -> str:
@@ -631,6 +706,67 @@ def _rtmpose_model_filename(model_size: str, keypoint_format: str) -> str:
     tier = {"small": "s", "medium": "m", "large": "l", "xlarge": "l"}.get(model_size, "m")
     suffix = "-halpe26" if keypoint_format == "halpe26" else ""
     return f"./models/rtmpose-{tier}{suffix}.onnx"
+
+
+# ─── Model registry ──────────────────────────────────────────────────────
+#
+# Adding a new backend (e.g. a real BlazePose/MoveNet/Halpe-68 export once
+# one is verified and wired into model_downloader.py) means: implement
+# PoseModelAdapter (load/infer), write one small `_build_*` function below
+# with the same `(cfg: dict) -> PoseModelAdapter` signature, and add one
+# line to MODEL_REGISTRY. No call site outside this file needs to change —
+# create_model_adapter()/create_reference_model_adapter() and everything
+# downstream (worker.py, reference_processor.py, export_renderer.py) only
+# ever type against PoseModelAdapter, never a concrete class.
+#
+# Not yet integrated (config/architecture supports them being added this
+# way, but no verified ONNX export exists in this codebase today — see
+# docs/AI_PIPELINE.md): Halpe-68, BlazePose, MoveNet, OpenPose.
+
+def _build_rtmpose_topdown_adapter(cfg: dict) -> PoseModelAdapter:
+    """Two-stage: YOLO person-detector crop -> RTMPose keypoints. The
+    primary/default backend — supports both COCO-17 and Halpe-26."""
+    return TopDownPoseEstimator(
+        rtmpose_path=cfg["model_path"],
+        detector_path=cfg["detector_path"],
+        model_size=cfg["model_size"],
+        detector_size=cfg["model_size"],
+        detect_interval_frames=cfg.get("detect_interval_frames"),
+        keypoint_format=cfg["keypoint_format"],
+    )
+
+
+def _build_yolo_adapter(cfg: dict) -> PoseModelAdapter:
+    """Single-stage YOLO-Pose — faster, lower accuracy, no separate detector
+    pass. Ultralytics' YOLO11-pose checkpoints are COCO-17-trained only;
+    unlike RTMPose there is no Halpe-26 export available for this backend,
+    so keypoint_format is accepted (for a uniform registry signature) but
+    only 'coco17' is actually honored."""
+    if cfg["keypoint_format"] != "coco17":
+        logger.warning(
+            "model_type='yolo' only supports coco17 keypoints (Ultralytics YOLO-pose "
+            "checkpoints are COCO-trained) — ignoring keypoint_format=%r",
+            cfg["keypoint_format"],
+        )
+    return YOLOPoseAdapter(cfg["model_path"], model_size=cfg["model_size"])
+
+
+MODEL_REGISTRY: dict[str, Callable[[dict], PoseModelAdapter]] = {
+    "rtmpose": _build_rtmpose_topdown_adapter,
+    "yolo": _build_yolo_adapter,
+}
+
+
+def _build_adapter(model_type: str, **cfg) -> PoseModelAdapter:
+    key = model_type.lower()
+    builder = MODEL_REGISTRY.get(key)
+    if builder is None:
+        logger.warning(
+            "Unknown model_type=%r (known: %s) — falling back to 'rtmpose'",
+            model_type, sorted(MODEL_REGISTRY),
+        )
+        builder = MODEL_REGISTRY["rtmpose"]
+    return builder(cfg)
 
 
 def create_model_adapter() -> PoseModelAdapter:
@@ -664,24 +800,18 @@ def create_model_adapter() -> PoseModelAdapter:
         detector_path = f"./models/yolo11{detector_tier}-pose.onnx"
         settings.detector_model_path = detector_path
 
-    if model_type == "yolo":
-        logger.info("Initializing YOLO-Pose Model Adapter (%s size)", model_size)
-        return YOLOPoseAdapter(model_path, model_size=model_size)
-    else:
-        logger.info(
-            "Initializing top-down RTMPose pipeline (%s size, %s, detector tier=%s): "
-            "person detector -> crop -> RTMPose",
-            model_size,
-            keypoint_format,
-            detector_tier,
-        )
-        return TopDownPoseEstimator(
-            rtmpose_path=model_path,
-            detector_path=detector_path,
-            model_size=model_size,
-            detector_size=model_size,
-            keypoint_format=keypoint_format,
-        )
+    logger.info(
+        "Initializing '%s' pose backend (%s size, %s%s)",
+        model_type, model_size, keypoint_format,
+        f", detector tier={detector_tier}" if model_type != "yolo" else "",
+    )
+    return _build_adapter(
+        model_type,
+        model_path=model_path,
+        detector_path=detector_path,
+        model_size=model_size,
+        keypoint_format=keypoint_format,
+    )
 
 
 def create_reference_model_adapter() -> PoseModelAdapter:
@@ -696,6 +826,12 @@ def create_reference_model_adapter() -> PoseModelAdapter:
     testing that the plain, unmodified settings already produce good
     results; this codebase's own speculative tightening of the bbox-refresh
     interval wasn't actually the difference-maker and only added CPU cost.
+
+    Always RTMPose (top-down) today — the reference/upload path has never
+    had a model_type override; if that's needed later, thread
+    settings.reference_model_type through the same _build_adapter() call
+    used by create_model_adapter() above rather than duplicating the
+    registry dispatch here.
     """
     model_size = settings.reference_model_size.lower()
     keypoint_format = settings.reference_keypoint_format.lower()
@@ -709,14 +845,13 @@ def create_reference_model_adapter() -> PoseModelAdapter:
         detector_tier = model_downloader.YOLO_POSE_TIERS.get(model_size, "l")
         detector_path = f"./models/yolo11{detector_tier}-pose.onnx"
 
-    estimator = TopDownPoseEstimator(
-        rtmpose_path=model_path,
-        detector_path=detector_path,
-        model_size=model_size,
-        detector_size=model_size,
-        detect_interval_frames=settings.reference_detect_interval_frames,
-        keypoint_format=keypoint_format,
-    )
+    estimator = _build_rtmpose_topdown_adapter({
+        "model_path": model_path,
+        "detector_path": detector_path,
+        "model_size": model_size,
+        "keypoint_format": keypoint_format,
+        "detect_interval_frames": settings.reference_detect_interval_frames,
+    })
     logger.info(
         "Initializing reference-video RTMPose pipeline (%s size, %s, detect_interval=%d): "
         "person detector -> crop -> RTMPose",

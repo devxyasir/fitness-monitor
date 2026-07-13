@@ -79,11 +79,38 @@ class Settings(BaseSettings):
     # Minimum keypoint confidence to include in output
     min_confidence: float = 0.3
 
+    # Skeleton rendering (skeleton_drawing.py) — previously hardcoded module
+    # constants; now tunable without a code change (e.g. a thicker line for
+    # a low-resolution export, or a stricter draw threshold than the
+    # inference-time min_confidence above). Colors are still hardcoded
+    # (BGR tuples aren't a natural env-var shape) — see skeleton_drawing.py
+    # if those need to become config-driven too later.
+    skeleton_line_thickness: int = 2
+    skeleton_joint_radius: int = 7
+    skeleton_min_score: float = 0.3
+
+    # EMA smoothing + short-gap hold across frames (see keypoint_smoothing.py)
+    # — cuts frame-to-frame jitter and rides out brief occlusions/motion-blur
+    # misses instead of the joint flickering in and out. Applies to both live
+    # tracking and reference-video analysis (both go through
+    # TopDownPoseEstimator). Off switch in case a future consumer wants raw
+    # unsmoothed per-frame output.
+    enable_temporal_smoothing: bool = True
+
     # Redis stream name for publishing keypoint frames
     redis_stream_key: str = "pose:keypoints"
 
     # Maximum number of concurrent workers
     max_workers: int = 8
+
+    # Every ONNX Runtime session already auto-prefers CUDAExecutionProvider
+    # when available (see inference.py's _select_providers) — GPU support
+    # is otherwise entirely a matter of which onnxruntime package is
+    # installed (see requirements.txt), not a code change. This is purely
+    # an escape hatch to force CPU even when a CUDA provider IS present
+    # (e.g. a GPU shared with another process, or debugging a
+    # GPU-vs-CPU-only output discrepancy).
+    force_cpu: bool = False
 
     model_config = {
         "env_prefix": "POSE_",

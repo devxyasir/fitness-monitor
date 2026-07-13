@@ -24,10 +24,87 @@ from pathlib import Path
 import cv2
 import requests
 
+from config import settings
 from inference import PoseModelAdapter
 from skeleton_drawing import draw_skeleton
 
 logger = logging.getLogger(__name__)
+
+# How many consecutive missing frames a joint gap can span and still be
+# filled in. Longer than this and linear interpolation would be fabricating
+# a plausible-looking but likely-wrong trajectory (a real occlusion/turn
+# that long deserves to just show as missing, not a straight-line guess).
+MAX_INTERPOLATION_GAP_FRAMES = 5
+
+
+def _interpolate_short_gaps(frames: list[dict]) -> None:
+    """
+    Batch post-pass over the fully-collected frame list: fills a joint's
+    gap of up to MAX_INTERPOLATION_GAP_FRAMES by linearly interpolating
+    between the last known-good position before the gap and the next
+    known-good position after it.
+
+    This is deliberately separate from (and complements) the online
+    per-frame smoothing already applied inside TopDownPoseEstimator (see
+    keypoint_smoothing.py), which can only hold the *last* known position
+    causally, one frame at a time, because live tracking has no visibility
+    into the future. A reference-video job has the entire buffered clip
+    available at once, so it can do better: interpolate using BOTH sides of
+    the gap, which tracks actual motion through the gap instead of freezing
+    in place. Not something the live path can do without buffering ahead,
+    which would add real-time latency it can't afford.
+
+    Mutates `frames` in place (each item's "keypoints" list gets synthetic
+    entries appended for interpolated joints).
+    """
+    n = len(frames)
+    if n == 0:
+        return
+
+    kp_maps: list[dict[str, dict]] = [{kp["name"]: kp for kp in fr["keypoints"]} for fr in frames]
+    all_names: set[str] = set()
+    for m in kp_maps:
+        all_names.update(m.keys())
+
+    filled = 0
+    for name in all_names:
+        i = 0
+        while i < n:
+            if name in kp_maps[i]:
+                i += 1
+                continue
+            gap_start = i
+            while i < n and name not in kp_maps[i]:
+                i += 1
+            gap_end = i  # first index after the gap that HAS this joint (or n if it never reappears)
+
+            # A gap touching either edge of the clip has no known point on
+            # one side to interpolate from/to — leave it missing rather
+            # than extrapolating blind.
+            if gap_start == 0 or gap_end >= n:
+                continue
+            if gap_end - gap_start > MAX_INTERPOLATION_GAP_FRAMES:
+                continue
+
+            before = kp_maps[gap_start - 1][name]
+            after = kp_maps[gap_end][name]
+            span = gap_end - (gap_start - 1)
+            for j in range(gap_start, gap_end):
+                t = (j - (gap_start - 1)) / span
+                interp = {
+                    "name": name,
+                    "x": before["x"] + t * (after["x"] - before["x"]),
+                    "y": before["y"] + t * (after["y"] - before["y"]),
+                    # Discounted below either endpoint's real detection —
+                    # this position is a synthetic guess, not a detection.
+                    "score": min(before["score"], after["score"]) * 0.9,
+                }
+                kp_maps[j][name] = interp
+                frames[j]["keypoints"].append(interp)
+                filled += 1
+
+    if filled:
+        logger.info("Interpolated %d short keypoint gaps across %d frames", filled, n)
 
 MAX_FRAMES = 1800  # bounds processing time (e.g. 60s @ 30fps, 120s @ 15fps)
 # Hard wall-clock budget independent of MAX_FRAMES — per-frame inference time
@@ -179,6 +256,16 @@ def process_reference_video(
                     ffmpeg_proc.kill()
 
         duration_ms = round((frame_index / fps) * 1000) if fps else 0
+
+        # Fills short keypoint gaps by interpolating across the now-fully-
+        # buffered frame list — see _interpolate_short_gaps. Only affects
+        # the keypoints JSON; a Full Body Analysis overlay is already
+        # streamed frame-by-frame into ffmpeg above and can't be rewound,
+        # so the burned-in skeleton doesn't benefit from this pass (the
+        # primary annotation_tracking mode, which renders entirely from
+        # this JSON, gets the full benefit).
+        if settings.enable_temporal_smoothing:
+            _interpolate_short_gaps(frames)
 
         # Upload the annotated overlay video (Full Body Analysis only) —
         # non-fatal: if it fails, the coach still gets keypoints + the raw

@@ -22,6 +22,7 @@ import cv2
 import numpy as np
 import requests
 
+from config import settings
 from skeleton_drawing import draw_skeleton
 
 logger = logging.getLogger(__name__)
@@ -29,7 +30,10 @@ logger = logging.getLogger(__name__)
 DOWNLOAD_TIMEOUT_S = 60
 UPLOAD_TIMEOUT_S = 120
 FFMPEG_EXIT_TIMEOUT_S = 120
-MIN_SCORE = 0.3
+# Same threshold as skeleton_drawing.py's own MIN_SCORE (config-driven,
+# POSE_SKELETON_MIN_SCORE) — previously a second, independently-hardcoded
+# 0.3 here that could silently drift out of sync with the skeleton layer's.
+MIN_SCORE = settings.skeleton_min_score
 
 
 def _hex_to_bgr(color: str) -> tuple[int, int, int]:
@@ -187,20 +191,29 @@ def export_annotated_video(
     annotations: list[dict],
     keypoint_format: str = "halpe26",
     draw_skeleton_layer: bool = False,
+    callback_url: str | None = None,
 ) -> None:
-    """Render raw video + annotations (optional skeleton) → MP4 with audio, upload it."""
+    """Render raw video + annotations (optional skeleton) → MP4 with audio, upload it.
+
+    Failure was previously silent — logged here, but nothing ever told the
+    API an export had failed, so a broken job left the coach's UI stuck on
+    "Exporting…" forever. If callback_url is provided (see
+    ReferenceExportRequest.callbackUrl), a failure now posts
+    {"status": "failed", "reason": ...} to it, mirroring
+    reference_processor.py's existing callback contract.
+    """
     import json
 
     local_path: str | None = None
     silent_path: str | None = None
     out_path: str | None = None
+    kp_path: str | None = None
     try:
         logger.info("Export %s: downloading video + keypoints", ref_id)
         local_path = _download(video_url, Path(video_url.split("?")[0]).suffix or ".mp4")
         kp_path = _download(keypoints_url, ".json")
         with open(kp_path) as f:
             kp_data = json.load(f)
-        os.remove(kp_path)
 
         frames_by_index: dict[int, dict] = {}
         for fr in kp_data.get("frames", []):
@@ -278,10 +291,25 @@ def export_annotated_video(
             )
         resp.raise_for_status()
         logger.info("Export %s: upload complete", ref_id)
-    except Exception:
+    except Exception as exc:
         logger.exception("Export %s: failed", ref_id)
+        if callback_url:
+            try:
+                fail_resp = requests.post(
+                    callback_url,
+                    json={"status": "failed", "reason": str(exc)},
+                    headers={"X-Callback-Token": callback_token},
+                    timeout=DOWNLOAD_TIMEOUT_S,
+                )
+                fail_resp.raise_for_status()
+            except Exception:
+                # Nothing further to fall back to — logged, and the job
+                # will look identical to "still processing" to the API.
+                # Same acknowledged limitation as reference_processor.py's
+                # own callback-delivery-failure path.
+                logger.exception("Export %s: failed to post failure callback", ref_id)
     finally:
-        for p in (local_path, silent_path, out_path):
+        for p in (local_path, silent_path, out_path, kp_path):
             if p and os.path.exists(p):
                 try:
                     os.remove(p)

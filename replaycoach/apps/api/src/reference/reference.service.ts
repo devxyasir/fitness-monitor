@@ -539,6 +539,7 @@ export class ReferenceService {
     const videoUrl = await this.storage.getPlaybackUrl(video.videoKey);
     const keypointsUrl = await this.storage.getPlaybackUrl(video.keypointsKey);
     const uploadUrl = `${this.storage.apiPublicBaseUrl}/api/v1/reference/${refId}/export-upload`;
+    const callbackUrl = `${this.storage.apiPublicBaseUrl}/api/v1/reference/${refId}/export-failed`;
     const callbackToken = this.storage.callbackToken(refId);
 
     const res = await fetch(`${baseUrl}/reference/export`, {
@@ -549,6 +550,7 @@ export class ReferenceService {
         videoUrl,
         keypointsUrl,
         uploadUrl,
+        callbackUrl,
         callbackToken,
         keypointFormat: video.keypointFormat,
         drawSkeleton: false,
