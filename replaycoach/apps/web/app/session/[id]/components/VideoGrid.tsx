@@ -151,6 +151,7 @@ export function ParticipantVideoTile({
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 640, height: 360 });
   const [isReplaying, setIsReplaying] = useState(false);
+  const [isStartingInstantReplay, setIsStartingInstantReplay] = useState(false);
   const [insufficientFootage, setInsufficientFootage] = useState(false);
   const setReplayMode = useReplayStore((s) => s.setMode);
   const setReplayManifest = useReplayStore((s) => s.setManifestUrl);
@@ -229,6 +230,41 @@ export function ParticipantVideoTile({
     }
   };
 
+  /**
+   * Instant DVR replay: opens the live in-meeting replay popup (ReplayPanel)
+   * straight from the client-side rolling buffer — no upload, no server-side
+   * processing, no wait. This is the quick "let's look at that again right
+   * now" telestrator tool; "Analyze Last 10s" (above) is the heavier,
+   * permanent-clip-with-pose-tracking flow and stays separate.
+   */
+  const handleInstantReplay = async () => {
+    if (!isCoach || isStartingInstantReplay) return;
+
+    const getBufferedDurationMs = useReplayStore.getState().getBufferedDurationMs;
+    const bufferedMs = getBufferedDurationMs?.(participantId) ?? 0;
+    if (bufferedMs < MIN_REQUIRED_MS) {
+      showInsufficientFootage();
+      return;
+    }
+
+    setIsStartingInstantReplay(true);
+    try {
+      const windowMs = Math.min(bufferedMs, ANALYZE_WINDOW_MS);
+      // Broadcasts session:replay:start to the whole room (this client
+      // included) — every participant's ReplayPanel opens from this same
+      // call, sliced from their own local copy of the buffer.
+      await apiClient.post(`/sessions/${sessionId}/replay/seek`, {
+        participantId,
+        fromOffsetMs: -windowMs,
+        toOffsetMs: 0,
+      });
+    } catch (err) {
+      console.error('Failed to start instant replay:', err);
+    } finally {
+      setIsStartingInstantReplay(false);
+    }
+  };
+
   // Only the local camera should ever be un-mirror-forced — remote tracks
   // already arrive in true orientation, and screen-share must never be
   // flipped. `local-camera-unmirror` (globals.css) forces true orientation
@@ -267,9 +303,20 @@ export function ParticipantVideoTile({
         <div className="absolute top-3 right-3 flex items-center gap-2 z-10">
           <button
             type="button"
+            onClick={handleInstantReplay}
+            disabled={isStartingInstantReplay}
+            className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-semibold px-2.5 py-1.5 rounded-md transition shadow"
+            title="Instant replay — opens for everyone right now, meeting keeps running"
+          >
+            {isStartingInstantReplay ? 'Opening...' : 'Replay'}
+          </button>
+
+          <button
+            type="button"
             onClick={handleAnalyzeClip}
             disabled={isReplaying}
             className="bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-semibold px-2.5 py-1.5 rounded-md transition shadow"
+            title="Save as a permanent, joint-tracked clip"
           >
             {isReplaying ? 'Analyzing...' : 'Analyze Last 10s'}
           </button>

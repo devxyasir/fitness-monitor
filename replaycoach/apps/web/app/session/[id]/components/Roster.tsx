@@ -1,11 +1,17 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useParticipants } from '@livekit/components-react';
-import { ChevronUp, ChevronDown } from 'lucide-react';
+import { ChevronUp, ChevronDown, UserX } from 'lucide-react';
+import { apiClient } from '../../../../lib/api-client';
 
 interface Toast {
   id: string;
   message: string;
+}
+
+interface RosterProps {
+  sessionId: string;
+  isCoach: boolean;
 }
 
 /** Pose-service subscriber bots — never show these in the roster. */
@@ -14,17 +20,32 @@ function isPoseWorkerIdentity(identity: string): boolean {
 }
 
 /**
- * Live "who's in the call" roster: header count, collapsible name list, and
- * join/leave toasts. Must render inside <LiveKitRoom>.
+ * Live "who's in the call" roster: header count, collapsible name list,
+ * join/leave toasts, and (coach only) a remove-participant host control.
+ * Must render inside <LiveKitRoom>.
  */
-export function Roster() {
+export function Roster({ sessionId, isCoach }: RosterProps) {
   const participants = useParticipants();
   const realParticipants = participants.filter((p) => !isPoseWorkerIdentity(p.identity));
 
   const [expanded, setExpanded] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [removingId, setRemovingId] = useState<string | null>(null);
   const prevIdentitiesRef = useRef<Set<string> | null>(null);
   const nameByIdentityRef = useRef<Map<string, string>>(new Map());
+
+  const handleRemove = async (identity: string) => {
+    if (!isCoach || removingId) return;
+    if (!window.confirm(`Remove ${nameByIdentityRef.current.get(identity) ?? identity} from this meeting?`)) return;
+    setRemovingId(identity);
+    try {
+      await apiClient.post(`/sessions/${sessionId}/participants/${identity}/remove`, {});
+    } catch (err) {
+      console.error('Failed to remove participant:', err);
+    } finally {
+      setRemovingId(null);
+    }
+  };
 
   const pushToast = (message: string) => {
     const id = `${Date.now()}-${Math.random()}`;
@@ -71,9 +92,21 @@ export function Roster() {
         {expanded && (
           <ul className="border-t border-slate-800 px-3 py-2 flex flex-col gap-1 max-h-52 overflow-y-auto min-w-[10rem]">
             {realParticipants.map((p) => (
-              <li key={p.identity} className="text-xs text-slate-300 truncate">
-                {p.name || p.identity}
-                {p.isLocal && <span className="text-slate-500"> (you)</span>}
+              <li key={p.identity} className="text-xs text-slate-300 truncate flex items-center justify-between gap-2">
+                <span className="truncate">
+                  {p.name || p.identity}
+                  {p.isLocal && <span className="text-slate-500"> (you)</span>}
+                </span>
+                {isCoach && !p.isLocal && (
+                  <button
+                    onClick={() => handleRemove(p.identity)}
+                    disabled={removingId === p.identity}
+                    className="shrink-0 text-slate-500 hover:text-red-400 disabled:opacity-40 transition"
+                    title={`Remove ${p.name || p.identity}`}
+                  >
+                    <UserX className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </li>
             ))}
           </ul>

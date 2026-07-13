@@ -6,7 +6,7 @@ import { AnnotationCanvas } from './AnnotationCanvas';
 import { usePoseStore } from '../../../../stores/pose-store';
 import { useReplayStore } from '../../../../stores/replay-store';
 import type { PoseFrameDto } from '@replaycoach/types';
-import { Rewind, Play, Pause, Circle } from 'lucide-react';
+import { Rewind, Play, Pause, Circle, Loader2 } from 'lucide-react';
 
 interface ReplayPanelProps {
   sessionId: string;
@@ -38,6 +38,7 @@ export function ReplayPanel({
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
+  const [loadState, setLoadState] = useState<'loading' | 'ready' | 'unavailable'>('loading');
 
   // Pose frames ring buffer for replay overlay — keyed by participantId → sorted PoseFrameDto[]
   const poseBufferRef = useRef<Map<string, PoseFrameDto[]>>(new Map());
@@ -85,6 +86,7 @@ export function ReplayPanel({
   // Load the requested participant's buffer on mount or when participantId updates
   useEffect(() => {
     if (!getReplayBlob || !participantId) return;
+    setLoadState('loading');
 
     const startOffset = fromOffsetMs ?? -30000;
     const blob = getReplayBlob(participantId, startOffset, 0);
@@ -93,8 +95,10 @@ export function ReplayPanel({
 
     if (!blob) {
       console.warn('[ReplayPanel] No buffer data available for', participantId);
+      setLoadState('unavailable');
       return;
     }
+    setLoadState('ready');
     loadBlob(blob);
   }, [getReplayBlob, participantId, fromOffsetMs, loadBlob]);
 
@@ -155,8 +159,36 @@ export function ReplayPanel({
 
   const speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
+  // Keyboard shortcuts: Space = play/pause, ←/→ = seek 5s, Esc = return to
+  // live (coach only — a student has no independent exit, matching the
+  // existing "coach controls when replay ends for everyone" design).
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+      const video = videoRef.current;
+      if (!video) return;
+
+      if (e.code === 'Space') {
+        e.preventDefault();
+        if (video.paused) video.play().catch(() => {}); else video.pause();
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        video.currentTime = Math.max(0, video.currentTime - 5);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        video.currentTime = Math.min(duration || video.currentTime, video.currentTime + 5);
+      } else if (e.key === 'Escape' && isCoach) {
+        e.preventDefault();
+        handleEndReplay();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [duration, isCoach]);
+
   return (
-    <div className="flex-1 flex flex-col h-full min-h-0 bg-slate-950 relative">
+    <div className="flex-1 flex flex-col h-full min-h-0 bg-slate-950 relative animate-rise">
       {/* Video player */}
       <video
         ref={videoRef}
@@ -168,12 +200,31 @@ export function ReplayPanel({
         onDurationChange={(e) => setDuration(e.currentTarget.duration)}
       />
 
+      {/* Loading / unavailable states — previously a blank black video with
+          only a console.warn on failure, no feedback to the user at all. */}
+      {loadState === 'loading' && (
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-slate-950">
+          <Loader2 className="w-8 h-8 text-indigo-400 animate-spin" />
+          <p className="text-sm font-medium text-slate-300">Loading replay…</p>
+        </div>
+      )}
+      {loadState === 'unavailable' && (
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-slate-950 px-6 text-center">
+          <Circle className="w-8 h-8 text-amber-500" />
+          <p className="text-sm font-medium text-slate-300">No buffered footage available yet.</p>
+          <p className="text-xs text-slate-500 max-w-xs">
+            The rolling buffer needs a few seconds of video before it can replay — try again shortly.
+          </p>
+        </div>
+      )}
+
       {/* Annotation canvas overlay (coach draws, students watch) */}
       <div className="absolute inset-0 z-10">
         <AnnotationCanvas
           sessionId={sessionId}
           frameTimestampMs={Math.round(currentTime * 1000)}
           isCoach={isCoach}
+          {...(participantId ? { participantId } : {})}
         />
       </div>
 
@@ -248,6 +299,11 @@ export function ReplayPanel({
       {/* DVR badge */}
       <div className="absolute top-3 left-3 z-20 bg-amber-600/90 text-white text-xs font-bold px-2.5 py-1 rounded-md shadow animate-pulse inline-flex items-center gap-1.5">
         <Circle className="w-2.5 h-2.5 fill-current" /> DVR PLAYBACK
+      </div>
+
+      {/* Keyboard shortcuts hint */}
+      <div className="absolute top-3 right-3 z-20 bg-slate-950/70 text-slate-400 text-[10px] font-mono px-2 py-1 rounded-md hidden sm:block">
+        Space play/pause · ←→ seek 5s{isCoach ? ' · Esc return to live' : ''}
       </div>
     </div>
   );

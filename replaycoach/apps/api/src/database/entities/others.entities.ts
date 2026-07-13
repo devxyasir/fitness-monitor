@@ -180,6 +180,23 @@ export class Annotation {
   @Column({ name: 'text_content', type: 'text', nullable: true })
   textContent!: string | null;
 
+  /** Nullable — rows created before this column existed never had a
+   * persisted color; the frontend falls back to a default when absent. */
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  color!: string | null;
+
+  @Column({ type: 'int', default: 3 })
+  thickness!: number;
+
+  /** false (default): visible only at exactly `frameTimestampMs` — the
+   * original momentary-telestrator-mark behavior (pen/text/arrow/circle
+   * drawn free-hand, not pinned to a joint). true: visible on every frame
+   * from `frameTimestampMs` onward until individually deleted or the
+   * replay ends — used by joint-attached shapes so they track the body
+   * across the whole replay window instead of flashing for one frame. */
+  @Column({ name: 'persist_until_cleared', type: 'boolean', default: false })
+  persistUntilCleared!: boolean;
+
   @Column({ name: 'created_by', type: 'uuid' })
   createdBy!: string;
 

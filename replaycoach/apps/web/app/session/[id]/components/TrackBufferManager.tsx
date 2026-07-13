@@ -8,13 +8,24 @@ type Chunk = { ts: number; blob: Blob };
 const WINDOW_MS = 70_000;
 
 /**
- * Records each remote participant's camera track into a rolling in-memory
- * buffer and registers `getReplayBlob` so ReplayPanel can slice a per-student
- * clip instantly (no server round-trip). Must render inside <LiveKitRoom> so
- * it can see subscribed tracks; runs for the whole session, not just replay.
+ * Records every participant's camera track — including the LOCAL one — into
+ * a rolling in-memory buffer and registers `getReplayBlob` so ReplayPanel
+ * can slice a clip instantly (no server round-trip). Must render inside
+ * <LiveKitRoom> so it can see subscribed tracks; runs for the whole
+ * session, not just replay.
+ *
+ * Local track is included (not just remote) because a replay can be
+ * broadcast to the WHOLE room targeting a specific participant — if that
+ * participant is a student and only remote tracks were buffered, the
+ * student being replayed would have no footage of themselves to show,
+ * even though every other participant (who has them as a remote track)
+ * would render fine.
  */
 export function TrackBufferManager() {
-  const tracks = useTracks([{ source: Track.Source.Camera, withPlaceholder: false }], { onlySubscribed: true });
+  const tracks = useTracks(
+    [{ source: Track.Source.Camera, withPlaceholder: false }],
+    { onlySubscribed: false },
+  );
   const buffers = useRef<Map<string, Chunk[]>>(new Map());
   // The very first chunk a MediaRecorder instance emits carries the WebM
   // container header (EBML/Segment/Tracks info) — every later chunk is just

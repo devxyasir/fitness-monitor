@@ -24,6 +24,7 @@ import { useReferenceSocketListeners } from './hooks/useReferenceSocket';
 import { useAnnotationTrackingSocket } from './hooks/useAnnotationTrackingSocket';
 import { useSessionRoom } from './hooks/useSessionRoom';
 import { ReferenceVideoQueue } from './components/ReferenceVideoQueue';
+import { ConnectionStatusBanner, LocalConnectionQualityIndicator } from './components/ConnectionStatusBanner';
 import { useReferenceStore } from '../../../stores/reference-store';
 import { useAnnotationTrackingStore } from '../../../stores/annotation-tracking-store';
 import {
@@ -40,6 +41,9 @@ import {
   ScreenShare,
   Upload,
   Loader2,
+  Maximize,
+  Minimize,
+  Link as LinkIcon,
 } from 'lucide-react';
 
 export default function SessionRoomPage({ params }: { params: { id: string } }) {
@@ -48,7 +52,9 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
   const { token, url, isLoading, error } = useLiveKitRoom(sessionId);
   const [pinnedTrackSid, setPinnedTrackSid] = useState<string | null>(null);
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
-  const [session, setSession] = useState<{ startedAt: string | null } | null>(null);
+  const [session, setSession] = useState<{ startedAt: string | null; inviteCode: string } | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [elapsedLabel, setElapsedLabel] = useState<string | null>(null);
   const [lobbyRequests, setLobbyRequests] = useState<{ userId: string; user: { email: string } }[]>([]);
   const [showExitModal, setShowExitModal] = useState(false);
   const [sessionEnded, setSessionEnded] = useState(false);
@@ -86,12 +92,41 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
 
   const { mode, reset: resetReplay } = useReplayStore();
 
-  // Fetch session metadata to get startedAt timestamp
+  // Fetch session metadata to get startedAt timestamp + inviteCode
   useEffect(() => {
-    apiClient.get<{ startedAt: string | null }>(`/sessions/${sessionId}`)
+    apiClient.get<{ startedAt: string | null; inviteCode: string }>(`/sessions/${sessionId}`)
       .then(setSession)
       .catch((err) => console.error('Failed to retrieve session startedAt time:', err));
   }, [sessionId]);
+
+  // Meeting timer — session.startedAt was already fetched but never
+  // rendered anywhere; ticks once a second while a startedAt exists.
+  useEffect(() => {
+    if (!session?.startedAt) { setElapsedLabel(null); return; }
+    const startedAtMs = new Date(session.startedAt).getTime();
+    const tick = () => {
+      const totalSec = Math.max(0, Math.floor((Date.now() - startedAtMs) / 1000));
+      const h = Math.floor(totalSec / 3600);
+      const m = Math.floor((totalSec % 3600) / 60).toString().padStart(2, '0');
+      const s = (totalSec % 60).toString().padStart(2, '0');
+      setElapsedLabel(h > 0 ? `${h}:${m}:${s}` : `${m}:${s}`);
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [session?.startedAt]);
+
+  const handleCopyMeetingLink = async () => {
+    if (!session?.inviteCode) return;
+    const link = `${window.location.origin}/session/join/${session.inviteCode}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy meeting link:', err);
+    }
+  };
 
   // Load initial pending lobby participants
   useEffect(() => {
@@ -298,6 +333,11 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
           <div className={`w-2.5 h-2.5 rounded-full ${mode === 'playing' ? 'bg-amber-500 animate-pulse' : 'bg-red-600 animate-ping'}`} />
           <h1 className="text-sm font-semibold tracking-tight text-white flex items-center gap-2">
             <span>Session: {sessionId.substring(0, 8)}</span>
+            {elapsedLabel && (
+              <span className="text-[10px] font-mono font-semibold text-slate-400 bg-slate-950/60 border border-slate-800 px-2 py-0.5 rounded tabular-nums">
+                {elapsedLabel}
+              </span>
+            )}
             {isCoach && <RecordingStatusIndicator />}
             {mode === 'playing' && (
               <span className="text-[10px] font-bold text-amber-500 border border-amber-950 bg-amber-950/20 px-2 py-0.5 rounded uppercase">
@@ -307,6 +347,19 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
           </h1>
         </div>
         <div className="flex items-center gap-3">
+          {isCoach && session?.inviteCode && (
+            <button
+              onClick={handleCopyMeetingLink}
+              className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs px-2.5 py-1 rounded-md font-medium tracking-wide transition inline-flex items-center gap-1.5"
+              title="Copy meeting link"
+            >
+              {linkCopied ? (
+                <><Check className="w-3.5 h-3.5 text-emerald-400" /> Copied</>
+              ) : (
+                <><LinkIcon className="w-3.5 h-3.5" /> Copy Link</>
+              )}
+            </button>
+          )}
           <span className="bg-slate-800 border border-slate-700 text-slate-300 text-xs px-2.5 py-1 rounded-md font-medium tracking-wide inline-flex items-center gap-1.5">
             {isCoach ? (
               <>
@@ -340,6 +393,16 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
         connect={true}
         audio={true}
         video={true}
+        options={{
+          // adaptiveStream: LiveKit only asks the server for the video
+          // resolution each subscribed track is actually rendered at
+          // (a small sidebar tile doesn't need a full 1080p stream).
+          // dynacast: server-side simulcast layer pausing for tracks
+          // nobody currently has visible, both purely bandwidth/CPU
+          // savings — no change to how the room/tracks are used.
+          adaptiveStream: true,
+          dynacast: true,
+        }}
         className="flex-1 flex flex-col min-h-0 relative"
         onDisconnected={(reason) => {
           // Only the reasons that mean "the meeting is actually over" should show
@@ -423,7 +486,8 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
 
         <RoomAudioRenderer />
         <TrackBufferManager />
-        <Roster />
+        <Roster sessionId={sessionId} isCoach={isCoach} />
+        <ConnectionStatusBanner />
         {isReferenceModalOpen && (
           <ReferenceAnalysisModal sessionId={sessionId} isCoach={isCoach} />
         )}
@@ -582,6 +646,7 @@ function ControlsArea({
 }) {
   const { isMicrophoneEnabled, isCameraEnabled, isScreenShareEnabled, localParticipant } =
     useLocalParticipant();
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadModeRef = useRef<'annotation_tracking' | 'full_body'>('annotation_tracking');
   const [uploadingVideo, setUploadingVideo] = useState(false);
@@ -603,6 +668,24 @@ function ControlsArea({
 
   const toggleScreen = async () => {
     await localParticipant.setScreenShareEnabled(!isScreenShareEnabled);
+  };
+
+  // Fullscreens the whole page rather than a single container — simplest
+  // reliable behavior across the live grid and replay layouts alike, and
+  // matches what most participants expect from a meeting app's fullscreen
+  // button (browser chrome hidden, everything else stays as laid out).
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    } else {
+      document.documentElement.requestFullscreen().catch(() => {});
+    }
   };
 
   const handleVideoFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -674,6 +757,19 @@ function ControlsArea({
         >
           {isCameraEnabled ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
         </button>
+
+        <button
+          type="button"
+          onClick={toggleFullscreen}
+          className="flex items-center justify-center w-11 h-11 rounded-full transition border shadow-sm bg-slate-800 border-slate-800 hover:bg-slate-700 text-white"
+          title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+        >
+          {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
+        </button>
+
+        <span className="flex items-center justify-center w-8 h-11">
+          <LocalConnectionQualityIndicator />
+        </span>
       </div>
 
       <div className="flex items-center gap-3">

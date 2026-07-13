@@ -1,15 +1,47 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { socket, connectSocket } from '../../../../lib/socket-client';
 import { useAuthStore } from '../../../../stores/auth-store';
+import { apiClient } from '../../../../lib/api-client';
 import { useAnnotationStore, ClientAnnotation } from '../../../../stores/annotation-store';
+
+/** Shape returned by GET /sessions/:id/annotations — a raw Annotation row. */
+interface RawAnnotation {
+  id: string;
+  frameTimestampMs: number;
+  type: string;
+  geometry: any;
+  textContent: string | null;
+  color: string | null;
+  thickness: number;
+  persistUntilCleared: boolean;
+  createdBy: string;
+  createdAt: string;
+}
+
+function toClientAnnotation(raw: RawAnnotation): ClientAnnotation {
+  return {
+    id: raw.id,
+    type: raw.type as ClientAnnotation['type'],
+    frameTimestampMs: raw.frameTimestampMs,
+    geometry: raw.geometry,
+    thickness: raw.thickness,
+    createdBy: raw.createdBy,
+    createdAt: raw.createdAt,
+    persistUntilCleared: raw.persistUntilCleared,
+    ...(raw.color ? { color: raw.color } : {}),
+    ...(raw.textContent ? { textContent: raw.textContent } : {}),
+  };
+}
 
 export function useAnnotationSocket(sessionId: string) {
   const accessToken = useAuthStore((s) => s.accessToken);
   const addAnnotation = useAnnotationStore((s) => s.addAnnotation);
+  const removeAnnotation = useAnnotationStore((s) => s.removeAnnotation);
   const undoLastAnnotation = useAnnotationStore((s) => s.undoLastAnnotation);
   const clearAnnotations = useAnnotationStore((s) => s.clearAnnotations);
+  const setAnnotations = useAnnotationStore((s) => s.setAnnotations);
 
   useEffect(() => {
     if (!accessToken || !sessionId) return;
@@ -36,7 +68,7 @@ export function useAnnotationSocket(sessionId: string) {
     socket.on('connect', joinRoom);
 
     // Register event listeners
-    const handleDraw = (payload: any) => {
+    const handleDraw = (payload: ClientAnnotation) => {
       addAnnotation(payload);
     };
 
@@ -48,17 +80,23 @@ export function useAnnotationSocket(sessionId: string) {
       clearAnnotations(payload.frameTimestampMs);
     };
 
+    const handleDelete = (payload: { id: string }) => {
+      removeAnnotation(payload.id);
+    };
+
     socket.on('annotation:draw', handleDraw);
     socket.on('annotation:undo', handleUndo);
     socket.on('annotation:clear', handleClear);
+    socket.on('annotation:delete', handleDelete);
 
     return () => {
       socket.off('connect', joinRoom);
       socket.off('annotation:draw', handleDraw);
       socket.off('annotation:undo', handleUndo);
       socket.off('annotation:clear', handleClear);
+      socket.off('annotation:delete', handleDelete);
     };
-  }, [accessToken, sessionId, addAnnotation, undoLastAnnotation, clearAnnotations]);
+  }, [accessToken, sessionId, addAnnotation, removeAnnotation, undoLastAnnotation, clearAnnotations]);
 
   const drawAnnotation = (annotation: ClientAnnotation, studentIds?: string[]) => {
     socket.emit('annotation:draw', {
@@ -84,9 +122,35 @@ export function useAnnotationSocket(sessionId: string) {
     });
   };
 
+  const deleteAnnotation = (id: string, studentIds?: string[]) => {
+    socket.emit('annotation:delete', {
+      sessionId,
+      id,
+      studentIds,
+    });
+  };
+
+  /** Pulls the durably-persisted annotation state for this session — call
+   * when replay opens (fresh join, reconnect, or a coach who just started a
+   * new instant replay) so a participant who wasn't there when a shape was
+   * first drawn still sees it, instead of starting from an empty canvas. */
+  const syncAnnotations = useCallback(async () => {
+    try {
+      const rows = await apiClient.get<RawAnnotation[]>(`/sessions/${sessionId}/annotations`);
+      // Tombstones are kept (not filtered out here) — getVisibleAnnotations
+      // needs them in-order to know which momentary marks were cleared on a
+      // given frame, exactly like it does for live-drawn ones.
+      setAnnotations(rows.map(toClientAnnotation));
+    } catch (err) {
+      console.error('[useAnnotationSocket] Failed to sync annotation history:', err);
+    }
+  }, [sessionId, setAnnotations]);
+
   return {
     drawAnnotation,
     undoAnnotation,
     clearAnnotationLayer,
+    deleteAnnotation,
+    syncAnnotations,
   };
 }

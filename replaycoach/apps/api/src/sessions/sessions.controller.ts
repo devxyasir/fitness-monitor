@@ -221,4 +221,30 @@ export class SessionsController {
     return this.sessionsService.leave(id, user.sub);
   }
 
+  /** Host control: coach forcibly removes a participant from the live
+   * meeting. Disconnects their WebRTC session immediately (LiveKit) and
+   * marks them as left (same bookkeeping as a normal leave) — they can
+   * still rejoin afterward like anyone else, this isn't a ban. */
+  @Post(':id/participants/:userId/remove')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(SessionsGuard)
+  async removeParticipant(
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Param('userId') userId: string,
+  ) {
+    const session = await this.sessionsService.findById(id);
+    if (!session) {
+      throw new NotFoundException(`Session with ID ${id} not found`);
+    }
+    if (session.coachId !== user.sub && user.role !== 'platform_admin') {
+      throw new ForbiddenException('Only the coach can remove participants');
+    }
+    if (userId === user.sub) {
+      throw new ForbiddenException('Use leave instead of removing yourself');
+    }
+
+    await this.livekitService.removeParticipant(id, userId);
+    return this.sessionsService.leave(id, userId);
+  }
 }

@@ -133,6 +133,48 @@ export class RealtimeGateway implements OnGatewayConnection {
     }
   }
 
+  /** Session lookup + "is this socket's user the session's coach (or a
+   * platform admin)" re-check, shared by every annotation:* handler — the
+   * client-claimed role is never trusted, this always re-derives it from
+   * the DB. Returns the session on success, or an ack error object to
+   * return directly from the handler on failure. */
+  private async assertCoachSession(
+    sessionId: string,
+    user: JwtPayload,
+    eventName: string,
+  ): Promise<{ session: Session } | { status: 'error'; message: string }> {
+    const session = await this.sessionRepository.findOne({ where: { id: sessionId } });
+    if (!session) {
+      return { status: 'error', message: 'Session not found' };
+    }
+    if (session.coachId !== user.sub && user.role !== 'platform_admin') {
+      this.logger.warn(`Unauthorized ${eventName} trigger by non-coach user ${user.email}`);
+      return { status: 'error', message: 'Forbidden' };
+    }
+    return { session };
+  }
+
+  /** Fans an annotation event out to either specific targeted students or
+   * the whole session room. Uses `client.to(...)` (excludes the sender),
+   * NOT `this.server.to(...)` — the drawing coach already applied their own
+   * stroke optimistically client-side; broadcasting back to their own
+   * socket too was producing a duplicate on their own canvas. */
+  private fanOutAnnotationEvent(
+    client: Socket,
+    sessionId: string,
+    event: string,
+    payload: any,
+    studentIds?: string[],
+  ): void {
+    if (studentIds && studentIds.length > 0) {
+      for (const studentId of studentIds) {
+        client.to(`session:${sessionId}:participant:${studentId}`).emit(event, payload);
+      }
+    } else {
+      client.to(`session:${sessionId}`).emit(event, payload);
+    }
+  }
+
   @SubscribeMessage('annotation:draw')
   async handleAnnotationDraw(
     @MessageBody() data: { sessionId: string; payload: any; studentIds?: string[] },
@@ -163,39 +205,25 @@ export class RealtimeGateway implements OnGatewayConnection {
     }
     client.data.annotationRateInfo = rateInfo;
 
-    // Security Re-validation: Only the coach or platform admin of this session can draw annotations
-    const session = await this.sessionRepository.findOne({
-      where: { id: sessionId },
-    });
+    const check = await this.assertCoachSession(sessionId, user, 'annotation:draw');
+    if ('status' in check) return check;
 
-    if (!session) {
-      return { status: 'error', message: 'Session not found' };
-    }
-
-    if (session.coachId !== user.sub && user.role !== 'platform_admin') {
-      this.logger.warn(`Unauthorized annotation:draw trigger by non-coach user ${user.email}`);
-      return { status: 'error', message: 'Forbidden' };
-    }
-
-    // Fans out annotation event to either specific targeted students or session room
-    if (studentIds && studentIds.length > 0) {
-      for (const studentId of studentIds) {
-        this.server.to(`session:${sessionId}:participant:${studentId}`).emit('annotation:draw', payload);
-      }
-    } else {
-      this.server.to(`session:${sessionId}`).emit('annotation:draw', payload);
-    }
+    this.fanOutAnnotationEvent(client, sessionId, 'annotation:draw', payload, studentIds);
 
     // Optimistic background save
-    const { type, frameTimestampMs, geometry, textContent } = payload;
+    const { id, type, frameTimestampMs, geometry, textContent, color, thickness, persistUntilCleared } = payload;
     this.annotationsService
       .saveAnnotation(
         {
+          id,
           sessionId,
           frameTimestampMs,
           type,
           geometry,
           textContent,
+          color,
+          thickness,
+          persistUntilCleared,
         },
         user.sub,
       )
@@ -221,27 +249,10 @@ export class RealtimeGateway implements OnGatewayConnection {
       return { status: 'error', message: 'Missing sessionId or frameTimestampMs' };
     }
 
-    const session = await this.sessionRepository.findOne({
-      where: { id: sessionId },
-    });
+    const check = await this.assertCoachSession(sessionId, user, 'annotation:undo');
+    if ('status' in check) return check;
 
-    if (!session) {
-      return { status: 'error', message: 'Session not found' };
-    }
-
-    if (session.coachId !== user.sub && user.role !== 'platform_admin') {
-      this.logger.warn(`Unauthorized annotation:undo trigger by non-coach user ${user.email}`);
-      return { status: 'error', message: 'Forbidden' };
-    }
-
-    // Fans out event
-    if (studentIds && studentIds.length > 0) {
-      for (const studentId of studentIds) {
-        this.server.to(`session:${sessionId}:participant:${studentId}`).emit('annotation:undo', { frameTimestampMs });
-      }
-    } else {
-      this.server.to(`session:${sessionId}`).emit('annotation:undo', { frameTimestampMs });
-    }
+    this.fanOutAnnotationEvent(client, sessionId, 'annotation:undo', { frameTimestampMs }, studentIds);
 
     // Optimistic delete
     this.annotationsService.undoLastAnnotation(sessionId, user.sub, frameTimestampMs).catch((err) => {
@@ -266,31 +277,44 @@ export class RealtimeGateway implements OnGatewayConnection {
       return { status: 'error', message: 'Missing sessionId or frameTimestampMs' };
     }
 
-    const session = await this.sessionRepository.findOne({
-      where: { id: sessionId },
-    });
+    const check = await this.assertCoachSession(sessionId, user, 'annotation:clear');
+    if ('status' in check) return check;
 
-    if (!session) {
-      return { status: 'error', message: 'Session not found' };
-    }
-
-    if (session.coachId !== user.sub && user.role !== 'platform_admin') {
-      this.logger.warn(`Unauthorized annotation:clear trigger by non-coach user ${user.email}`);
-      return { status: 'error', message: 'Forbidden' };
-    }
-
-    // Fans out event
-    if (studentIds && studentIds.length > 0) {
-      for (const studentId of studentIds) {
-        this.server.to(`session:${sessionId}:participant:${studentId}`).emit('annotation:clear', { frameTimestampMs });
-      }
-    } else {
-      this.server.to(`session:${sessionId}`).emit('annotation:clear', { frameTimestampMs });
-    }
+    this.fanOutAnnotationEvent(client, sessionId, 'annotation:clear', { frameTimestampMs }, studentIds);
 
     // Optimistic tombstone
     this.annotationsService.clearAnnotations(sessionId, user.sub, frameTimestampMs).catch((err) => {
       this.logger.error(`Failed to async clear annotations: ${err.message ?? err}`);
+    });
+
+    return { status: 'ok' };
+  }
+
+  /** Removes one specific annotation by id — for persistent (joint-attached)
+   * shapes, which aren't naturally "the most recent" (undo) or "everything
+   * on this exact frame" (clear). */
+  @SubscribeMessage('annotation:delete')
+  async handleAnnotationDelete(
+    @MessageBody() data: { sessionId: string; id: string; studentIds?: string[] },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const user: JwtPayload | undefined = client.data?.['user'];
+    if (!user) {
+      return { status: 'error', message: 'Unauthorized' };
+    }
+
+    const { sessionId, id, studentIds } = data;
+    if (!sessionId || !id) {
+      return { status: 'error', message: 'Missing sessionId or id' };
+    }
+
+    const check = await this.assertCoachSession(sessionId, user, 'annotation:delete');
+    if ('status' in check) return check;
+
+    this.fanOutAnnotationEvent(client, sessionId, 'annotation:delete', { id }, studentIds);
+
+    this.annotationsService.deleteAnnotation(sessionId, id).catch((err) => {
+      this.logger.error(`Failed to async delete annotation: ${err.message ?? err}`);
     });
 
     return { status: 'ok' };

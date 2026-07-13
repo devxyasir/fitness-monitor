@@ -45,6 +45,20 @@ export class LiveKitService {
     }
   }
 
+  /** Host control: force one participant out of the room (not the whole
+   * session, unlike deleteRoom). LiveKit disconnects their WebRTC session
+   * immediately; the frontend already treats DisconnectReason.PARTICIPANT_REMOVED
+   * as "session ended" for that client (see page.tsx's onDisconnected). */
+  async removeParticipant(sessionId: string, identity: string): Promise<void> {
+    if (!this.roomService) {
+      this.logger.warn('RoomServiceClient unavailable (no LiveKit creds) — skipping removeParticipant');
+      return;
+    }
+    const room = liveKitRoomName(sessionId);
+    await this.roomService.removeParticipant(room, identity);
+    this.logger.log(`Removed participant ${identity} from room ${room}`);
+  }
+
   async generateToken(
     roomName: string,
     identity: string,

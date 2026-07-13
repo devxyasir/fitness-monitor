@@ -234,6 +234,8 @@ describe('RealtimeGateway', () => {
         data: {
           user: { sub: 'coach-1', role: 'coach', email: 'coach@example.com' },
         },
+        to: jest.fn().mockReturnThis(),
+        emit: jest.fn(),
       } as any;
 
       mockSessionRepo.findOne.mockResolvedValue({
@@ -247,8 +249,11 @@ describe('RealtimeGateway', () => {
       );
 
       expect(res).toEqual({ status: 'ok' });
-      expect(gateway.server.to).toHaveBeenCalledWith('session:session-1');
-      expect(gateway.server.emit).toHaveBeenCalledWith('annotation:draw', { stroke: 'draw-action' });
+      // Broadcasts via client.to(...), not server.to(...) — excludes the
+      // drawing coach's own socket so their optimistic local copy isn't
+      // duplicated by their own echoed broadcast.
+      expect(mockSocket.to).toHaveBeenCalledWith('session:session-1');
+      expect(mockSocket.emit).toHaveBeenCalledWith('annotation:draw', { stroke: 'draw-action' });
     });
 
     it('should partition emissions if studentIds targets listed', async () => {
@@ -256,6 +261,8 @@ describe('RealtimeGateway', () => {
         data: {
           user: { sub: 'coach-1', role: 'coach', email: 'coach@example.com' },
         },
+        to: jest.fn().mockReturnThis(),
+        emit: jest.fn(),
       } as any;
 
       mockSessionRepo.findOne.mockResolvedValue({
@@ -269,8 +276,8 @@ describe('RealtimeGateway', () => {
       );
 
       expect(res).toEqual({ status: 'ok' });
-      expect(gateway.server.to).toHaveBeenCalledWith('session:session-1:participant:student-1');
-      expect(gateway.server.emit).toHaveBeenCalledWith('annotation:draw', 'draw-2');
+      expect(mockSocket.to).toHaveBeenCalledWith('session:session-1:participant:student-1');
+      expect(mockSocket.emit).toHaveBeenCalledWith('annotation:draw', 'draw-2');
     });
 
     it('should drop messages if rate limits are exceeded (>30 messages per connection)', async () => {
