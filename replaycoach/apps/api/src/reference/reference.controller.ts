@@ -19,6 +19,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -48,8 +49,9 @@ export class ReferenceController {
     private readonly realtimeGateway: RealtimeGateway,
   ) {}
 
-  /** Coach uploads a video (buffered clip or file picker) or pastes a URL. */
+   /** Coach uploads a video (buffered clip or file picker) or pastes a URL. */
   @Post('upload')
+  @Throttle({ default: { limit: 10, ttl: 3600000 } })
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_BYTES } }))
   async upload(
     @Param('id') sessionId: string,

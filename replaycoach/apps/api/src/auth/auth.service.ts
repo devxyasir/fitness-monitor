@@ -5,7 +5,9 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { InjectDataSource } from '@nestjs/typeorm';
 import { JwtService } from '@nestjs/jwt';
+import { DataSource } from 'typeorm';
 import * as argon2 from 'argon2';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -13,6 +15,8 @@ import type { JwtPayload, TokenResponse } from '@replaycoach/types';
 
 import { UserService } from '../users/user.service';
 import { OrganizationService } from '../organizations/organization.service';
+import { OrgInvite } from '../organizations/org-invite.entity';
+import { User } from '../users/user.entity';
 import { RefreshTokenService } from './refresh-token.service';
 import type { RegisterDto, LoginDto } from './auth.dto';
 import { parseDurationMs } from './duration.util';
@@ -33,6 +37,8 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly refreshTokenService: RefreshTokenService,
     private readonly configService: ConfigService,
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
   ) {}
 
   /**
@@ -51,10 +57,39 @@ export class AuthService {
     let teamId: string | null = null;
 
     if (dto.inviteToken) {
-      const redeemed = await this.organizationService.consumeInviteForRegistration(dto.inviteToken, dto.email);
-      orgId = redeemed.orgId;
-      role = redeemed.role;
-      teamId = redeemed.teamId;
+      const queryRunner = this.dataSource.createQueryRunner();
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+
+      try {
+        const redeemed = await this.organizationService.consumeInviteForRegistration(
+          dto.inviteToken,
+          dto.email,
+          queryRunner.manager.getRepository(OrgInvite),
+        );
+        orgId = redeemed.orgId;
+        role = redeemed.role;
+        teamId = redeemed.teamId;
+
+        const user = await this.userService.create(
+          { email: dto.email, password: dto.password, displayName: dto.displayName, role },
+          { orgId },
+          queryRunner.manager.getRepository(User),
+        );
+
+        await queryRunner.commitTransaction();
+
+        if (teamId && orgId) {
+          await this.organizationService.joinTeamAfterRegistration(orgId, teamId, user.id);
+        }
+
+        return this.issueTokenPair(user.id, user.email, user.role, user.orgId, user.sessionVersion, true);
+      } catch (err) {
+        await queryRunner.rollbackTransaction();
+        throw err;
+      } finally {
+        await queryRunner.release();
+      }
     }
 
     const user = await this.userService.create(

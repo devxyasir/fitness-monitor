@@ -41,7 +41,7 @@ export class ReferenceStorageService {
     // URL handed to another process (the browser, or the pose-service) —
     // API_PUBLIC_URL overrides it; local dev is unaffected by default.
     this.publicBaseUrl = this.configService.get<string>('API_PUBLIC_URL') || `http://localhost:${port}`;
-    this.signingSecret = this.configService.getOrThrow<string>('jwt.secret');
+    this.signingSecret = this.configService.getOrThrow<string>('callback.secret');
 
     this.bucket = this.configService.get<string>('S3_REFERENCE_VIDEOS_BUCKET');
     const region = this.configService.get<string>('AWS_REGION') ?? 'us-east-1';

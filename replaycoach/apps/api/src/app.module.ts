@@ -30,6 +30,7 @@ import {
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import { UserModule } from './users/user.module';
 import { OrganizationModule } from './organizations/organization.module';
 import { TeamsModule } from './teams/teams.module';
@@ -112,8 +113,9 @@ import { ReferenceModule } from './reference/reference.module';
     // the "a new controller forgot to add JwtAuthGuard" class of gap —
     // existing per-controller @UseGuards(...) declarations still work
     // exactly as before, this just adds a safety net underneath them.
-    { provide: APP_GUARD, useClass: JwtAuthGuard },
-    { provide: APP_GUARD, useClass: RolesGuard },
+     { provide: APP_GUARD, useClass: JwtAuthGuard },
+     { provide: APP_GUARD, useClass: RolesGuard },
+     { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
 })
 export class AppModule {}

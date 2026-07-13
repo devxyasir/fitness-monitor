@@ -22,6 +22,9 @@ export const configSchema = Joi.object({
   // Redis — required
   REDIS_URL: Joi.string().default('redis://localhost:6379'),
 
+  // Pose-service callback and media-streaming HMAC signing
+  CALLBACK_TOKEN_SECRET: Joi.string().min(32).required(),
+
   // LiveKit
   LIVEKIT_API_KEY: Joi.string().when('NODE_ENV', {
     is: Joi.string().valid('production', 'staging'),

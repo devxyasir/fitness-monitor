@@ -23,6 +23,9 @@ export default () => ({
     cookieSameSite: process.env['AUTH_COOKIE_SAMESITE'] ?? 'strict',
     cookieDomain: process.env['AUTH_COOKIE_DOMAIN'] ?? '',
   },
+  callback: {
+    secret: process.env['CALLBACK_TOKEN_SECRET'],
+  },
   redis: {
     url: process.env['REDIS_URL'] ?? 'redis://localhost:6379',
   },

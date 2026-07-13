@@ -4,8 +4,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
 import type {
@@ -35,6 +35,8 @@ export class OrganizationService {
     private readonly inviteRepo: Repository<OrgInvite>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
     private readonly userService: UserService,
     private readonly teamsService: TeamsService,
   ) {}
@@ -65,18 +67,30 @@ export class OrganizationService {
       throw new ForbiddenException('Only a coach can create an organization');
     }
 
-    const org = this.orgRepo.create({ name: dto.name, createdBy: actingUser.sub });
-    await this.orgRepo.save(org);
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    const user = await this.userService.findById(actingUser.sub);
-    user.orgId = org.id;
-    if (user.role === 'coach') user.role = 'studio_admin';
-    await this.userRepo.save(user);
-    // The caller's current access token still carries the old role/orgId —
-    // force it to be re-minted via refresh (same pattern as logout/suspend).
-    await this.userService.incrementSessionVersion(user.id);
+    try {
+      const org = queryRunner.manager.create(Organization, { name: dto.name, createdBy: actingUser.sub });
+      await queryRunner.manager.save(org);
 
-    return org;
+      const user = await this.userService.findById(actingUser.sub);
+      user.orgId = org.id;
+      if (user.role === 'coach') user.role = 'studio_admin';
+      await queryRunner.manager.save(User, user);
+      // The caller's current access token still carries the old role/orgId —
+      // force it to be re-minted via refresh (same pattern as logout/suspend).
+      await this.userService.incrementSessionVersion(user.id, queryRunner.manager.getRepository(User));
+
+      await queryRunner.commitTransaction();
+      return org;
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      throw err;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   async findById(id: string): Promise<Organization> {
@@ -232,8 +246,10 @@ export class OrganizationService {
   async consumeInviteForRegistration(
     token: string,
     email: string,
+    manager?: Repository<OrgInvite>,
   ): Promise<{ orgId: string; role: 'coach' | 'student'; teamId: string | null }> {
-    const invite = await this.findInviteByToken(token);
+    const repo = manager ?? this.inviteRepo;
+    const invite = await this.findInviteByToken(token, repo);
     this.assertInviteRedeemable(invite);
 
     if (invite.invitedEmail.toLowerCase() !== email.toLowerCase()) {
@@ -241,7 +257,7 @@ export class OrganizationService {
     }
 
     invite.usedAt = new Date();
-    await this.inviteRepo.save(invite);
+    await repo.save(invite);
 
     return { orgId: invite.orgId, role: invite.role as 'coach' | 'student', teamId: invite.teamId };
   }
@@ -252,8 +268,8 @@ export class OrganizationService {
     await this.teamsService.addMemberSystem(orgId, teamId, userId);
   }
 
-  private async findInviteByToken(token: string): Promise<OrgInvite> {
-    const invite = await this.inviteRepo.findOne({ where: { inviteToken: token } });
+  private async findInviteByToken(token: string, repo?: Repository<OrgInvite>): Promise<OrgInvite> {
+    const invite = await (repo ?? this.inviteRepo).findOne({ where: { inviteToken: token } });
     if (!invite) throw new NotFoundException('Invite not found');
     return invite;
   }

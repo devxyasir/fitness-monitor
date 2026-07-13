@@ -27,12 +27,13 @@ export class UserService {
    * invite instead of the caller's self-selected values (see
    * AuthService.register) — an invite is the only thing that can hand out
    * anything other than the default org-less coach/student role. */
-  async create(dto: CreateUserDto, overrides?: { orgId?: string | null }): Promise<User> {
-    const existing = await this.userRepo.findOne({ where: { email: dto.email } });
+  async create(dto: CreateUserDto, overrides?: { orgId?: string | null }, manager?: Repository<User>): Promise<User> {
+    const repo = manager ?? this.userRepo;
+    const existing = await repo.findOne({ where: { email: dto.email } });
     if (existing) throw new ConflictException('Email already registered');
 
     const passwordHash = await argon2.hash(dto.password, { type: argon2.argon2id });
-    const user = this.userRepo.create({
+    const user = repo.create({
       email: dto.email,
       passwordHash,
       displayName: dto.displayName,
@@ -40,7 +41,7 @@ export class UserService {
       orgId: overrides?.orgId ?? null,
     });
 
-    return this.userRepo.save(user);
+    return repo.save(user);
   }
 
   async findByEmail(email: string): Promise<User | null> {
@@ -60,8 +61,9 @@ export class UserService {
     return this.userRepo.save(user);
   }
 
-  async incrementSessionVersion(id: string): Promise<void> {
-    await this.userRepo.increment({ id }, 'sessionVersion', 1);
+  async incrementSessionVersion(id: string, manager?: Repository<User>): Promise<void> {
+    const repo = manager ?? this.userRepo;
+    await repo.increment({ id }, 'sessionVersion', 1);
   }
 
   async touchLastLogin(id: string): Promise<void> {

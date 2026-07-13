@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { DataSource } from 'typeorm';
 import * as argon2 from 'argon2';
 
 import { AuthService } from './auth.service';
@@ -61,6 +62,10 @@ const mockOrganizationService = {
   joinTeamAfterRegistration: jest.fn(),
 };
 
+const mockDataSource = {
+  createQueryRunner: jest.fn(),
+};
+
 const mockRefreshTokenService = {
   store: jest.fn(),
   findValid: jest.fn(),
@@ -77,7 +82,7 @@ const mockConfigService = {
   get: jest.fn().mockReturnValue('7d'),
 };
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
+
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -91,6 +96,7 @@ describe('AuthService', () => {
         { provide: RefreshTokenService, useValue: mockRefreshTokenService },
         { provide: JwtService, useValue: mockJwtService },
         { provide: ConfigService, useValue: mockConfigService },
+        { provide: DataSource, useValue: mockDataSource },
       ],
     }).compile();
 
