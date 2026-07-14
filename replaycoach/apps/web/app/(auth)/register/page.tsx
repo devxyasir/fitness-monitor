@@ -5,6 +5,16 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { authClient } from '../../../lib/auth-client';
 
+// Mirrors apps/api/src/auth/auth.dto.ts's PASSWORD_REGEX exactly — min 8
+// chars, at least one uppercase, one lowercase, one digit — so the client
+// never lets a user submit a password the API will reject.
+const PASSWORD_RULES = [
+  { label: 'At least 8 characters', test: (p: string) => p.length >= 8 },
+  { label: 'One uppercase letter', test: (p: string) => /[A-Z]/.test(p) },
+  { label: 'One lowercase letter', test: (p: string) => /[a-z]/.test(p) },
+  { label: 'One digit', test: (p: string) => /\d/.test(p) },
+];
+
 export default function RegisterPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -39,7 +49,9 @@ export default function RegisterPage() {
     }
   };
 
-  const canSubmit = displayName.trim().length > 0 && email.trim().length > 0 && password.length >= 8 && !loading;
+  const [passwordTouched, setPasswordTouched] = useState(false);
+  const passwordValid = PASSWORD_RULES.every((r) => r.test(password));
+  const canSubmit = displayName.trim().length > 0 && email.trim().length > 0 && passwordValid && !loading;
 
   return (
     <>
@@ -96,6 +108,7 @@ export default function RegisterPage() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              onFocus={() => setPasswordTouched(true)}
               className="w-full bg-panel-2 border border-hairline rounded-lg px-3.5 py-2.5 pr-12 text-sm text-ink placeholder:text-ink-faint transition-all duration-150 focus:outline-none focus-visible:border-brand-indigo/60 focus-visible:shadow-[0_0_0_4px_rgba(99,102,241,0.15)]"
               placeholder="Min 8 chars, upper + lower + digit"
             />
@@ -108,6 +121,28 @@ export default function RegisterPage() {
               {showPassword ? 'Hide' : 'Show'}
             </button>
           </div>
+          {passwordTouched && (
+            <ul className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 animate-rise">
+              {PASSWORD_RULES.map((rule) => {
+                const met = rule.test(password);
+                return (
+                  <li
+                    key={rule.label}
+                    className={`text-[11px] flex items-center gap-1.5 transition-colors ${met ? 'text-live' : 'text-ink-faint'}`}
+                  >
+                    <span className={`w-3 h-3 rounded-full flex items-center justify-center flex-shrink-0 ${met ? 'bg-live/20' : 'bg-panel-2 border border-hairline'}`}>
+                      {met && (
+                        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" aria-hidden>
+                          <path d="M20 6 9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
+                    </span>
+                    {rule.label}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
 
         <div>
@@ -132,6 +167,21 @@ export default function RegisterPage() {
           {loading ? 'Creating account…' : 'Create account'}
         </button>
       </form>
+
+      <div className="flex items-center gap-3 my-[22px]">
+        <div className="flex-1 h-px bg-hairline" />
+        <span className="text-xs text-ink-faint">or</span>
+        <div className="flex-1 h-px bg-hairline" />
+      </div>
+
+      <button
+        type="button"
+        disabled
+        className="w-full flex items-center justify-center gap-2.5 bg-panel-2 border border-hairline rounded-lg py-2.5 text-ink-faint text-sm cursor-not-allowed"
+      >
+        <span aria-hidden>G</span> Continue with Google
+        <span className="font-mono text-[0.6875rem] text-ink-faint bg-hairline px-2 py-0.5 rounded-full">coming soon</span>
+      </button>
 
       <div className="text-center mt-6 text-sm text-ink-muted">
         Have an account?{' '}

@@ -104,6 +104,21 @@ export default function LoginPage() {
         </button>
       </form>
 
+      <div className="flex items-center gap-3 my-[22px]">
+        <div className="flex-1 h-px bg-hairline" />
+        <span className="text-xs text-ink-faint">or</span>
+        <div className="flex-1 h-px bg-hairline" />
+      </div>
+
+      <button
+        type="button"
+        disabled
+        className="w-full flex items-center justify-center gap-2.5 bg-panel-2 border border-hairline rounded-lg py-2.5 text-ink-faint text-sm cursor-not-allowed"
+      >
+        <span aria-hidden>G</span> Continue with Google
+        <span className="font-mono text-[0.6875rem] text-ink-faint bg-hairline px-2 py-0.5 rounded-full">coming soon</span>
+      </button>
+
       <div className="text-center mt-6 text-sm text-ink-muted">
         New here?{' '}
         <Link
