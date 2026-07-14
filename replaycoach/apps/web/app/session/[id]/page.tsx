@@ -25,6 +25,7 @@ import { useAnnotationTrackingSocket } from './hooks/useAnnotationTrackingSocket
 import { useSessionRoom } from './hooks/useSessionRoom';
 import { ReferenceVideoQueue } from './components/ReferenceVideoQueue';
 import { ConnectionStatusBanner, LocalConnectionQualityIndicator } from './components/ConnectionStatusBanner';
+import { SocketStatusBanner } from './components/SocketStatusBanner';
 import { useReferenceStore } from '../../../stores/reference-store';
 import { useAnnotationTrackingStore } from '../../../stores/annotation-tracking-store';
 import {
@@ -488,6 +489,7 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
         <TrackBufferManager />
         <Roster sessionId={sessionId} isCoach={isCoach} />
         <ConnectionStatusBanner />
+        <SocketStatusBanner />
         {isReferenceModalOpen && (
           <ReferenceAnalysisModal sessionId={sessionId} isCoach={isCoach} />
         )}
