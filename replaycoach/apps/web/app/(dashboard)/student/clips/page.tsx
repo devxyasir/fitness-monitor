@@ -6,6 +6,7 @@ import { ClipPlaybackModal } from '../../components/ClipPlaybackModal';
 import { MeetingGroups } from '../../components/MeetingGroups';
 import type { ClipItem } from '../../components/clipsShared';
 import { RefreshCw, Clapperboard } from 'lucide-react';
+import { toast } from '../../../../stores/toast-store';
 
 export default function StudentClipsPage() {
   const [clips, setClips] = useState<ClipItem[]>([]);
@@ -37,7 +38,7 @@ export default function StudentClipsPage() {
       const data = await apiClient.get<{ playUrl: string; annotations: any[] }>(`/clips/${clip.id}`);
       setPlayData(data);
     } catch (err: any) {
-      alert('Failed to load clip stream.');
+      toast.error('Failed to load clip stream.');
       setPlayingClip(null);
     } finally {
       setLoadingPlay(false);

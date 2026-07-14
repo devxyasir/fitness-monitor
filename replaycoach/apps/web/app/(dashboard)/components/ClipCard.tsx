@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Play, Video, Download, Share2 } from 'lucide-react';
 import type { ClipItem } from './clipsShared';
 import { downloadClipVideo } from './downloadClip';
+import { toast } from '../../../stores/toast-store';
 
 function formatDuration(startMs: number, endMs: number): string {
   const totalSecs = Math.max(0, Math.floor((endMs - startMs) / 1000));
@@ -38,7 +39,7 @@ export function ClipCard({ clip, onPlay, onShare }: ClipCardProps) {
       });
     } catch (err) {
       console.error('[ClipCard] Download failed:', err);
-      alert('Download failed. Please try again.');
+      toast.error('Download failed. Please try again.');
     } finally {
       setDownloading(false);
     }

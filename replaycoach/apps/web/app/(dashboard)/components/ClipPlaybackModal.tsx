@@ -7,6 +7,7 @@ import { getVisibleAnnotations } from '../../../stores/annotation-store';
 import { X, Play, Pause, Palette, Download, Bone, PenLine, Loader2 } from 'lucide-react';
 import { apiClient } from '../../../lib/api-client';
 import { downloadClipVideo } from './downloadClip';
+import { toast } from '../../../stores/toast-store';
 
 interface ClipPlaybackModalProps {
   clip: {
@@ -47,7 +48,7 @@ export function ClipPlaybackModal({ clip, playUrl, annotations, onClose, isCoach
       await downloadClipVideo({ clipId: clip.id, startedAt: clip.meeting?.startedAt, playUrl });
     } catch (err) {
       console.error('[ClipPlaybackModal] Download failed:', err);
-      alert('Download failed. Please try again.');
+      toast.error('Download failed. Please try again.');
     } finally {
       setDownloading(false);
     }
@@ -83,7 +84,7 @@ export function ClipPlaybackModal({ clip, playUrl, annotations, onClose, isCoach
       await downloadClipVideo({ clipId: clip.id, startedAt: clip.meeting?.startedAt, playUrl: freshUrl });
     } catch (err) {
       console.error('[ClipPlaybackModal] Export/download failed:', err);
-      alert(err instanceof Error ? err.message : 'Export failed. Please try again.');
+      toast.error(err instanceof Error ? err.message : 'Export failed. Please try again.');
     } finally {
       setExportingMode(null);
     }

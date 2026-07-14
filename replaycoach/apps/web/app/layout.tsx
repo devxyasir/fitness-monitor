@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import localFont from 'next/font/local';
 import AuthInitializer from './components/AuthInitializer';
+import { ToastContainer } from './components/ToastContainer';
 
 import './globals.css';
 
@@ -68,6 +69,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
         <AuthInitializer>{children}</AuthInitializer>
+        <ToastContainer />
       </body>
     </html>
   );

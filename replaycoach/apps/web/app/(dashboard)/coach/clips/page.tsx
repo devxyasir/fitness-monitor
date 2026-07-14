@@ -7,6 +7,7 @@ import { ClipPlaybackModal } from '../../components/ClipPlaybackModal';
 import { MeetingGroups } from '../../components/MeetingGroups';
 import type { ClipItem } from '../../components/clipsShared';
 import { RefreshCw, Clapperboard, X } from 'lucide-react';
+import { toast } from '../../../../stores/toast-store';
 
 interface User {
   id: string;
@@ -64,7 +65,7 @@ export default function CoachClipsPage() {
       const data = await apiClient.get<{ playUrl: string; annotations: any[] }>(`/clips/${clip.id}`);
       setPlayData(data);
     } catch (err: any) {
-      alert('Failed to load clip stream.');
+      toast.error('Failed to load clip stream.');
       setPlayingClip(null);
     } finally {
       setLoadingPlay(false);
@@ -81,7 +82,7 @@ export default function CoachClipsPage() {
       const clipDetail = await apiClient.get<{ clip: { shares?: { sharedWithUserId: string }[] } }>(`/clips/${clip.id}`);
       setSelectedStudentIds((clipDetail.clip.shares || []).map((s) => s.sharedWithUserId));
     } catch (err: any) {
-      alert('Failed to load sharing options.');
+      toast.error('Failed to load sharing options.');
       setSharingClip(null);
     } finally {
       setLoadingShareOptions(false);
@@ -102,7 +103,7 @@ export default function CoachClipsPage() {
       await fetchClips();
       setSharingClip(null);
     } catch (err: any) {
-      alert('Failed to save share permissions.');
+      toast.error('Failed to save share permissions.');
     } finally {
       setSavingShare(false);
     }

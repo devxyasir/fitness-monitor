@@ -6,6 +6,7 @@ import { apiClient } from '../../../../lib/api-client';
 import { useReferenceStore, type Stroke, type ReferenceTool } from '../../../../stores/reference-store';
 import { useReferenceEmitters } from '../hooks/useReferenceSocket';
 import { findNearestJoint } from './skeletonGeometry';
+import { toast } from '../../../../stores/toast-store';
 import {
   Pencil,
   Minus,
@@ -213,7 +214,7 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
       URL.revokeObjectURL(objectUrl);
     } catch (err) {
       console.error('[ReferenceAnalysisModal] Video download failed:', err);
-      alert('Download failed. Please try again.');
+      toast.error('Download failed. Please try again.');
     } finally {
       setDownloadingVideo(false);
     }
