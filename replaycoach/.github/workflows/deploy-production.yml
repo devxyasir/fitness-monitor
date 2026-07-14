@@ -1,0 +1,138 @@
+name: Deploy Production
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  build-and-typecheck:
+    name: Build & Typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared packages
+        run: pnpm turbo build --filter=@replaycoach/types
+
+      - name: Typecheck
+        run: pnpm turbo typecheck
+
+  deploy:
+    name: Deploy to Server
+    needs: build-and-typecheck
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+
+    steps:
+      - name: Install SSH key
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          known_hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          config: |
+            Host deploy
+              HostName ${{ secrets.DEPLOY_HOST }}
+              User ${{ secrets.DEPLOY_USER }}
+              IdentityFile ~/.ssh/deploy_key
+              StrictHostKeyChecking yes
+
+      - name: Deploy via SSH
+        run: |
+          ssh deploy bash -s << 'REMOTE_SCRIPT'
+            set -euo pipefail
+
+            APP_DIR="/home/ubuntu/fitness-monitor"
+            REPO="git@github.com:devxyasir/fitness-monitor.git"
+
+            echo "=== [1/6] Source environment ==="
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+            export PATH="$HOME/.local/share/pnpm:$HOME/.local/bin:$PATH"
+
+            echo "=== [2/6] Fetch latest code ==="
+            cd "$APP_DIR"
+            if [ -d .git ]; then
+              git fetch origin main
+              git reset --hard origin/main
+            else
+              echo "ERROR: $APP_DIR is not a git repo"
+              exit 1
+            fi
+
+            echo "=== [3/6] Install dependencies ==="
+            cd "$APP_DIR/replaycoach"
+            pnpm install --frozen-lockfile
+
+            echo "=== [4/6] Build ==="
+            pnpm turbo build --filter=@replaycoach/types
+            pnpm turbo build --filter=@replaycoach/api
+            pnpm turbo build --filter=@replaycoach/web
+
+            echo "=== [5/6] Run DB migrations ==="
+            cd "$APP_DIR/replaycoach/apps/api"
+            if [ -f .env ]; then
+              npx typeorm migration:run -d dist/database/data-source.js || echo "WARNING: migration runner not available, skipping"
+            fi
+
+            echo "=== [6/6] Restart services ==="
+            cd "$APP_DIR"
+
+            # API: restart
+            pm2 restart fitness-api --update-env || {
+              cd "$APP_DIR/replaycoach/apps/api"
+              pm2 start dist/main.js --name fitness-api --node-args='-r dotenv/config' --cwd "$APP_DIR/replaycoach/apps/api"
+            }
+
+            # Web: restart
+            pm2 restart fitness-web --update-env || {
+              cd "$APP_DIR/replaycoach/apps/web"
+              pnpm run start
+            }
+
+            # ML (pose-service): restart
+            pm2 restart fitness-ml --update-env || {
+              cd "$APP_DIR/replaycoach/apps/pose-service"
+              pm2 start run_ml.sh --name fitness-ml --interpreter bash
+            }
+
+            pm2 save
+
+            echo "=== Deployment complete ==="
+            pm2 list
+          REMOTE_SCRIPT
+
+      - name: Health check
+        run: |
+          ssh deploy bash -s << 'REMOTE_SCRIPT'
+            set -e
+            echo "--- API Health ---"
+            curl -sf http://localhost:4001/api/v1/health || (echo "API UNHEALTHY" && exit 1)
+            echo "--- ML Health ---"
+            curl -sf http://localhost:8100/ready || (echo "ML UNHEALTHY" && exit 1)
+            echo "--- Web Health ---"
+            curl -sf -o /dev/null http://localhost:4002 || (echo "WEB UNHEALTHY" && exit 1)
+            echo "ALL SERVICES HEALTHY"
+          REMOTE_SCRIPT
