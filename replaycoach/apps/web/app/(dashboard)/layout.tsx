@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
-import { LayoutGrid, CalendarDays, Film, Users, Settings } from 'lucide-react';
+import { LayoutGrid, CalendarDays, Film, Users, Settings, Menu, X } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth-store';
 import { ThemeToggle } from '../components/ThemeToggle';
 
@@ -27,13 +27,68 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { user } = useAuthStore();
   const [role, setRole] = useState<'coach' | 'student'>('coach');
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {
     if (user?.role === 'student') setRole('student');
     else setRole('coach');
   }, [user]);
 
+  // Close the mobile drawer on route change — otherwise navigating leaves it
+  // open, stacked behind/over the new page.
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname]);
+
   const visibleNav = navItems.filter((item) => item.roles.includes(role));
+
+  const navLinks = (onNavigate: () => void = () => {}) => (
+    <nav className="flex flex-col gap-0.5">
+      {visibleNav.map((item) => {
+        const isActive =
+          item.href === pathname ||
+          (item.href !== '/coach' && item.href !== '/student' && pathname?.startsWith(item.href));
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            onClick={onNavigate}
+            className={`flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm transition-colors ${
+              isActive
+                ? 'bg-panel-2 text-ink font-medium border-l-[3px] border-brand-indigo pl-[10px]'
+                : 'text-ink-muted hover:bg-panel-2 hover:text-ink border-l-[3px] border-transparent'
+            }`}
+          >
+            {item.icon}
+            <span>{item.label}</span>
+          </Link>
+        );
+      })}
+
+      <div className="h-px bg-hairline my-3 mx-2" />
+
+      <Link
+        href="/settings"
+        onClick={onNavigate}
+        className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm text-ink-muted hover:bg-panel-2 hover:text-ink transition-colors"
+      >
+        <Settings className="w-4 h-4" />
+        <span>Settings</span>
+      </Link>
+    </nav>
+  );
+
+  const userChip = (
+    <div className="mt-auto flex items-center gap-2.5 p-2.5 rounded-lg border border-hairline">
+      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-brand-indigo to-brand-violet flex items-center justify-center text-[0.6875rem] font-bold text-canvas flex-shrink-0">
+        {user?.displayName?.charAt(0)?.toUpperCase() ?? user?.email?.charAt(0)?.toUpperCase() ?? 'U'}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-xs font-semibold truncate">{user?.displayName ?? 'User'}</div>
+        <div className="text-[0.625rem] text-ink-faint truncate">{role} ▾</div>
+      </div>
+    </div>
+  );
 
   const pageTitle = (() => {
     if (!pathname) return '';
@@ -57,56 +112,54 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           <span className="ml-auto font-mono text-[0.625rem] text-ink-faint uppercase">{role}</span>
         </div>
 
-        {/* Nav */}
-        <nav className="flex flex-col gap-0.5">
-          {visibleNav.map((item) => {
-            const isActive =
-              item.href === pathname ||
-              (item.href !== '/coach' && item.href !== '/student' && pathname?.startsWith(item.href));
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm transition-colors ${
-                  isActive
-                    ? 'bg-panel-2 text-ink font-medium border-l-[3px] border-brand-indigo pl-[10px]'
-                    : 'text-ink-muted hover:bg-panel-2 hover:text-ink border-l-[3px] border-transparent'
-                }`}
-              >
-                {item.icon}
-                <span>{item.label}</span>
-              </Link>
-            );
-          })}
-
-          <div className="h-px bg-hairline my-3 mx-2" />
-
-          <Link
-            href="/settings"
-            className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm text-ink-muted hover:bg-panel-2 hover:text-ink transition-colors"
-          >
-            <Settings className="w-4 h-4" />
-            <span>Settings</span>
-          </Link>
-        </nav>
-
-        {/* User chip */}
-        <div className="mt-auto flex items-center gap-2.5 p-2.5 rounded-lg border border-hairline">
-          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-brand-indigo to-brand-violet flex items-center justify-center text-[0.6875rem] font-bold text-canvas flex-shrink-0">
-            {user?.displayName?.charAt(0)?.toUpperCase() ?? user?.email?.charAt(0)?.toUpperCase() ?? 'U'}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-xs font-semibold truncate">{user?.displayName ?? 'User'}</div>
-            <div className="text-[0.625rem] text-ink-faint truncate">{role} ▾</div>
-          </div>
-        </div>
+        {navLinks()}
+        {userChip}
       </aside>
+
+      {/* Mobile drawer */}
+      {mobileNavOpen && (
+        <div role="dialog" aria-modal="true" aria-label="Navigation menu" className="lg:hidden fixed inset-0 z-40">
+          <div
+            aria-hidden
+            className="absolute inset-0 bg-canvas/70 backdrop-blur-sm animate-rise"
+            onClick={() => setMobileNavOpen(false)}
+          />
+          <aside className="relative w-[260px] max-w-[80vw] h-full bg-panel border-r border-hairline flex flex-col py-5 px-3.5 animate-rise">
+            <div className="flex items-center gap-2.5 px-2.5 mb-6">
+              <div className="w-5 h-5 rounded-md bg-gradient-to-br from-brand-indigo to-brand-violet flex items-center justify-center">
+                <span className="text-[9px] font-bold text-canvas">◇</span>
+              </div>
+              <div className="font-display font-semibold text-sm">ReplayCoach</div>
+              <button
+                type="button"
+                onClick={() => setMobileNavOpen(false)}
+                aria-label="Close navigation menu"
+                className="ml-auto text-ink-muted hover:text-ink"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            {navLinks(() => setMobileNavOpen(false))}
+            {userChip}
+          </aside>
+        </div>
+      )}
 
       {/* Main */}
       <div className="flex-1 min-w-0">
         {/* Topbar */}
-        <header className="sticky top-0 z-10 bg-panel/60 backdrop-blur-glass border-b border-hairline px-7 py-4 flex items-center justify-between gap-4 flex-wrap">
-          <h1 className="font-display font-semibold text-lg">{pageTitle}</h1>
+        <header className="sticky top-0 z-10 bg-panel/60 backdrop-blur-glass border-b border-hairline px-4 sm:px-7 py-4 flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setMobileNavOpen(true)}
+              aria-label="Open navigation menu"
+              className="lg:hidden w-8 h-8 flex items-center justify-center rounded-full bg-panel-2 border border-hairline text-ink-muted hover:text-ink transition-colors flex-shrink-0"
+            >
+              <Menu className="w-4 h-4" />
+            </button>
+            <h1 className="font-display font-semibold text-lg">{pageTitle}</h1>
+          </div>
           <div className="flex items-center gap-3 flex-wrap">
             {/* Search affordance */}
             <div className="hidden sm:flex items-center gap-2 bg-panel-2 border border-hairline rounded-full px-3.5 py-2 text-ink-faint text-xs">
@@ -128,7 +181,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         </header>
 
         {/* Content */}
-        <main className="p-7 max-w-7xl">
+        <main className="p-4 sm:p-7 max-w-7xl">
           {children}
         </main>
       </div>

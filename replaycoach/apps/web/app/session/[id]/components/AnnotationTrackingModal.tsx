@@ -645,7 +645,7 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
   if (!refId || !videoUrl) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+    <div role="dialog" aria-modal="true" aria-label="Annotation tracking" className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
       <div className="w-full max-w-6xl h-[88vh] bg-panel border border-hairline rounded-lg shadow-2xl flex flex-col overflow-hidden animate-settle">
         <div className="flex items-center justify-between px-5 py-3 border-b border-hairline bg-panel-2">
           <div className="flex items-center gap-3">

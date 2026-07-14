@@ -542,7 +542,7 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
       )}
 
       {showExitModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-canvas/80 backdrop-blur-md">
+        <div role="dialog" aria-modal="true" aria-label="Exit options" className="fixed inset-0 z-50 flex items-center justify-center bg-canvas/80 backdrop-blur-md">
           <div className="bg-panel border border-hairline p-6 rounded-lg max-w-sm w-full shadow-2xl flex flex-col gap-4 animate-settle">
             <div>
               <h3 className="text-sm font-display font-semibold text-ink uppercase tracking-wider">

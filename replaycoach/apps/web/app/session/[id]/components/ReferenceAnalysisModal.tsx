@@ -459,7 +459,7 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
   if (!refId || !videoUrl) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+    <div role="dialog" aria-modal="true" aria-label="Reference video analysis" className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
       <div className="w-full max-w-6xl h-[85vh] bg-panel border border-hairline rounded-lg shadow-2xl flex flex-col overflow-hidden animate-settle">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-hairline bg-panel-2">

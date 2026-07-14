@@ -170,11 +170,11 @@ export default function CoachClipsPage() {
 
       {/* Sharing Modal */}
       {sharingClip && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-canvas/80 backdrop-blur-sm p-4">
+        <div role="dialog" aria-modal="true" aria-label="Share clip permissions" className="fixed inset-0 z-50 flex items-center justify-center bg-canvas/80 backdrop-blur-sm p-4">
           <div className="bg-panel border border-hairline rounded-lg w-full max-w-md overflow-hidden flex flex-col shadow-xl">
             <div className="px-6 py-4 border-b border-hairline flex items-center justify-between">
               <h3 className="text-sm font-bold text-ink">Share Clip Permissions</h3>
-              <button onClick={() => setSharingClip(null)} className="text-ink-muted hover:text-ink"><X className="w-4 h-4" /></button>
+              <button onClick={() => setSharingClip(null)} aria-label="Close share dialog" className="text-ink-muted hover:text-ink"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-6">
               {loadingShareOptions ? (

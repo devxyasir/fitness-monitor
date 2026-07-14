@@ -299,7 +299,7 @@ export function ClipPlaybackModal({ clip, playUrl, annotations, onClose, isCoach
   const canReExport = isCoach && Boolean(clip.referenceVideoId);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-canvas/80 backdrop-blur-md p-4">
+    <div role="dialog" aria-modal="true" aria-label={clip.title} className="fixed inset-0 z-50 flex items-center justify-center bg-canvas/80 backdrop-blur-md p-4">
       <div className="bg-panel border border-hairline rounded-lg w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh] animate-settle">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-hairline bg-panel-2/50">
@@ -361,6 +361,7 @@ export function ClipPlaybackModal({ clip, playUrl, annotations, onClose, isCoach
             )}
             <button
               onClick={onClose}
+              aria-label="Close video player"
               className="p-2 rounded-full bg-panel-2 hover:bg-panel-2/60 border border-hairline text-ink-muted hover:text-ink transition-colors"
             >
               <X className="w-4 h-4" />
