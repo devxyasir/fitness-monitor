@@ -4,6 +4,10 @@ import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { authClient } from '../../../lib/auth-client';
+import { Logomark } from '../../components/Logomark';
+import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
+import { ErrorBlock } from '../../components/ui/StateBlocks';
 
 // Mirrors apps/api/src/auth/auth.dto.ts's PASSWORD_REGEX exactly — min 8
 // chars, at least one uppercase, one lowercase, one digit — so the client
@@ -26,6 +30,7 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [passwordTouched, setPasswordTouched] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,57 +54,46 @@ export default function RegisterPage() {
     }
   };
 
-  const [passwordTouched, setPasswordTouched] = useState(false);
   const passwordValid = PASSWORD_RULES.every((r) => r.test(password));
   const canSubmit = displayName.trim().length > 0 && email.trim().length > 0 && passwordValid && !loading;
 
   return (
     <>
       <div className="flex items-center gap-2.5 mb-5">
-        <div className="w-5 h-5 rounded-md bg-gradient-to-br from-brand-indigo to-brand-violet flex-shrink-0" />
+        <Logomark className="w-5 h-5 text-brand flex-shrink-0" />
         <div>
-          <h2 className="font-display font-semibold text-lg leading-tight">Create your account</h2>
+          <h2 className="font-display text-display-s leading-tight">Create your account</h2>
           <p className="text-ink-muted text-sm mt-0.5">Set up your coaching room in a minute.</p>
         </div>
       </div>
 
-      {error && (
-        <div role="alert" className="bg-danger/10 border border-danger/30 text-danger text-xs rounded-lg px-3.5 py-2.5 mb-5 animate-rise">
-          {error}
-        </div>
-      )}
+      {error && <div className="mb-5"><ErrorBlock message={error} /></div>}
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div>
-          <label htmlFor="reg-name" className="block text-xs text-ink-muted mb-1.5">Full name</label>
-          <input
-            id="reg-name"
-            type="text"
-            autoComplete="name"
-            required
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            className="w-full bg-panel-2 border border-hairline rounded-lg px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-faint transition-all duration-150 focus:outline-none focus-visible:border-brand-indigo/60 focus-visible:shadow-[0_0_0_4px_rgba(99,102,241,0.15)]"
-            placeholder="Coach Carter"
-          />
-        </div>
+        <Input
+          id="reg-name"
+          type="text"
+          label="Full name"
+          autoComplete="name"
+          required
+          value={displayName}
+          onChange={(e) => setDisplayName(e.target.value)}
+          placeholder="Coach Carter"
+        />
+
+        <Input
+          id="reg-email"
+          type="email"
+          label="Email"
+          autoComplete="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="coach@example.com"
+        />
 
         <div>
-          <label htmlFor="reg-email" className="block text-xs text-ink-muted mb-1.5">Email</label>
-          <input
-            id="reg-email"
-            type="email"
-            autoComplete="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full bg-panel-2 border border-hairline rounded-lg px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-faint transition-all duration-150 focus:outline-none focus-visible:border-brand-indigo/60 focus-visible:shadow-[0_0_0_4px_rgba(99,102,241,0.15)]"
-            placeholder="coach@example.com"
-          />
-        </div>
-
-        <div>
-          <label htmlFor="reg-password" className="block text-xs text-ink-muted mb-1.5">Password</label>
+          <label htmlFor="reg-password" className="block text-label text-ink-muted mb-1.5">Password</label>
           <div className="relative">
             <input
               id="reg-password"
@@ -109,7 +103,7 @@ export default function RegisterPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               onFocus={() => setPasswordTouched(true)}
-              className="w-full bg-panel-2 border border-hairline rounded-lg px-3.5 py-2.5 pr-12 text-sm text-ink placeholder:text-ink-faint transition-all duration-150 focus:outline-none focus-visible:border-brand-indigo/60 focus-visible:shadow-[0_0_0_4px_rgba(99,102,241,0.15)]"
+              className="w-full bg-panel-2 border border-hairline rounded-sm px-3.5 py-2.5 pr-12 text-sm text-ink placeholder:text-ink-faint transition-all duration-150 focus:outline-none focus-visible:border-brand focus-visible:shadow-focus"
               placeholder="Min 8 chars, upper + lower + digit"
             />
             <button
@@ -128,9 +122,9 @@ export default function RegisterPage() {
                 return (
                   <li
                     key={rule.label}
-                    className={`text-[11px] flex items-center gap-1.5 transition-colors ${met ? 'text-live' : 'text-ink-faint'}`}
+                    className={`text-[11px] flex items-center gap-1.5 transition-colors ${met ? 'text-success' : 'text-ink-faint'}`}
                   >
-                    <span className={`w-3 h-3 rounded-full flex items-center justify-center flex-shrink-0 ${met ? 'bg-live/20' : 'bg-panel-2 border border-hairline'}`}>
+                    <span className={`w-3 h-3 rounded-full flex items-center justify-center flex-shrink-0 ${met ? 'bg-success/20' : 'bg-panel-2 border border-hairline'}`}>
                       {met && (
                         <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" aria-hidden>
                           <path d="M20 6 9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
@@ -146,26 +140,21 @@ export default function RegisterPage() {
         </div>
 
         <div>
-          <label htmlFor="reg-role" className="block text-xs text-ink-muted mb-1.5">I am registering as a</label>
+          <label htmlFor="reg-role" className="block text-label text-ink-muted mb-1.5">I am registering as a</label>
           <select
             id="reg-role"
             value={role}
             onChange={(e) => setRole(e.target.value as 'coach' | 'student')}
-            className="w-full bg-panel-2 border border-hairline rounded-lg px-3.5 py-2.5 text-sm text-ink transition-all duration-150 focus:outline-none focus-visible:border-brand-indigo/60 focus-visible:shadow-[0_0_0_4px_rgba(99,102,241,0.15)]"
+            className="w-full bg-panel-2 border border-hairline rounded-sm px-3.5 py-2.5 text-sm text-ink transition-all duration-150 focus:outline-none focus-visible:border-brand focus-visible:shadow-focus"
           >
             <option value="coach">Coach / Instructor</option>
             <option value="student">Student / Athlete</option>
           </select>
         </div>
 
-        <button
-          type="submit"
-          disabled={!canSubmit}
-          className="mt-2 w-full font-semibold text-sm text-canvas bg-gradient-to-r from-brand-indigo to-brand-violet rounded-full py-3 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-glow transition-all duration-150 flex items-center justify-center gap-2"
-        >
-          {loading && <span className="w-3.5 h-3.5 rounded-full border-2 border-canvas/30 border-t-canvas animate-spin" />}
+        <Button type="submit" disabled={!canSubmit} loading={loading} className="mt-2 w-full">
           {loading ? 'Creating account…' : 'Create account'}
-        </button>
+        </Button>
       </form>
 
       <div className="flex items-center gap-3 my-[22px]">
@@ -174,20 +163,16 @@ export default function RegisterPage() {
         <div className="flex-1 h-px bg-hairline" />
       </div>
 
-      <button
-        type="button"
-        disabled
-        className="w-full flex items-center justify-center gap-2.5 bg-panel-2 border border-hairline rounded-lg py-2.5 text-ink-faint text-sm cursor-not-allowed"
-      >
+      <Button variant="ghost" disabled className="w-full">
         <span aria-hidden>G</span> Continue with Google
-        <span className="font-mono text-[0.6875rem] text-ink-faint bg-hairline px-2 py-0.5 rounded-full">coming soon</span>
-      </button>
+        <span className="font-mono text-[0.6875rem] text-ink-faint bg-hairline px-2 py-0.5 rounded-full ml-auto">coming soon</span>
+      </Button>
 
       <div className="text-center mt-6 text-sm text-ink-muted">
         Have an account?{' '}
         <Link
           href={redirectTo ? `/login?redirectTo=${encodeURIComponent(redirectTo)}` : '/login'}
-          className="text-brand-violet hover:text-brand-violet/80 font-semibold"
+          className="text-brand hover:brightness-110 font-semibold"
         >
           Log in
         </Link>

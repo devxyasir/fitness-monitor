@@ -1,6 +1,7 @@
 import type { Config } from 'tailwindcss';
 
 const config: Config = {
+  darkMode: ['selector', '[data-theme="dark"]'],
   content: [
     './app/**/*.{ts,tsx}',
     './components/**/*.{ts,tsx}',
@@ -22,35 +23,57 @@ const config: Config = {
           muted: 'rgb(var(--color-ink-muted) / <alpha-value>)',
           faint: 'rgb(var(--color-ink-faint) / <alpha-value>)',
         },
-        // Accent colors are identical in both themes by design (brand,
-        // replay/live/danger semantics don't change with light/dark).
-        brand: {
-          indigo: '#6366F1',
-          violet: '#8B5CF6',
+        // Domain accents — each UI domain gets its own, see
+        // design/DESIGN_SYSTEM.md §1.2. Theme-switchable (brighter in dark).
+        brand: 'rgb(var(--color-brand) / <alpha-value>)',
+        session: 'rgb(var(--color-session) / <alpha-value>)',
+        analytics: 'rgb(var(--color-analytics) / <alpha-value>)',
+        // Semantic accents — cross-cutting meaning, theme-switchable.
+        success: 'rgb(var(--color-success) / <alpha-value>)',
+        danger: 'rgb(var(--color-danger) / <alpha-value>)',
+        replay: 'rgb(var(--color-replay) / <alpha-value>)',
+        // Chart-series-only categorical palette — never used as UI chrome.
+        chart: {
+          clay: 'rgb(var(--chart-clay) / <alpha-value>)',
+          petrol: 'rgb(var(--chart-petrol) / <alpha-value>)',
+          ochre: 'rgb(var(--chart-ochre) / <alpha-value>)',
+          blue: 'rgb(var(--chart-blue) / <alpha-value>)',
+          moss: 'rgb(var(--chart-moss) / <alpha-value>)',
+          plum: 'rgb(var(--chart-plum) / <alpha-value>)',
         },
-        replay: '#FBBF24',
-        live: '#34D399',
-        danger: '#F87171',
       },
       fontFamily: {
-        display: ['var(--font-display)', 'sans-serif'],
-        sans: ['var(--font-sans)', 'sans-serif'],
-        mono: ['var(--font-mono)', 'monospace'],
+        display: ['var(--font-display)', 'Iowan Old Style', 'Palatino Linotype', 'serif'],
+        sans: ['var(--font-sans)', '-apple-system', 'Segoe UI', 'sans-serif'],
+        mono: ['var(--font-mono)', 'SF Mono', 'monospace'],
+      },
+      fontSize: {
+        'display-xl': ['3.75rem', { lineHeight: '1.05', letterSpacing: '-0.01em', fontWeight: '600' }],
+        'display-l': ['2.5rem', { lineHeight: '1.1', letterSpacing: '-0.01em', fontWeight: '600' }],
+        'display-m': ['1.75rem', { lineHeight: '1.15', fontWeight: '500' }],
+        'display-s': ['1.375rem', { lineHeight: '1.2', fontWeight: '500' }],
+        'body-l': ['1.125rem', { lineHeight: '1.6' }],
+        'body-m': ['0.9375rem', { lineHeight: '1.55' }],
+        'body-s': ['0.8125rem', { lineHeight: '1.5' }],
+        label: ['0.75rem', { lineHeight: '1.4', letterSpacing: '0.02em', fontWeight: '600' }],
       },
       borderRadius: {
-        sm: '8px',
-        md: '12px',
+        sm: '6px',
+        md: '10px',
         lg: '16px',
       },
       boxShadow: {
-        glow: '0 0 40px -12px rgba(99,102,241,0.55)',
+        sm: '0 1px 2px rgba(20,14,8,0.06)',
+        md: '0 8px 24px -8px rgba(20,14,8,0.16)',
+        lg: '0 24px 48px -16px rgba(20,14,8,0.24)',
+        focus: '0 0 0 3px rgb(var(--color-brand) / 0.25)',
       },
       backdropBlur: {
         glass: '12px',
       },
       keyframes: {
         rise: {
-          '0%': { opacity: '0', transform: 'translateY(6px)' },
+          '0%': { opacity: '0', transform: 'translateY(8px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
         pulse: {
@@ -62,7 +85,7 @@ const config: Config = {
           '100%': { backgroundPosition: '200% 0' },
         },
         settle: {
-          '0%': { opacity: '0', transform: 'scale(0.94)' },
+          '0%': { opacity: '0', transform: 'scale(0.96)' },
           '100%': { opacity: '1', transform: 'scale(1)' },
         },
         spin: {
@@ -71,8 +94,8 @@ const config: Config = {
         },
       },
       animation: {
-        rise: 'rise 0.25s ease-out both',
-        settle: 'settle 0.5s ease-out both',
+        rise: 'rise 260ms ease-out both',
+        settle: 'settle 240ms cubic-bezier(0.16,1,0.3,1) both',
         shimmer: 'shimmer 1.4s infinite linear',
       },
     },

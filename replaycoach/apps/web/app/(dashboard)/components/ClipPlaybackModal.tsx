@@ -304,7 +304,7 @@ export function ClipPlaybackModal({ clip, playUrl, annotations, onClose, isCoach
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-hairline bg-panel-2/50">
           <div>
-            <h3 className="text-lg font-display font-bold text-ink leading-snug">{clip.title}</h3>
+            <h3 className="text-lg font-display font-semibold text-ink leading-snug">{clip.title}</h3>
             <p className="text-xs text-ink-faint mt-1 font-mono">
               Length: {formatTime((clip.endMs - clip.startMs) / 1000)} | Session:{' '}
               {clip.sessionId.substring(0, 8)}
@@ -325,7 +325,7 @@ export function ClipPlaybackModal({ clip, playUrl, annotations, onClose, isCoach
                   <button
                     onClick={() => handleExportAndDownload(true)}
                     title="Burn in the full skeleton overlay"
-                    className="px-3 py-2 rounded-full bg-brand-indigo/15 hover:bg-brand-indigo/25 border border-brand-indigo/40 text-[#A5A9F5] text-xs font-semibold transition-colors inline-flex items-center gap-1.5"
+                    className="px-3 py-2 rounded-full bg-session/15 hover:bg-session/25 border border-session/40 text-session text-xs font-semibold transition-colors inline-flex items-center gap-1.5"
                   >
                     <Bone className="w-3.5 h-3.5" /> Full skeleton
                   </button>
@@ -342,7 +342,7 @@ export function ClipPlaybackModal({ clip, playUrl, annotations, onClose, isCoach
                   <button
                     onClick={handleDownload}
                     disabled={downloading}
-                    className="px-3 py-2 rounded-full bg-gradient-to-r from-brand-indigo to-brand-violet hover:shadow-glow disabled:opacity-50 text-canvas text-xs font-semibold transition-colors inline-flex items-center gap-1.5"
+                    className="px-3 py-2 rounded-full bg-brand hover:brightness-110 disabled:opacity-50 text-white dark:text-canvas text-xs font-semibold transition-colors inline-flex items-center gap-1.5"
                     title="Download this video"
                   >
                     <Download className="w-4 h-4" /> {downloading ? 'Preparing…' : 'Download'}
@@ -411,7 +411,7 @@ export function ClipPlaybackModal({ clip, playUrl, annotations, onClose, isCoach
                 if (videoRef.current) videoRef.current.currentTime = val;
                 setCurrentTime(val);
               }}
-              className="flex-1 accent-brand-indigo bg-panel-2 h-1.5 rounded-full cursor-pointer"
+              className="flex-1 accent-brand bg-panel-2 h-1.5 rounded-full cursor-pointer"
             />
             <span className="text-xs font-mono text-ink-faint">{formatTime(duration)}</span>
           </div>
@@ -430,7 +430,7 @@ export function ClipPlaybackModal({ clip, playUrl, annotations, onClose, isCoach
                 onClick={() => setShowAnnotations(!showAnnotations)}
                 className={`rounded-full px-4 py-2 text-xs font-semibold transition-colors inline-flex items-center gap-1.5 border ${
                   showAnnotations
-                    ? 'bg-gradient-to-r from-brand-indigo to-brand-violet text-canvas border-transparent'
+                    ? 'bg-brand text-white dark:text-canvas border-transparent'
                     : 'bg-panel-2 text-ink-muted hover:bg-panel-2/60 border-hairline'
                 }`}
               >
@@ -446,7 +446,7 @@ export function ClipPlaybackModal({ clip, playUrl, annotations, onClose, isCoach
                   onClick={() => changeSpeed(speed)}
                   className={`px-3 py-1 rounded-full text-xs font-mono font-semibold transition-colors ${
                     playbackRate === speed
-                      ? 'bg-gradient-to-r from-brand-indigo to-brand-violet text-canvas'
+                      ? 'bg-brand text-white dark:text-canvas'
                       : 'text-ink-muted hover:text-ink'
                   }`}
                 >

@@ -24,17 +24,17 @@ export function MeetingGroups({ clips, onPlay, onShare }: MeetingGroupsProps) {
       {groups.map((group) => (
         <section key={group.sessionId}>
           {/* One meeting header, rendered once for the whole group. */}
-          <div className="flex items-center gap-3 mb-4 pb-3 border-b border-slate-900">
-            <div className="w-9 h-9 rounded-xl bg-indigo-950/40 border border-indigo-900/60 flex items-center justify-center shrink-0">
-              <Calendar className="w-4 h-4 text-indigo-400" />
+          <div className="flex items-center gap-3 mb-4 pb-3 border-b border-hairline">
+            <div className="w-9 h-9 rounded-md bg-session/10 border border-session/25 flex items-center justify-center shrink-0">
+              <Calendar className="w-4 h-4 text-session" />
             </div>
             <div className="min-w-0">
-              <h3 className="text-base font-bold text-white truncate">
+              <h3 className="font-display text-display-s text-ink truncate">
                 {group.otherParticipantName}
               </h3>
-              <p className="text-xs text-slate-400">{formatMeetingDateTime(group.startedAt)}</p>
+              <p className="text-xs text-ink-muted">{formatMeetingDateTime(group.startedAt)}</p>
             </div>
-            <span className="ml-auto text-[10px] font-semibold text-slate-500 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 shrink-0">
+            <span className="ml-auto font-mono text-[10px] font-semibold text-ink-faint bg-panel-2 border border-hairline rounded-md px-2 py-1 shrink-0">
               {group.clips.length} clip{group.clips.length === 1 ? '' : 's'}
             </span>
           </div>

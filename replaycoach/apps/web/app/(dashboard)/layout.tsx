@@ -7,6 +7,8 @@ import type { ReactNode } from 'react';
 import { LayoutGrid, CalendarDays, Film, Users, Settings, Menu, X } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth-store';
 import { ThemeToggle } from '../components/ThemeToggle';
+import { Logomark } from '../components/Logomark';
+import { Button } from '../components/ui/Button';
 
 interface NavItem {
   href: string;
@@ -53,10 +55,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             key={item.href}
             href={item.href}
             onClick={onNavigate}
-            className={`flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm transition-colors ${
+            aria-current={isActive ? 'page' : undefined}
+            className={`flex items-center gap-2.5 px-2.5 py-2 rounded-sm text-sm transition-colors border-l-[3px] ${
               isActive
-                ? 'bg-panel-2 text-ink font-medium border-l-[3px] border-brand-indigo pl-[10px]'
-                : 'text-ink-muted hover:bg-panel-2 hover:text-ink border-l-[3px] border-transparent'
+                ? 'bg-panel-2 text-ink font-medium border-brand pl-[10px]'
+                : 'text-ink-muted hover:bg-panel-2 hover:text-ink border-transparent'
             }`}
           >
             {item.icon}
@@ -70,7 +73,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       <Link
         href="/settings"
         onClick={onNavigate}
-        className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm text-ink-muted hover:bg-panel-2 hover:text-ink transition-colors"
+        className="flex items-center gap-2.5 px-2.5 py-2 rounded-sm text-sm text-ink-muted hover:bg-panel-2 hover:text-ink transition-colors"
       >
         <Settings className="w-4 h-4" />
         <span>Settings</span>
@@ -79,12 +82,12 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   );
 
   const userChip = (
-    <div className="mt-auto flex items-center gap-2.5 p-2.5 rounded-lg border border-hairline">
-      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-brand-indigo to-brand-violet flex items-center justify-center text-[0.6875rem] font-bold text-canvas flex-shrink-0">
+    <div className="mt-auto flex items-center gap-2.5 p-2.5 rounded-md border border-hairline">
+      <div className="w-7 h-7 rounded-full bg-analytics flex items-center justify-center text-[0.6875rem] font-bold text-white dark:text-canvas flex-shrink-0">
         {user?.displayName?.charAt(0)?.toUpperCase() ?? user?.email?.charAt(0)?.toUpperCase() ?? 'U'}
       </div>
       <div className="min-w-0 flex-1">
-        <div className="text-xs font-semibold truncate">{user?.displayName ?? 'User'}</div>
+        <div className="text-xs font-semibold text-ink truncate">{user?.displayName ?? 'User'}</div>
         <div className="text-[0.625rem] text-ink-faint truncate">{role} ▾</div>
       </div>
     </div>
@@ -103,12 +106,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-canvas text-ink flex">
       {/* Sidebar */}
       <aside className="hidden lg:flex w-[240px] flex-shrink-0 bg-panel border-r border-hairline flex-col py-5 px-3.5 sticky top-0 h-screen">
-        {/* Wordmark */}
         <div className="flex items-center gap-2.5 px-2.5 mb-6">
-          <div className="w-5 h-5 rounded-md bg-gradient-to-br from-brand-indigo to-brand-violet flex items-center justify-center">
-            <span className="text-[9px] font-bold text-canvas">◇</span>
-          </div>
-          <div className="font-display font-semibold text-sm">ReplayCoach</div>
+          <Logomark className="w-5 h-5 text-brand" />
+          <div className="font-display text-sm font-medium">ReplayCoach</div>
           <span className="ml-auto font-mono text-[0.625rem] text-ink-faint uppercase">{role}</span>
         </div>
 
@@ -126,10 +126,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           />
           <aside className="relative w-[260px] max-w-[80vw] h-full bg-panel border-r border-hairline flex flex-col py-5 px-3.5 animate-rise">
             <div className="flex items-center gap-2.5 px-2.5 mb-6">
-              <div className="w-5 h-5 rounded-md bg-gradient-to-br from-brand-indigo to-brand-violet flex items-center justify-center">
-                <span className="text-[9px] font-bold text-canvas">◇</span>
-              </div>
-              <div className="font-display font-semibold text-sm">ReplayCoach</div>
+              <Logomark className="w-5 h-5 text-brand" />
+              <div className="font-display text-sm font-medium">ReplayCoach</div>
               <button
                 type="button"
                 onClick={() => setMobileNavOpen(false)}
@@ -148,7 +146,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       {/* Main */}
       <div className="flex-1 min-w-0">
         {/* Topbar */}
-        <header className="sticky top-0 z-10 bg-panel/60 backdrop-blur-glass border-b border-hairline px-4 sm:px-7 py-4 flex items-center justify-between gap-4 flex-wrap">
+        <header className="sticky top-0 z-10 bg-panel/85 backdrop-blur-md border-b border-hairline px-4 sm:px-7 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -158,7 +156,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             >
               <Menu className="w-4 h-4" />
             </button>
-            <h1 className="font-display font-semibold text-lg">{pageTitle}</h1>
+            <h1 className="font-display text-display-s">{pageTitle}</h1>
           </div>
           <div className="flex items-center gap-3 flex-wrap">
             {/* Search affordance */}
@@ -167,14 +165,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               <span>Search</span>
               <kbd className="font-mono text-[0.625rem] bg-hairline px-1.5 py-0.5 rounded">⌘K</kbd>
             </div>
-            <Link
-              href="/session/new"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold text-canvas bg-gradient-to-r from-brand-indigo to-brand-violet hover:shadow-glow transition-all"
-            >
-              + New session
-            </Link>
+            <Button href="/session/new" size="sm">+ New session</Button>
             <ThemeToggle />
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-brand-indigo to-brand-violet flex items-center justify-center text-[0.6875rem] font-bold text-canvas">
+            <div className="w-8 h-8 rounded-full bg-analytics flex items-center justify-center text-[0.6875rem] font-bold text-white dark:text-canvas">
               {user?.displayName?.charAt(0)?.toUpperCase() ?? user?.email?.charAt(0)?.toUpperCase() ?? 'U'}
             </div>
           </div>

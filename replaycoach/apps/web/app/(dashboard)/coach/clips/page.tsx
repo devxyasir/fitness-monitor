@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { apiClient } from '../../../../lib/api-client';
 import { ClipPlaybackModal } from '../../components/ClipPlaybackModal';
 import { MeetingGroups } from '../../components/MeetingGroups';
 import type { ClipItem } from '../../components/clipsShared';
 import { RefreshCw, Clapperboard, X } from 'lucide-react';
 import { toast } from '../../../../stores/toast-store';
+import { Button } from '../../../components/ui/Button';
+import { StateBlock, SkeletonCards, ErrorBlock } from '../../../components/ui/StateBlocks';
 
 interface User {
   id: string;
@@ -114,42 +115,25 @@ export default function CoachClipsPage() {
       {/* Top bar */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h2 className="font-display font-semibold text-xl">Clips Library</h2>
+          <h2 className="font-display text-display-m">Clips library</h2>
           <p className="text-xs text-ink-muted mt-1">View, play back, and manage sharing for your replay clips.</p>
         </div>
-        <button
-          onClick={fetchClips}
-          className="px-3.5 py-2 text-xs font-semibold text-ink bg-panel-2 border border-hairline rounded-full hover:bg-panel-2/80 transition-colors inline-flex items-center gap-1.5"
-        >
+        <Button variant="ghost" size="sm" onClick={fetchClips}>
           <RefreshCw className="w-3.5 h-3.5" /> Refresh
-        </button>
+        </Button>
       </div>
 
-      {error && (
-        <div className="bg-danger/10 border border-danger/30 text-danger rounded-lg px-4 py-3 text-xs font-medium">
-          {error}
-        </div>
-      )}
+      {error && <ErrorBlock message={error} onRetry={fetchClips} />}
 
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-20 gap-3">
-          <div className="w-8 h-8 rounded-full border-4 border-brand-indigo border-t-transparent animate-spin" />
-          <p className="text-xs text-ink-muted">Loading clips...</p>
-        </div>
+        <SkeletonCards count={4} />
       ) : clips.length === 0 ? (
-        <div className="text-center py-16 border border-dashed border-hairline rounded-lg">
-          <Clapperboard className="w-10 h-10 mx-auto text-ink-faint mb-4" />
-          <h3 className="text-base font-bold text-ink mb-2">No clips yet</h3>
-          <p className="text-sm text-ink-muted max-w-sm mx-auto mb-6">
-            Save a replay from a live room to see it here.
-          </p>
-          <Link
-            href="/coach/sessions"
-            className="inline-flex px-4 py-2 text-xs font-semibold text-canvas bg-gradient-to-r from-brand-indigo to-brand-violet rounded-full hover:shadow-glow transition-all"
-          >
-            Go to Sessions
-          </Link>
-        </div>
+        <StateBlock
+          icon={<Clapperboard className="w-full h-full" />}
+          title="No clips yet"
+          body="Save a replay from a live room to see it here."
+          action={<Button href="/coach/sessions">Go to sessions</Button>}
+        />
       ) : (
         <MeetingGroups clips={clips} onPlay={handleOpenPlay} onShare={handleOpenShare} />
       )}
@@ -161,8 +145,8 @@ export default function CoachClipsPage() {
 
       {playingClip && loadingPlay && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-canvas/70 backdrop-blur-sm">
-          <div className="bg-panel p-6 rounded-lg border border-hairline flex flex-col items-center gap-3">
-            <div className="w-7 h-7 rounded-full border-4 border-brand-indigo border-t-transparent animate-spin" />
+          <div className="bg-panel p-6 rounded-md border border-hairline flex flex-col items-center gap-3">
+            <div className="w-7 h-7 rounded-full border-4 border-brand/25 border-t-brand animate-spin" />
             <p className="text-xs text-ink-muted">Fetching signed URL...</p>
           </div>
         </div>
@@ -171,21 +155,21 @@ export default function CoachClipsPage() {
       {/* Sharing Modal */}
       {sharingClip && (
         <div role="dialog" aria-modal="true" aria-label="Share clip permissions" className="fixed inset-0 z-50 flex items-center justify-center bg-canvas/80 backdrop-blur-sm p-4">
-          <div className="bg-panel border border-hairline rounded-lg w-full max-w-md overflow-hidden flex flex-col shadow-xl">
+          <div className="bg-panel border border-hairline rounded-lg w-full max-w-md overflow-hidden flex flex-col shadow-lg animate-settle">
             <div className="px-6 py-4 border-b border-hairline flex items-center justify-between">
-              <h3 className="text-sm font-bold text-ink">Share Clip Permissions</h3>
-              <button onClick={() => setSharingClip(null)} aria-label="Close share dialog" className="text-ink-muted hover:text-ink"><X className="w-4 h-4" /></button>
+              <h3 className="font-display text-display-s text-ink">Share clip permissions</h3>
+              <button onClick={() => setSharingClip(null)} aria-label="Close share dialog" className="text-ink-muted hover:text-ink transition-colors"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-6">
               {loadingShareOptions ? (
-                <div className="flex justify-center py-6"><div className="w-6 h-6 rounded-full border-3 border-brand-indigo border-t-transparent animate-spin" /></div>
+                <div className="flex justify-center py-6"><div className="w-6 h-6 rounded-full border-[3px] border-brand/25 border-t-brand animate-spin" /></div>
               ) : sessionStudents.length === 0 ? (
                 <p className="text-sm text-ink-muted text-center py-4">No students in this session yet.</p>
               ) : (
                 <div className="space-y-3">
                   {sessionStudents.map((s) => (
                     <label key={s.id} className="flex items-center gap-3 cursor-pointer text-sm text-ink">
-                      <input type="checkbox" checked={selectedStudentIds.includes(s.id)} onChange={() => handleToggleStudentShare(s.id)} className="accent-brand-indigo" />
+                      <input type="checkbox" checked={selectedStudentIds.includes(s.id)} onChange={() => handleToggleStudentShare(s.id)} className="accent-brand" />
                       {s.displayName || s.email}
                     </label>
                   ))}
@@ -193,10 +177,8 @@ export default function CoachClipsPage() {
               )}
             </div>
             <div className="px-6 py-4 border-t border-hairline flex justify-end gap-3">
-              <button onClick={() => setSharingClip(null)} className="text-xs font-semibold text-ink-muted hover:text-ink">Cancel</button>
-              <button onClick={handleSaveShares} disabled={savingShare} className="px-4 py-2 text-xs font-semibold text-canvas bg-gradient-to-r from-brand-indigo to-brand-violet rounded-full disabled:opacity-50">
-                {savingShare ? 'Saving...' : 'Save sharing'}
-              </button>
+              <Button variant="ghost" size="sm" onClick={() => setSharingClip(null)}>Cancel</Button>
+              <Button size="sm" loading={savingShare} onClick={handleSaveShares}>Save sharing</Button>
             </div>
           </div>
         </div>

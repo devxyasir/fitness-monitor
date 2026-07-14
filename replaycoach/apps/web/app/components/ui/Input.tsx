@@ -13,15 +13,16 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     return (
       <div className="flex flex-col gap-1.5">
         {label && (
-          <label htmlFor={inputId} className="text-xs text-ink-muted font-medium">
+          <label htmlFor={inputId} className="text-label text-ink-muted">
             {label}
           </label>
         )}
         <input
           ref={ref}
           id={inputId}
+          aria-invalid={Boolean(error)}
           aria-describedby={error ? `${inputId}-error` : undefined}
-          className={`w-full bg-panel-2 border border-hairline rounded-lg px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-faint transition-all duration-150 focus:outline-none focus-visible:border-brand-indigo/60 focus-visible:shadow-[0_0_0_4px_rgba(99,102,241,0.15)] ${error ? 'border-danger/50' : ''} ${className}`}
+          className={`w-full bg-panel-2 border border-hairline rounded-sm px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-faint transition-all duration-150 focus:outline-none focus-visible:border-brand focus-visible:shadow-focus ${error ? 'border-danger/50' : ''} ${className}`}
           {...props}
         />
         {error && (

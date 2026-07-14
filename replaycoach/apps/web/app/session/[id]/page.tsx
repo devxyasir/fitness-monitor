@@ -275,7 +275,7 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-canvas text-ink p-6">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-brand-indigo/25 border-t-brand-indigo rounded-full animate-spin"></div>
+          <div className="w-12 h-12 border-4 border-brand/25 border-t-brand rounded-full animate-spin"></div>
           <p className="text-lg font-medium animate-pulse text-ink-muted">Entering session room...</p>
         </div>
       </div>
@@ -289,7 +289,7 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
           <div className="w-16 h-16 bg-danger/10 border border-danger/30 rounded-full flex items-center justify-center mx-auto mb-6 text-danger">
             <AlertTriangle className="w-8 h-8" />
           </div>
-          <h2 className="text-xl font-display font-bold text-ink mb-2">Connection Failed</h2>
+          <h2 className="text-xl font-display font-semibold text-ink mb-2">Connection Failed</h2>
           <p className="text-ink-muted mb-6 text-sm">
             {error || 'Unable to retrieve LiveKit connection details.'}
           </p>
@@ -311,7 +311,7 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
           <div className="w-16 h-16 bg-panel-2 border border-hairline rounded-full flex items-center justify-center mx-auto mb-6 text-ink-muted">
             <Flag className="w-8 h-8" />
           </div>
-          <h2 className="text-xl font-display font-bold text-ink mb-2">This session has ended</h2>
+          <h2 className="text-xl font-display font-semibold text-ink mb-2">This session has ended</h2>
           <p className="text-ink-muted mb-6 text-sm">
             The coach has ended this coaching session for everyone.
           </p>
@@ -331,7 +331,7 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
       {/* Session Title Header */}
       <header className="flex items-center justify-between flex-wrap gap-2 px-3 sm:px-6 py-3 bg-panel/60 backdrop-blur-glass border-b border-hairline z-10">
         <div className="flex items-center gap-3">
-          <div className={`w-2.5 h-2.5 rounded-full ${mode === 'playing' ? 'bg-replay animate-pulse' : 'bg-live animate-pulse'}`} />
+          <div className={`w-2.5 h-2.5 rounded-full ${mode === 'playing' ? 'bg-replay animate-pulse' : 'bg-success animate-pulse'}`} />
           <h1 className="text-sm font-semibold tracking-tight text-ink flex items-center gap-2 flex-wrap">
             <span>Session: {sessionId.substring(0, 8)}</span>
             {elapsedLabel && (
@@ -355,16 +355,16 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
               title="Copy meeting link"
             >
               {linkCopied ? (
-                <><Check className="w-3.5 h-3.5 text-live" /> Copied</>
+                <><Check className="w-3.5 h-3.5 text-success" /> Copied</>
               ) : (
                 <><LinkIcon className="w-3.5 h-3.5" /> Copy Link</>
               )}
             </button>
           )}
-          <span className="bg-brand-violet/10 border border-brand-violet/30 text-brand-violet text-xs px-3 py-1.5 rounded-full font-mono font-medium tracking-wide inline-flex items-center gap-1.5">
+          <span className="bg-session/10 border border-session/30 text-session text-xs px-3 py-1.5 rounded-full font-mono font-medium tracking-wide inline-flex items-center gap-1.5">
             {isCoach ? (
               <>
-                <Circle className="w-2 h-2 fill-live text-live" /> COACH
+                <Circle className="w-2 h-2 fill-success text-success" /> COACH
               </>
             ) : (
               <>
@@ -522,7 +522,7 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
                 <div className="flex items-center gap-1.5 shrink-0">
                   <button
                     onClick={() => handleApproveLobby(req.userId)}
-                    className="w-7 h-7 bg-live/10 border border-live/30 hover:bg-live/20 text-live rounded-full flex items-center justify-center text-xs transition-colors font-bold"
+                    className="w-7 h-7 bg-success/10 border border-success/30 hover:bg-success/20 text-success rounded-full flex items-center justify-center text-xs transition-colors font-bold"
                     title="Approve student"
                   >
                     <Check className="w-3.5 h-3.5" />
@@ -782,7 +782,7 @@ function ControlsArea({
             onClick={toggleScreen}
             className={`flex items-center px-4 py-2 text-xs font-semibold rounded-full transition-colors border ${
               isScreenShareEnabled
-                ? 'bg-gradient-to-r from-brand-indigo to-brand-violet text-canvas border-transparent shadow-glow'
+                ? 'bg-session text-white dark:text-canvas border-transparent'
                 : 'bg-panel-2 border-hairline hover:bg-panel-2/60 text-ink-muted'
             }`}
           >
@@ -822,7 +822,7 @@ function ControlsArea({
                 <button
                   type="button"
                   onClick={() => { uploadModeRef.current = 'annotation_tracking'; fileInputRef.current?.click(); }}
-                  className="flex items-center px-4 py-2 text-xs font-semibold rounded-full bg-brand-indigo/15 border border-brand-indigo/40 hover:bg-brand-indigo/25 text-[#A5A9F5] transition-colors"
+                  className="flex items-center px-4 py-2 text-xs font-semibold rounded-full bg-session/15 border border-session/40 hover:bg-session/25 text-session transition-colors"
                   title="Upload a video and draw coaching annotations between joints that follow the body"
                 >
                   <Upload className="w-3.5 h-3.5 mr-1.5" /> Annotate Video
@@ -850,7 +850,7 @@ function ControlsArea({
                 </div>
                 <div className="h-1.5 w-full bg-panel-2 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-brand-indigo to-brand-violet transition-all"
+                    className="h-full bg-session transition-all"
                     style={{
                       width: `${Math.min(100, (uploadProgress.loaded / uploadProgress.total) * 100)}%`,
                     }}

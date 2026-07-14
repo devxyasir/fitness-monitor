@@ -464,8 +464,8 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-hairline bg-panel-2">
           <div className="flex items-center gap-3">
-            <h2 className="text-sm font-display font-bold text-ink uppercase tracking-wide">Reference Analysis</h2>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-live/10 border border-live/30 text-live uppercase tracking-wider inline-flex items-center gap-1">
+            <h2 className="text-sm font-display font-semibold text-ink uppercase tracking-wide">Reference Analysis</h2>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-success/10 border border-success/30 text-success uppercase tracking-wider inline-flex items-center gap-1">
               <CircleIcon className="w-2 h-2 fill-current" /> Synced to room
             </span>
             {status === 'processing' && (
@@ -486,7 +486,7 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
               <button
                 onClick={handleDownloadVideo}
                 disabled={downloadingVideo}
-                className="px-3 py-1.5 rounded-full bg-gradient-to-r from-brand-indigo to-brand-violet hover:shadow-glow disabled:opacity-50 text-canvas text-xs font-semibold transition-colors inline-flex items-center gap-1.5"
+                className="px-3 py-1.5 rounded-full bg-session hover:brightness-110 disabled:opacity-50 text-white dark:text-canvas text-xs font-semibold transition-colors inline-flex items-center gap-1.5"
                 title="Download this video"
               >
                 <Download className="w-3.5 h-3.5" /> {downloadingVideo ? 'Preparing…' : 'Download'}
@@ -571,7 +571,7 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
                         type="checkbox"
                         checked={targetStudentIds.length === 0}
                         onChange={() => setTargetStudentIds([])}
-                        className="w-3.5 h-3.5 accent-brand-indigo"
+                        className="w-3.5 h-3.5 accent-session"
                       />
                       All connected
                     </label>
@@ -584,7 +584,7 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
                           type="checkbox"
                           checked={targetStudentIds.includes(s.identity)}
                           onChange={() => toggleStudent(s.identity)}
-                          className="w-3.5 h-3.5 accent-brand-indigo"
+                          className="w-3.5 h-3.5 accent-session"
                         />
                         {s.name || s.identity}
                       </label>
@@ -603,7 +603,7 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
                       title={t.label}
                       className={`aspect-square rounded-lg text-base flex items-center justify-center border transition-colors ${
                         activeTool === t.id
-                          ? 'bg-gradient-to-r from-brand-indigo to-brand-violet border-transparent text-canvas'
+                          ? 'bg-session border-transparent text-white dark:text-canvas'
                           : 'bg-panel border-hairline text-ink-muted hover:text-ink hover:border-hairline'
                       }`}
                     >
@@ -638,7 +638,7 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
                       onClick={() => setActiveWidth(w)}
                       className={`flex-1 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
                         activeWidth === w
-                          ? 'bg-gradient-to-r from-brand-indigo to-brand-violet border-transparent text-canvas'
+                          ? 'bg-session border-transparent text-white dark:text-canvas'
                           : 'bg-panel border-hairline text-ink-muted hover:text-ink'
                       }`}
                     >
@@ -675,7 +675,7 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
               step={1}
               value={frameIndex}
               onChange={(e) => seekToFrame(parseInt(e.target.value, 10))}
-              className="w-full accent-brand-indigo h-1.5 cursor-pointer"
+              className="w-full accent-session h-1.5 cursor-pointer"
             />
           )}
           <div className="flex items-center justify-between flex-wrap gap-3">
@@ -690,7 +690,7 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
                   </button>
                   <button
                     onClick={togglePlay}
-                    className="bg-gradient-to-r from-brand-indigo to-brand-violet hover:shadow-glow disabled:opacity-40 text-canvas text-xs font-semibold px-3 py-1.5 rounded-full transition-colors inline-flex items-center gap-1.5"
+                    className="bg-session hover:brightness-110 disabled:opacity-40 text-white dark:text-canvas text-xs font-semibold px-3 py-1.5 rounded-full transition-colors inline-flex items-center gap-1.5"
                   >
                     {playing ? (<><Pause className="w-3.5 h-3.5 fill-current" /> Pause</>) : (<><Play className="w-3.5 h-3.5 fill-current" /> Play</>)}
                   </button>
@@ -717,7 +717,7 @@ export function ReferenceAnalysisModal({ sessionId, isCoach }: ReferenceAnalysis
                       if (videoRef.current) videoRef.current.playbackRate = s;
                     }}
                     className={`text-xs font-mono px-2 py-1 rounded-full transition-colors ${
-                      playbackRate === s ? 'bg-gradient-to-r from-brand-indigo to-brand-violet text-canvas' : 'bg-panel hover:bg-panel/70 border border-hairline text-ink-muted'
+                      playbackRate === s ? 'bg-session text-white dark:text-canvas' : 'bg-panel hover:bg-panel/70 border border-hairline text-ink-muted'
                     }`}
                   >
                     {s}×

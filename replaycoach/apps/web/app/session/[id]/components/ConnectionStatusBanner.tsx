@@ -28,8 +28,8 @@ export function ConnectionStatusBanner() {
 }
 
 const QUALITY_CONFIG: Record<ConnectionQuality, { icon: any; className: string; label: string }> = {
-  [ConnectionQuality.Excellent]: { icon: SignalHigh, className: 'text-live', label: 'Excellent connection' },
-  [ConnectionQuality.Good]: { icon: SignalMedium, className: 'text-live', label: 'Good connection' },
+  [ConnectionQuality.Excellent]: { icon: SignalHigh, className: 'text-success', label: 'Excellent connection' },
+  [ConnectionQuality.Good]: { icon: SignalMedium, className: 'text-success', label: 'Good connection' },
   [ConnectionQuality.Poor]: { icon: SignalLow, className: 'text-replay', label: 'Poor connection' },
   [ConnectionQuality.Lost]: { icon: WifiOff, className: 'text-danger', label: 'Connection lost' },
   [ConnectionQuality.Unknown]: { icon: Wifi, className: 'text-ink-faint', label: 'Connection quality unknown' },

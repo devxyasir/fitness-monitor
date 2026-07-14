@@ -713,7 +713,7 @@ export function AnnotationCanvas({
               type="button"
               onClick={() => { setActiveTool('select'); setPendingPoints([]); }}
               className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold uppercase tracking-wider transition-colors inline-flex items-center gap-1.5 ${
-                activeTool === 'select' ? 'bg-gradient-to-r from-brand-indigo to-brand-violet text-canvas shadow-md' : 'text-ink-muted hover:text-ink hover:bg-panel-2'
+                activeTool === 'select' ? 'bg-session text-white dark:text-canvas shadow-md' : 'text-ink-muted hover:text-ink hover:bg-panel-2'
               }`}
               title="Select an existing shape"
             >
@@ -725,7 +725,7 @@ export function AnnotationCanvas({
                 type="button"
                 onClick={() => { setActiveTool(sh.id); setPendingPoints([]); setTextInputPos(null); }}
                 className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold uppercase tracking-wider transition-colors inline-flex items-center gap-1.5 ${
-                  activeTool === sh.id ? 'bg-gradient-to-r from-brand-indigo to-brand-violet text-canvas shadow-md' : 'text-ink-muted hover:text-ink hover:bg-panel-2'
+                  activeTool === sh.id ? 'bg-session text-white dark:text-canvas shadow-md' : 'text-ink-muted hover:text-ink hover:bg-panel-2'
                 }`}
                 title={sh.label}
               >
@@ -756,7 +756,7 @@ export function AnnotationCanvas({
                 type="button"
                 onClick={() => setActiveThickness(t)}
                 className={`w-6 h-6 rounded-md flex items-center justify-center transition-colors ${
-                  activeThickness === t ? 'bg-gradient-to-r from-brand-indigo to-brand-violet' : 'hover:bg-panel-2'
+                  activeThickness === t ? 'bg-session' : 'hover:bg-panel-2'
                 }`}
                 title={`${t}px`}
               >
@@ -791,7 +791,7 @@ export function AnnotationCanvas({
       )}
 
       {isCoach && hoveredJoint && activeTool !== 'select' && (
-        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-panel/90 backdrop-blur-glass border border-brand-indigo/30 text-brand-violet text-[11px] font-mono px-2.5 py-1 rounded-full z-20">
+        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-panel/90 backdrop-blur-glass border border-session/30 text-session text-[11px] font-mono px-2.5 py-1 rounded-full z-20">
           snap: {hoveredJoint}
         </div>
       )}

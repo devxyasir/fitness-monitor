@@ -7,6 +7,8 @@ import { MeetingGroups } from '../../components/MeetingGroups';
 import type { ClipItem } from '../../components/clipsShared';
 import { RefreshCw, Clapperboard } from 'lucide-react';
 import { toast } from '../../../../stores/toast-store';
+import { Button } from '../../../components/ui/Button';
+import { StateBlock, SkeletonCards, ErrorBlock } from '../../../components/ui/StateBlocks';
 
 export default function StudentClipsPage() {
   const [clips, setClips] = useState<ClipItem[]>([]);
@@ -49,29 +51,24 @@ export default function StudentClipsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h2 className="font-display font-semibold text-xl">Shared Clips</h2>
+          <h2 className="font-display text-display-m">Shared clips</h2>
           <p className="text-xs text-ink-muted mt-1">Clips your coach has shared with you.</p>
         </div>
-        <button onClick={fetchClips} className="px-3.5 py-2 text-xs font-semibold text-ink bg-panel-2 border border-hairline rounded-full hover:bg-panel-2/80 transition-colors inline-flex items-center gap-1.5">
+        <Button variant="ghost" size="sm" onClick={fetchClips}>
           <RefreshCw className="w-3.5 h-3.5" /> Refresh
-        </button>
+        </Button>
       </div>
 
-      {error && (
-        <div className="bg-danger/10 border border-danger/30 text-danger rounded-lg px-4 py-3 text-xs font-medium">{error}</div>
-      )}
+      {error && <ErrorBlock message={error} onRetry={fetchClips} />}
 
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-20 gap-3">
-          <div className="w-8 h-8 rounded-full border-4 border-brand-indigo border-t-transparent animate-spin" />
-          <p className="text-xs text-ink-muted">Loading clips...</p>
-        </div>
+        <SkeletonCards count={4} />
       ) : clips.length === 0 ? (
-        <div className="text-center py-16 border border-dashed border-hairline rounded-lg">
-          <Clapperboard className="w-10 h-10 mx-auto text-ink-faint mb-4" />
-          <h3 className="text-base font-bold text-ink mb-2">No clips yet</h3>
-          <p className="text-sm text-ink-muted max-w-sm mx-auto">Your coach will share replays here after a session.</p>
-        </div>
+        <StateBlock
+          icon={<Clapperboard className="w-full h-full" />}
+          title="No clips yet"
+          body="Your coach will share replays here after a session."
+        />
       ) : (
         <MeetingGroups clips={clips} onPlay={handleOpenPlay} onShare={undefined} />
       )}
@@ -82,8 +79,8 @@ export default function StudentClipsPage() {
 
       {playingClip && loadingPlay && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-canvas/70 backdrop-blur-sm">
-          <div className="bg-panel p-6 rounded-lg border border-hairline flex flex-col items-center gap-3">
-            <div className="w-7 h-7 rounded-full border-4 border-brand-indigo border-t-transparent animate-spin" />
+          <div className="bg-panel p-6 rounded-md border border-hairline flex flex-col items-center gap-3">
+            <div className="w-7 h-7 rounded-full border-4 border-brand/25 border-t-brand animate-spin" />
             <p className="text-xs text-ink-muted">Fetching signed URL...</p>
           </div>
         </div>

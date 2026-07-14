@@ -38,7 +38,7 @@ export function RecordingStatusIndicator() {
 
   const className =
     status === 'active'
-      ? 'border-live/30 bg-live/10 text-live'
+      ? 'border-success/30 bg-success/10 text-success'
       : status === 'degraded'
         ? 'border-replay/30 bg-replay/10 text-replay'
         : 'border-hairline bg-panel-2 text-ink-faint';

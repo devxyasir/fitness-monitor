@@ -1,9 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { apiClient } from '../../../lib/api-client';
-import { CalendarDays, Film } from 'lucide-react';
+import { CalendarDays } from 'lucide-react';
+import { Card } from '../../components/ui/Card';
+import { Button } from '../../components/ui/Button';
+import { StateBlock, SkeletonRows, ErrorBlock } from '../../components/ui/StateBlocks';
 
 interface StudentStats {
   sessionsAttended: number;
@@ -43,56 +45,45 @@ export default function StudentOverviewPage() {
 
   return (
     <div className="space-y-6">
-      {error && (
-        <div role="alert" className="bg-danger/10 border border-danger/30 text-danger text-sm rounded-lg px-4 py-3 animate-rise">
-          {error}
-        </div>
-      )}
+      {error && <ErrorBlock message={error} onRetry={fetchOverview} />}
 
-      {/* Stat row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-panel border border-hairline rounded-lg p-5">
-          <div className="text-xs text-ink-muted mb-2">Sessions attended</div>
-          <div className="font-mono font-medium text-lg">{loading ? '—' : stats?.sessionsAttended ?? 0}</div>
-        </div>
-        <div className="bg-live/5 border border-live/20 rounded-lg p-5">
+        <Card accent="analytics">
+          <div className="text-xs text-ink-muted mb-2 pl-2">Sessions attended</div>
+          <div className="font-mono font-medium text-lg text-ink pl-2">{loading ? '—' : stats?.sessionsAttended ?? 0}</div>
+        </Card>
+
+        <Card accent="success" className="bg-success/5 border-success/20">
           <div className="text-xs text-ink-muted mb-2">Next session</div>
           {loading ? (
-            <div className="text-sm text-ink-muted">Loading...</div>
+            <SkeletonRows count={1} />
           ) : stats?.nextSession ? (
             <>
-              <div className="text-sm font-semibold">{stats.nextSession.time}</div>
-              <Link href={`/session/${stats.nextSession.sessionId}`} className="inline-flex mt-2 text-xs font-semibold text-canvas bg-live rounded-full px-3 py-1.5 hover:brightness-110 transition">
-                Join
-              </Link>
+              <div className="text-sm font-semibold text-ink">{stats.nextSession.time}</div>
+              <Button href={`/session/${stats.nextSession.sessionId}`} variant="session" size="sm" className="mt-2">Join</Button>
             </>
           ) : (
             <div className="text-sm text-ink-muted">No upcoming sessions</div>
           )}
-        </div>
-        <div className="bg-panel border border-hairline rounded-lg p-5">
-          <div className="text-xs text-ink-muted mb-2">Clips shared with you</div>
-          <div className="font-mono font-medium text-lg">{loading ? '—' : stats?.clipsShared ?? 0}</div>
-        </div>
+        </Card>
+
+        <Card accent="analytics">
+          <div className="text-xs text-ink-muted mb-2 pl-2">Clips shared with you</div>
+          <div className="font-mono font-medium text-lg text-ink pl-2">{loading ? '—' : stats?.clipsShared ?? 0}</div>
+        </Card>
       </div>
 
-      {/* Recent sessions */}
-      <div className="bg-panel border border-hairline rounded-lg p-5">
-        <h2 className="font-display font-semibold text-[1.0625rem] mb-4">Recent sessions</h2>
+      <div className="bg-panel border border-hairline rounded-md p-5">
+        <h2 className="font-display text-display-s mb-4">Recent sessions</h2>
         {loading ? (
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => <div key={i} className="h-6 bg-panel-2 rounded animate-shimmer" />)}
-          </div>
+          <SkeletonRows count={3} />
         ) : recentSessions.length === 0 ? (
-          <div className="text-center py-8">
-            <CalendarDays className="w-8 h-8 mx-auto text-ink-faint mb-3" />
-            <p className="text-sm text-ink-muted">No sessions yet — your coach will invite you to one.</p>
-          </div>
+          <StateBlock icon={<CalendarDays className="w-full h-full" />} title="No sessions yet" body="Your coach will invite you to one." />
         ) : (
           <div className="flex flex-col">
             {recentSessions.map((s) => (
               <div key={s.id} className="flex justify-between items-center py-3 border-b border-hairline last:border-0">
-                <span className="text-sm">{s.title}</span>
+                <span className="text-sm text-ink">{s.title}</span>
                 <span className="font-mono text-xs text-ink-faint">{s.date}</span>
               </div>
             ))}

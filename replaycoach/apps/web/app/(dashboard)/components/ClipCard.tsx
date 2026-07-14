@@ -46,10 +46,10 @@ export function ClipCard({ clip, onPlay, onShare }: ClipCardProps) {
   };
 
   return (
-    <div className="bg-panel border border-hairline rounded-lg p-5 flex flex-col justify-between hover:border-brand-indigo/25 transition-colors group">
+    <div className="bg-panel border border-hairline rounded-md p-5 flex flex-col justify-between hover:border-session/25 transition-colors group">
       <div>
         <div
-          className="aspect-video w-full rounded-lg mb-4 bg-gradient-to-tr from-panel-2 to-brand-indigo/10 flex items-center justify-center relative border border-hairline overflow-hidden cursor-pointer"
+          className="aspect-video w-full rounded-md mb-4 bg-gradient-to-tr from-panel-2 to-session/10 flex items-center justify-center relative border border-hairline overflow-hidden cursor-pointer"
           onClick={() => onPlay(clip)}
         >
           {clip.videoUrl ? (
@@ -72,7 +72,7 @@ export function ClipCard({ clip, onPlay, onShare }: ClipCardProps) {
                 e.stopPropagation();
                 onPlay(clip);
               }}
-              className="bg-gradient-to-br from-brand-indigo to-brand-violet text-canvas p-3 rounded-full shadow-lg transform scale-90 group-hover:scale-100 transition-transform duration-300"
+              className="bg-session text-white dark:text-canvas p-3 rounded-full shadow-lg transform scale-90 group-hover:scale-100 transition-transform duration-300"
             >
               <Play className="w-5 h-5 fill-current" />
             </button>
@@ -82,7 +82,7 @@ export function ClipCard({ clip, onPlay, onShare }: ClipCardProps) {
           </span>
         </div>
 
-        <h3 className="text-sm font-display font-semibold text-ink group-hover:text-brand-violet transition-colors truncate">
+        <h3 className="text-sm font-display font-medium text-ink group-hover:text-session transition-colors truncate">
           {clip.title}
         </h3>
       </div>
@@ -107,7 +107,7 @@ export function ClipCard({ clip, onPlay, onShare }: ClipCardProps) {
         {onShare && (
           <button
             onClick={() => onShare(clip)}
-            className="flex-1 py-2 bg-gradient-to-r from-brand-indigo to-brand-violet hover:shadow-glow text-canvas rounded-full text-xs font-semibold tracking-wide transition-all inline-flex items-center justify-center gap-1.5"
+            className="flex-1 py-2 bg-brand hover:brightness-110 text-white dark:text-canvas rounded-full text-xs font-semibold tracking-wide transition-all inline-flex items-center justify-center gap-1.5"
           >
             <Share2 className="w-3.5 h-3.5" /> Share ({clip.sharesCount ?? 0})
           </button>

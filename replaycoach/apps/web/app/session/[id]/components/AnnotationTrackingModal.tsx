@@ -153,14 +153,12 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
     };
 
     if (showSkeleton) {
-      // Signature neon skeleton — same indigo→violet gradient + glow used by
-      // the live overlay (SkeletonOverlay.tsx), not a flat per-limb color.
-      const boneGradient = ctx.createLinearGradient(0, 0, videoRect.width, videoRect.height);
-      boneGradient.addColorStop(0, '#6366F1');
-      boneGradient.addColorStop(1, '#8B5CF6');
+      // Signature motif — flat color-session stroke, small solid joint
+      // dots, zero glow. Same look as the live overlay (SkeletonOverlay.tsx).
+      const accentRaw = getComputedStyle(document.documentElement).getPropertyValue('--color-session').trim();
+      const accent = accentRaw ? `rgb(${accentRaw})` : '#1F6F6B';
 
-      ctx.lineWidth = 1.75; ctx.lineCap = 'round'; ctx.strokeStyle = boneGradient;
-      ctx.shadowColor = 'rgba(139,92,246,0.75)'; ctx.shadowBlur = 6;
+      ctx.lineWidth = 1.5; ctx.lineCap = 'round'; ctx.strokeStyle = accent;
       for (const [a, b] of skeletonConnectionsFor(keypointFormat)) {
         const ka = ordered[a], kb = ordered[b];
         if (!ka || !kb || ka.score < MIN_SCORE || kb.score < MIN_SCORE) continue;
@@ -169,14 +167,12 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
         ctx.lineTo(kb.x * videoRect.width, kb.y * videoRect.height);
         ctx.stroke();
       }
-      ctx.fillStyle = '#8B5CF6';
+      ctx.fillStyle = accent;
       for (const k of ordered) {
         if (!k || k.score < MIN_SCORE) continue;
         const px = k.x * videoRect.width, py = k.y * videoRect.height;
-        ctx.shadowBlur = 4;
-        ctx.beginPath(); ctx.arc(px, py, 2.75, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(px, py, 2.25, 0, Math.PI * 2); ctx.fill();
       }
-      ctx.shadowBlur = 0;
     } else {
       // Only draw joints that matter right now: ones already used by an
       // annotation visible on this frame, joints picked so far for the
@@ -649,8 +645,8 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
       <div className="w-full max-w-6xl h-[88vh] bg-panel border border-hairline rounded-lg shadow-2xl flex flex-col overflow-hidden animate-settle">
         <div className="flex items-center justify-between px-5 py-3 border-b border-hairline bg-panel-2">
           <div className="flex items-center gap-3">
-            <h2 className="text-sm font-display font-bold text-ink uppercase tracking-wide">Annotation Tracking</h2>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-brand-indigo/10 border border-brand-indigo/30 text-brand-violet uppercase tracking-wider">
+            <h2 className="text-sm font-display font-semibold text-ink uppercase tracking-wide">Annotation Tracking</h2>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-session/10 border border-session/30 text-session uppercase tracking-wider">
               Joints follow the body
             </span>
             {status === 'processing' && (
@@ -664,7 +660,7 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
               </button>
             ) : exportVideoUrl && !showModeChooser ? (
               <>
-                <button onClick={downloadExport} className="px-3 py-1.5 rounded-full bg-live/90 hover:bg-live text-canvas text-xs font-semibold transition-colors inline-flex items-center gap-1.5">
+                <button onClick={downloadExport} className="px-3 py-1.5 rounded-full bg-success/90 hover:bg-success text-white dark:text-canvas text-xs font-semibold transition-colors inline-flex items-center gap-1.5">
                   <Download className="w-3.5 h-3.5" /> Download {lastExportMode === 'skeleton' ? '(skeleton)' : '(annotations)'}
                 </button>
                 {isCoach && status === 'ready' && (
@@ -684,7 +680,7 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
                 <button
                   onClick={() => startExport(true)}
                   title="Burn in the full skeleton overlay"
-                  className="px-3 py-1.5 rounded-full bg-brand-indigo/15 hover:bg-brand-indigo/25 border border-brand-indigo/40 text-[#A5A9F5] text-xs font-semibold transition-colors inline-flex items-center gap-1.5"
+                  className="px-3 py-1.5 rounded-full bg-session/15 hover:bg-session/25 border border-session/40 text-session text-xs font-semibold transition-colors inline-flex items-center gap-1.5"
                 >
                   <Bone className="w-3.5 h-3.5" /> Full skeleton
                 </button>
@@ -749,7 +745,7 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
                         : 'Click two joints to connect them'}
                 </div>
                 {pendingJoints.length > 0 && (
-                  <div className="text-[10px] text-brand-violet font-mono">
+                  <div className="text-[10px] text-session font-mono">
                     Selected: {pendingJoints.join(' → ')}
                   </div>
                 )}
@@ -764,7 +760,7 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
                 <div className="grid grid-cols-3 gap-1.5">
                   {SHAPES.map((sh) => (
                     <button key={sh.id} onClick={() => s.setShape(sh.id)}
-                      className={`flex flex-col items-center gap-1 py-2 rounded-lg text-[10px] font-semibold border transition-colors ${shapeType === sh.id ? 'bg-gradient-to-r from-brand-indigo to-brand-violet border-transparent text-canvas' : 'bg-panel border-hairline text-ink-muted hover:text-ink'}`}>
+                      className={`flex flex-col items-center gap-1 py-2 rounded-lg text-[10px] font-semibold border transition-colors ${shapeType === sh.id ? 'bg-session border-transparent text-white dark:text-canvas' : 'bg-panel border-hairline text-ink-muted hover:text-ink'}`}>
                       <sh.icon className="w-4 h-4" /> {sh.label}
                     </button>
                   ))}
@@ -790,7 +786,7 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
                 <div className="flex items-center gap-1.5">
                   {THICKNESSES.map((t) => (
                     <button key={t} onClick={() => changeSelectedThickness(t)}
-                      className={`flex-1 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${thickness === t ? 'bg-gradient-to-r from-brand-indigo to-brand-violet border-transparent text-canvas' : 'bg-panel border-hairline text-ink-muted hover:text-ink'}`}>{t}px</button>
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${thickness === t ? 'bg-session border-transparent text-white dark:text-canvas' : 'bg-panel border-hairline text-ink-muted hover:text-ink'}`}>{t}px</button>
                   ))}
                 </div>
               </div>
@@ -805,7 +801,7 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
                       value={annotations.find((a) => a.id === selectedId)?.label ?? ''}
                       onChange={(e) => changeSelectedLabel(e.target.value)}
                       placeholder="e.g. Keep elbow high"
-                      className="w-full bg-panel border border-hairline rounded-lg px-2.5 py-1.5 text-xs text-ink placeholder-ink-faint focus:outline-none focus:border-brand-indigo"
+                      className="w-full bg-panel border border-hairline rounded-lg px-2.5 py-1.5 text-xs text-ink placeholder-ink-faint focus:outline-none focus:border-session"
                     />
                   </div>
                 )}
@@ -828,7 +824,7 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
           {isCoach && (
             <>
               <button onClick={() => step(-1)} className="bg-panel hover:bg-panel/70 border border-hairline text-ink text-xs px-2.5 py-1.5 rounded-full transition-colors"><StepBack className="w-3.5 h-3.5" /></button>
-              <button onClick={togglePlay} className="bg-gradient-to-r from-brand-indigo to-brand-violet hover:shadow-glow text-canvas text-xs font-semibold px-3 py-1.5 rounded-full transition-colors inline-flex items-center gap-1.5">{playing ? <><Pause className="w-3.5 h-3.5" /> Pause</> : <><Play className="w-3.5 h-3.5" /> Play</>}</button>
+              <button onClick={togglePlay} className="bg-session hover:brightness-110 text-white dark:text-canvas text-xs font-semibold px-3 py-1.5 rounded-full transition-colors inline-flex items-center gap-1.5">{playing ? <><Pause className="w-3.5 h-3.5" /> Pause</> : <><Play className="w-3.5 h-3.5" /> Play</>}</button>
               <button onClick={() => step(1)} className="bg-panel hover:bg-panel/70 border border-hairline text-ink text-xs px-2.5 py-1.5 rounded-full transition-colors"><StepForward className="w-3.5 h-3.5" /></button>
             </>
           )}

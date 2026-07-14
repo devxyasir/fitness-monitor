@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { apiClient } from '../../../../lib/api-client';
 import { RefreshCw, CalendarDays } from 'lucide-react';
+import { apiClient } from '../../../../lib/api-client';
 import { Pill } from '../../../components/ui/Pill';
+import { Button } from '../../../components/ui/Button';
+import { StateBlock, SkeletonRows, ErrorBlock } from '../../../components/ui/StateBlocks';
 
 interface Session {
   id: string;
@@ -15,6 +16,12 @@ interface Session {
   scheduledAt: string;
   startedAt: string | null;
   endedAt: string | null;
+}
+
+function statusPill(status: Session['status']): 'success' | 'scheduled' | 'ended' {
+  if (status === 'live') return 'success';
+  if (status === 'scheduled') return 'scheduled';
+  return 'ended';
 }
 
 export default function StudentSessionsPage() {
@@ -37,46 +44,35 @@ export default function StudentSessionsPage() {
     }
   };
 
-  const statusPill = (status: Session['status']): 'live' | 'scheduled' | 'ended' => {
-    if (status === 'live') return 'live';
-    if (status === 'scheduled') return 'scheduled';
-    return 'ended';
-  };
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h2 className="font-display font-semibold text-xl">My Sessions</h2>
+          <h2 className="font-display text-display-m">My sessions</h2>
           <p className="text-xs text-ink-muted mt-1">View sessions you participated in and review clip notes shared with you.</p>
         </div>
-        <button onClick={fetchSessions} className="px-3.5 py-2 text-xs font-semibold text-ink bg-panel-2 border border-hairline rounded-full hover:bg-panel-2/80 transition-colors inline-flex items-center gap-1.5">
+        <Button variant="ghost" size="sm" onClick={fetchSessions}>
           <RefreshCw className="w-3.5 h-3.5" /> Refresh
-        </button>
+        </Button>
       </div>
 
-      {error && (
-        <div className="bg-danger/10 border border-danger/30 text-danger rounded-lg px-4 py-3 text-xs font-medium">{error}</div>
-      )}
+      {error && <ErrorBlock message={error} onRetry={fetchSessions} />}
 
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-20 gap-3">
-          <div className="w-8 h-8 rounded-full border-4 border-brand-indigo border-t-transparent animate-spin" />
-          <p className="text-xs text-ink-muted">Loading sessions...</p>
-        </div>
+        <SkeletonRows count={5} />
       ) : sessions.length === 0 ? (
-        <div className="text-center py-16 border border-dashed border-hairline rounded-lg">
-          <CalendarDays className="w-10 h-10 mx-auto text-ink-faint mb-4" />
-          <h3 className="text-base font-bold text-ink mb-2">No active sessions found</h3>
-          <p className="text-sm text-ink-muted max-w-sm mx-auto">You will find your coaching session list here once you join a live session invitation.</p>
-        </div>
+        <StateBlock
+          icon={<CalendarDays className="w-full h-full" />}
+          title="No active sessions found"
+          body="You'll find your coaching session list here once you join a live session invitation."
+        />
       ) : (
-        <div className="bg-panel border border-hairline rounded-lg overflow-hidden">
+        <div className="bg-panel border border-hairline rounded-md overflow-hidden">
           {/* Desktop */}
           <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>
-                <tr className="border-b border-hairline bg-panel-2 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
+                <tr className="border-b border-hairline bg-panel-2 text-label text-ink-faint uppercase">
                   <th className="px-5 py-3">Session</th>
                   <th className="px-5 py-3">Status</th>
                   <th className="px-5 py-3">Date</th>
@@ -85,15 +81,15 @@ export default function StudentSessionsPage() {
               </thead>
               <tbody className="divide-y divide-hairline">
                 {sessions.map((s) => (
-                  <tr key={s.id} className="hover:bg-panel-2/30 transition-colors">
+                  <tr key={s.id} className="hover:bg-panel-2/40 transition-colors">
                     <td className="px-5 py-3.5 font-mono text-xs text-ink">{s.id.substring(0, 8)}...</td>
                     <td className="px-5 py-3.5"><Pill variant={statusPill(s.status)}>{s.status}</Pill></td>
                     <td className="px-5 py-3.5 text-xs text-ink-muted">{new Date(s.scheduledAt).toLocaleString()}</td>
                     <td className="px-5 py-3.5 text-right">
                       {['live', 'scheduled'].includes(s.status) ? (
-                        <Link href={`/session/${s.id}`} className="px-3.5 py-1.5 text-xs font-semibold text-canvas bg-live rounded-full hover:brightness-110 transition">Join Room</Link>
+                        <Button variant="session" size="sm" href={`/session/${s.id}`}>Join room</Button>
                       ) : (
-                        <Link href={`/student/clips?sessionId=${s.id}`} className="btn-ghost px-3 py-1.5 text-xs">View Clips</Link>
+                        <Button variant="ghost" size="sm" href={`/student/clips?sessionId=${s.id}`}>View clips</Button>
                       )}
                     </td>
                   </tr>
@@ -113,9 +109,9 @@ export default function StudentSessionsPage() {
                 <div className="text-xs text-ink-muted">{new Date(s.scheduledAt).toLocaleString()}</div>
                 <div>
                   {['live', 'scheduled'].includes(s.status) ? (
-                    <Link href={`/session/${s.id}`} className="inline-flex px-3 py-1.5 text-xs font-semibold text-canvas bg-live rounded-full">Join</Link>
+                    <Button variant="session" size="sm" href={`/session/${s.id}`}>Join</Button>
                   ) : (
-                    <Link href={`/student/clips?sessionId=${s.id}`} className="btn-ghost px-3 py-1.5 text-xs">View Clips</Link>
+                    <Button variant="ghost" size="sm" href={`/student/clips?sessionId=${s.id}`}>View clips</Button>
                   )}
                 </div>
               </div>

@@ -36,7 +36,7 @@ export function ReplayTargetPicker({ selectedStudentIds, onChange }: ReplayTarge
         <h3 className="text-sm font-display font-semibold text-ink tracking-wide uppercase inline-flex items-center gap-1.5">
           <Settings2 className="w-3.5 h-3.5" /> Sync replay to
         </h3>
-        <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-full bg-brand-indigo/10 text-brand-violet border border-brand-indigo/30">
+        <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-full bg-session/10 text-session border border-session/30">
           {students.length} active
         </span>
       </div>
@@ -54,7 +54,7 @@ export function ReplayTargetPicker({ selectedStudentIds, onChange }: ReplayTarge
                 key={student.identity}
                 className={`flex items-center justify-between px-3.5 py-2.5 rounded-lg border transition-colors cursor-pointer select-none ${
                   isChecked
-                    ? 'bg-brand-indigo/10 border-brand-indigo/35 text-ink'
+                    ? 'bg-session/10 border-session/35 text-ink'
                     : 'bg-panel-2/40 border-hairline text-ink-muted hover:bg-panel-2 hover:text-ink'
                 }`}
               >
@@ -63,7 +63,7 @@ export function ReplayTargetPicker({ selectedStudentIds, onChange }: ReplayTarge
                     type="checkbox"
                     checked={isChecked}
                     onChange={() => toggleStudent(student.identity)}
-                    className="w-4 h-4 accent-brand-indigo rounded border-hairline bg-panel-2 cursor-pointer"
+                    className="w-4 h-4 accent-session rounded border-hairline bg-panel-2 cursor-pointer"
                   />
                   <span className="text-xs font-semibold">
                     {student.name || student.identity}

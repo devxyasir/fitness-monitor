@@ -291,7 +291,7 @@ export function ParticipantVideoTile({
 
       {/* Display user label */}
       <div className="absolute bottom-3 left-3 bg-panel/70 backdrop-blur-glass px-2.5 py-1 rounded-full border border-hairline text-ink text-xs font-medium flex items-center gap-1.5 z-10">
-        <span className="w-1.5 h-1.5 rounded-full bg-live"></span>
+        <span className="w-1.5 h-1.5 rounded-full bg-success"></span>
         {trackRef.participant.name || trackRef.participant.identity}
         {trackRef.participant.isLocal && ' (You)'}
       </div>
@@ -324,7 +324,7 @@ export function ParticipantVideoTile({
           <button
             type="button"
             onClick={() => onPinTrack(isPinned ? null : trackSid)}
-            className="bg-brand-indigo/15 hover:bg-brand-indigo/25 border border-brand-indigo/35 text-[#A5A9F5] text-xs font-semibold px-2.5 py-1.5 rounded-full transition-colors"
+            className="bg-session/15 hover:bg-session/25 border border-session/35 text-session text-xs font-semibold px-2.5 py-1.5 rounded-full transition-colors"
           >
             {isPinned ? 'Unpin' : 'Spotlight'}
           </button>

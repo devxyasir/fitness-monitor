@@ -204,7 +204,7 @@ export function ReplayPanel({
           only a console.warn on failure, no feedback to the user at all. */}
       {loadState === 'loading' && (
         <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-canvas">
-          <Loader2 className="w-8 h-8 text-brand-violet animate-spin" />
+          <Loader2 className="w-8 h-8 text-session animate-spin" />
           <p className="text-sm font-medium text-ink-muted">Loading replay…</p>
         </div>
       )}
@@ -275,7 +275,7 @@ export function ReplayPanel({
                 }}
                 className={`text-xs font-mono px-2 py-1 rounded-full transition-colors ${
                   playbackRate === s
-                    ? 'bg-gradient-to-r from-brand-indigo to-brand-violet text-canvas font-semibold'
+                    ? 'bg-brand text-white dark:text-canvas font-semibold'
                     : 'bg-panel-2 border border-hairline hover:bg-panel-2/70 text-ink-muted'
                 }`}
               >
@@ -288,7 +288,7 @@ export function ReplayPanel({
           {isCoach && (
             <button
               onClick={handleEndReplay}
-              className="bg-live/90 hover:bg-live text-canvas text-xs font-semibold px-3.5 py-1.5 rounded-full transition-colors inline-flex items-center gap-1.5"
+              className="bg-success/90 hover:bg-success text-white dark:text-canvas text-xs font-semibold px-3.5 py-1.5 rounded-full transition-colors inline-flex items-center gap-1.5"
             >
               <Rewind className="w-3.5 h-3.5" /> Return to Live
             </button>

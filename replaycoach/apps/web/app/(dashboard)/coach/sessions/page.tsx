@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { apiClient } from '../../../../lib/api-client';
 import { CalendarDays, Check } from 'lucide-react';
+import { apiClient } from '../../../../lib/api-client';
 import { Pill } from '../../../components/ui/Pill';
+import { Button } from '../../../components/ui/Button';
+import { StateBlock, SkeletonRows, ErrorBlock } from '../../../components/ui/StateBlocks';
 
 interface Session {
   id: string;
@@ -18,6 +19,12 @@ interface Session {
   endedAt: string | null;
   accessType: 'public' | 'lobby';
   inviteCode: string;
+}
+
+function statusPillVariant(status: Session['status']): 'success' | 'scheduled' | 'ended' {
+  if (status === 'live') return 'success';
+  if (status === 'scheduled') return 'scheduled';
+  return 'ended';
 }
 
 export default function CoachSessionsPage() {
@@ -77,67 +84,38 @@ export default function CoachSessionsPage() {
     }
   };
 
-  const statusPillVariant = (status: Session['status']): 'live' | 'scheduled' | 'ended' => {
-    if (status === 'live') return 'live';
-    if (status === 'scheduled') return 'scheduled';
-    return 'ended';
-  };
-
   return (
     <div className="space-y-6">
       {/* Top bar: create + refresh */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h2 className="font-display font-semibold text-xl">Coaching Sessions</h2>
+          <h2 className="font-display text-display-m">Coaching sessions</h2>
           <p className="text-xs text-ink-muted mt-1">Create, join, or review your live coaching sessions.</p>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={fetchSessions} className="px-3.5 py-2 text-xs font-semibold text-ink bg-panel-2 border border-hairline rounded-full hover:bg-panel-2/80 transition-colors">
-            Refresh
-          </button>
-          <button
-            onClick={handleCreateSession}
-            disabled={creating}
-            className="px-4 py-2 text-xs font-semibold text-canvas bg-gradient-to-r from-brand-indigo to-brand-violet rounded-full hover:shadow-glow transition-all disabled:opacity-50"
-          >
-            {creating ? 'Creating...' : '+ New Session'}
-          </button>
+          <Button variant="ghost" size="sm" onClick={fetchSessions}>Refresh</Button>
+          <Button size="sm" loading={creating} onClick={handleCreateSession}>+ New session</Button>
         </div>
       </div>
 
-      {error && (
-        <div className="bg-danger/10 border border-danger/30 text-danger rounded-lg px-4 py-3 text-xs font-medium">
-          {error}
-        </div>
-      )}
+      {error && <ErrorBlock message={error} onRetry={fetchSessions} />}
 
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-20 gap-3">
-          <div className="w-8 h-8 rounded-full border-4 border-brand-indigo border-t-transparent animate-spin" />
-          <p className="text-xs text-ink-muted">Loading sessions...</p>
-        </div>
+        <SkeletonRows count={5} />
       ) : sessions.length === 0 ? (
-        <div className="text-center py-16 border border-dashed border-hairline rounded-lg">
-          <CalendarDays className="w-10 h-10 mx-auto text-ink-faint mb-4" />
-          <h3 className="text-base font-bold text-ink mb-2">No sessions yet</h3>
-          <p className="text-sm text-ink-muted max-w-sm mx-auto mb-6">
-            Create an instant live room and share the link with your students.
-          </p>
-          <button
-            onClick={handleCreateSession}
-            disabled={creating}
-            className="px-5 py-2.5 text-sm font-semibold text-canvas bg-gradient-to-r from-brand-indigo to-brand-violet rounded-full hover:shadow-glow transition-all disabled:opacity-50"
-          >
-            {creating ? 'Creating...' : '+ Create Your First Session'}
-          </button>
-        </div>
+        <StateBlock
+          icon={<CalendarDays className="w-full h-full" />}
+          title="No sessions yet"
+          body="Create an instant live room and share the link with your students."
+          action={<Button loading={creating} onClick={handleCreateSession}>+ Create your first session</Button>}
+        />
       ) : (
-        <div className="bg-panel border border-hairline rounded-lg overflow-hidden">
+        <div className="bg-panel border border-hairline rounded-md overflow-hidden">
           {/* Desktop table */}
           <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>
-                <tr className="border-b border-hairline bg-panel-2 text-[11px] font-bold uppercase tracking-wider text-ink-faint">
+                <tr className="border-b border-hairline bg-panel-2 text-label text-ink-faint uppercase">
                   <th className="px-5 py-3">Room</th>
                   <th className="px-5 py-3">Access</th>
                   <th className="px-5 py-3">Status</th>
@@ -147,25 +125,25 @@ export default function CoachSessionsPage() {
               </thead>
               <tbody className="divide-y divide-hairline">
                 {sessions.map((session) => (
-                  <tr key={session.id} className="hover:bg-panel-2/30 transition-colors">
+                  <tr key={session.id} className="hover:bg-panel-2/40 transition-colors">
                     <td className="px-5 py-3.5 font-mono text-xs text-ink">{session.id.substring(0, 8)}...</td>
                     <td className="px-5 py-3.5 text-xs font-semibold capitalize text-ink-muted">{session.accessType ?? 'public'}</td>
                     <td className="px-5 py-3.5"><Pill variant={statusPillVariant(session.status)}>{session.status}</Pill></td>
                     <td className="px-5 py-3.5 text-xs text-ink-muted">{new Date(session.scheduledAt).toLocaleString()}</td>
                     <td className="px-5 py-3.5">
                       <div className="flex justify-end items-center gap-2">
-                        <button onClick={() => handleCopyLink(session)} className="px-3 py-1.5 text-xs text-ink-muted border border-hairline rounded-full hover:bg-panel-2 transition-colors flex items-center gap-1">
+                        <Button variant="ghost" size="sm" onClick={() => handleCopyLink(session)}>
                           {copiedSessionId === session.id ? <><Check className="w-3 h-3" /> Copied</> : 'Copy invite'}
-                        </button>
+                        </Button>
                         {['live', 'scheduled'].includes(session.status) ? (
                           <>
-                            <button onClick={() => handleStopSession(session.id)} className="px-3 py-1.5 text-xs text-danger border border-danger/30 rounded-full hover:bg-danger/10 transition-colors">Stop</button>
-                            <Link href={`/session/${session.id}`} className="px-3.5 py-1.5 text-xs font-semibold text-canvas bg-live rounded-full hover:brightness-110 transition">Join Room</Link>
+                            <Button variant="danger" size="sm" onClick={() => handleStopSession(session.id)}>Stop</Button>
+                            <Button variant="session" size="sm" href={`/session/${session.id}`}>Join room</Button>
                           </>
                         ) : (
                           <>
-                            <Link href={`/session/${session.id}?replay=true`} className="btn-ghost px-3 py-1.5 text-xs">Replay</Link>
-                            <Link href={`/coach/clips?sessionId=${session.id}`} className="px-3 py-1.5 text-xs font-semibold text-canvas bg-gradient-to-r from-brand-indigo to-brand-violet rounded-full">Clips</Link>
+                            <Button variant="ghost" size="sm" href={`/session/${session.id}?replay=true`}>Replay</Button>
+                            <Button variant="analytics" size="sm" href={`/coach/clips?sessionId=${session.id}`}>Clips</Button>
                           </>
                         )}
                       </div>
@@ -186,18 +164,18 @@ export default function CoachSessionsPage() {
                 </div>
                 <div className="text-xs text-ink-muted">{new Date(session.scheduledAt).toLocaleString()}</div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <button onClick={() => handleCopyLink(session)} className="px-3 py-1.5 text-xs text-ink-muted border border-hairline rounded-full">
+                  <Button variant="ghost" size="sm" onClick={() => handleCopyLink(session)}>
                     {copiedSessionId === session.id ? 'Copied' : 'Copy invite'}
-                  </button>
+                  </Button>
                   {['live', 'scheduled'].includes(session.status) ? (
                     <>
-                      <button onClick={() => handleStopSession(session.id)} className="px-3 py-1.5 text-xs text-danger border border-danger/30 rounded-full">Stop</button>
-                      <Link href={`/session/${session.id}`} className="px-3 py-1.5 text-xs font-semibold text-canvas bg-live rounded-full">Join</Link>
+                      <Button variant="danger" size="sm" onClick={() => handleStopSession(session.id)}>Stop</Button>
+                      <Button variant="session" size="sm" href={`/session/${session.id}`}>Join</Button>
                     </>
                   ) : (
                     <>
-                      <Link href={`/session/${session.id}?replay=true`} className="btn-ghost px-3 py-1.5 text-xs">Replay</Link>
-                      <Link href={`/coach/clips?sessionId=${session.id}`} className="px-3 py-1.5 text-xs font-semibold text-canvas bg-gradient-to-r from-brand-indigo to-brand-violet rounded-full">Clips</Link>
+                      <Button variant="ghost" size="sm" href={`/session/${session.id}?replay=true`}>Replay</Button>
+                      <Button variant="analytics" size="sm" href={`/coach/clips?sessionId=${session.id}`}>Clips</Button>
                     </>
                   )}
                 </div>

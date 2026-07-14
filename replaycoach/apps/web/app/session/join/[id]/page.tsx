@@ -7,6 +7,10 @@ import { useAuthStore } from '../../../../stores/auth-store';
 import { apiClient } from '../../../../lib/api-client';
 import { socket, connectSocket, disconnectSocket } from '../../../../lib/socket-client';
 import { Lock, AlertTriangle, Hourglass, Ban, Clapperboard } from 'lucide-react';
+import { Button } from '../../../components/ui/Button';
+import { Pill } from '../../../components/ui/Pill';
+import { IconBadge } from '../../../components/ui/StateBlocks';
+import type { ReactNode } from 'react';
 
 interface Session {
   id: string;
@@ -14,6 +18,16 @@ interface Session {
   status: string;
   accessType: 'public' | 'lobby';
   inviteCode: string;
+}
+
+function JoinShell({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-canvas text-ink p-6">
+      <div className="max-w-md w-full bg-panel border border-hairline rounded-lg shadow-lg p-8 text-center animate-rise">
+        {children}
+      </div>
+    </div>
+  );
 }
 
 export default function SessionJoinPage({ params }: { params: { id: string } }) {
@@ -29,7 +43,7 @@ export default function SessionJoinPage({ params }: { params: { id: string } }) 
   // 1. Fetch Session Info
   useEffect(() => {
     if (!inviteCode) return;
-    
+
     apiClient.get<Session>(`/sessions/by-invite/${inviteCode}`)
       .then((data) => {
         setSession(data);
@@ -45,7 +59,7 @@ export default function SessionJoinPage({ params }: { params: { id: string } }) 
   // 2. Handle joining security flow
   const handleJoin = async () => {
     if (!session || !accessToken) return;
-    
+
     try {
       setJoinStatus('joining');
       const response = await apiClient.post<{ sessionId: string }, { status: 'approved' | 'pending' | 'rejected' }>(
@@ -74,7 +88,6 @@ export default function SessionJoinPage({ params }: { params: { id: string } }) 
 
     connectSocket(accessToken);
 
-    // Join the session channel to listen to approvals
     socket.emit('session:join', { sessionId: session.id }, (res: any) => {
       if (res?.status === 'error') {
         console.error('Failed to register socket lobby presence:', res.message);
@@ -104,153 +117,92 @@ export default function SessionJoinPage({ params }: { params: { id: string } }) 
     };
   }, [joinStatus, session, accessToken, router]);
 
-  // Render Loading
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-slate-200 p-6">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-indigo-600 border-t-indigo-400 rounded-full animate-spin"></div>
-          <p className="text-sm font-semibold text-slate-400">Verifying invite link...</p>
-        </div>
-      </div>
+      <JoinShell>
+        <div className="w-12 h-12 border-4 border-brand/25 border-t-brand rounded-full animate-spin mx-auto mb-4" />
+        <p className="text-sm font-semibold text-ink-muted">Verifying invite link...</p>
+      </JoinShell>
     );
   }
 
-  // Render Unauthenticated
   if (!accessToken) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-slate-200 p-6">
-        <div className="max-w-md w-full bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-xl text-center">
-          <div className="w-16 h-16 bg-indigo-950 border border-indigo-800 rounded-full flex items-center justify-center mx-auto mb-6 text-indigo-500">
-            <Lock className="w-8 h-8" />
-          </div>
-          <h2 className="text-xl font-bold text-white mb-2">Authentication Required</h2>
-          <p className="text-slate-400 mb-6 text-sm">
-            You must be signed in to join coaching sessions on ReplayCoach.
-          </p>
-          <Link
-            href={`/login?redirect=/session/join/${inviteCode}`}
-            className="flex justify-center items-center w-full px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition"
-          >
-            Sign In & Join Session
-          </Link>
-        </div>
-      </div>
+      <JoinShell>
+        <IconBadge icon={Lock} tone="brand" />
+        <h2 className="font-display text-display-s text-ink mb-2">Sign in required</h2>
+        <p className="text-ink-muted text-sm mb-6">You must be signed in to join coaching sessions on ReplayCoach.</p>
+        <Button href={`/login?redirect=/session/join/${inviteCode}`} className="w-full">Sign in & join session</Button>
+      </JoinShell>
     );
   }
 
-  // Render Error / Session Not Found
   if (error || !session) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-slate-200 p-6">
-        <div className="max-w-md w-full bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-xl text-center">
-          <div className="w-16 h-16 bg-red-950 border border-red-800 rounded-full flex items-center justify-center mx-auto mb-6 text-red-500">
-            <AlertTriangle className="w-8 h-8" />
-          </div>
-          <h2 className="text-xl font-bold text-white mb-2">Invite Error</h2>
-          <p className="text-slate-400 mb-6 text-sm">
-            {error || 'Unable to retrieve session invitation details.'}
-          </p>
-          <Link
-            href="/dashboard"
-            className="inline-flex justify-center items-center w-full px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-medium transition"
-          >
-            Return to Dashboard
-          </Link>
-        </div>
-      </div>
+      <JoinShell>
+        <IconBadge icon={AlertTriangle} tone="danger" />
+        <h2 className="font-display text-display-s text-ink mb-2">Invite error</h2>
+        <p className="text-ink-muted text-sm mb-6">{error || 'Unable to retrieve session invitation details.'}</p>
+        <Button href="/dashboard" variant="ghost" className="w-full">Return to dashboard</Button>
+      </JoinShell>
     );
   }
 
-  // Render Lobby Waiting Room for Student
   if (joinStatus === 'pending') {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-slate-200 p-6">
-        <div className="max-w-md w-full bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-xl text-center relative overflow-hidden">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-indigo-500 animate-pulse" />
-          <div className="w-16 h-16 bg-amber-950/40 border border-amber-900/60 rounded-full flex items-center justify-center mx-auto mb-6 text-amber-500 animate-pulse">
-            <Hourglass className="w-7 h-7" />
-          </div>
-          <h2 className="text-xl font-bold text-white mb-2">Waiting for Approval</h2>
-          <p className="text-slate-400 mb-6 text-sm">
-            The coach has been notified of your request to join. Keep this tab open; you will enter the room automatically when they approve you.
-          </p>
-          <div className="flex justify-center gap-2 mb-6">
-            <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-bounce [animation-delay:-0.3s]"></span>
-            <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-bounce [animation-delay:-0.15s]"></span>
-            <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-bounce"></span>
-          </div>
-          <Link
-            href="/dashboard"
-            onClick={() => disconnectSocket()}
-            className="inline-flex justify-center items-center w-full px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-xs font-semibold transition"
-          >
-            Cancel Request & Exit
-          </Link>
+      <JoinShell>
+        <IconBadge icon={Hourglass} tone="replay" />
+        <h2 className="font-display text-display-s text-ink mb-2">Waiting for approval</h2>
+        <p className="text-ink-muted text-sm mb-6">
+          The coach has been notified of your request to join. Keep this tab open —
+          you&apos;ll enter the room automatically once they approve you.
+        </p>
+        <div className="flex justify-center gap-2 mb-6" aria-hidden>
+          <span className="w-2.5 h-2.5 rounded-full bg-replay animate-bounce [animation-delay:-0.3s]" />
+          <span className="w-2.5 h-2.5 rounded-full bg-replay animate-bounce [animation-delay:-0.15s]" />
+          <span className="w-2.5 h-2.5 rounded-full bg-replay animate-bounce" />
         </div>
-      </div>
+        <Button href="/dashboard" variant="ghost" size="sm" className="w-full" onClick={() => disconnectSocket()}>
+          Cancel request & exit
+        </Button>
+      </JoinShell>
     );
   }
 
-  // Render Rejected State
   if (joinStatus === 'rejected') {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-slate-200 p-6">
-        <div className="max-w-md w-full bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-xl text-center">
-          <div className="w-16 h-16 bg-red-950/40 border border-red-900/60 rounded-full flex items-center justify-center mx-auto mb-6 text-red-500">
-            <Ban className="w-8 h-8" />
-          </div>
-          <h2 className="text-xl font-bold text-white mb-2">Access Declined</h2>
-          <p className="text-slate-400 mb-6 text-sm">
-            Your request to join this session has been declined by the coach.
-          </p>
-          <Link
-            href="/dashboard"
-            className="inline-flex justify-center items-center w-full px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-medium transition"
-          >
-            Return to Dashboard
-          </Link>
-        </div>
-      </div>
+      <JoinShell>
+        <IconBadge icon={Ban} tone="danger" />
+        <h2 className="font-display text-display-s text-ink mb-2">Access declined</h2>
+        <p className="text-ink-muted text-sm mb-6">Your request to join this session has been declined by the coach.</p>
+        <Button href="/dashboard" variant="ghost" className="w-full">Return to dashboard</Button>
+      </JoinShell>
     );
   }
 
-  // Render Join Prompt Button for new entrants
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-slate-200 p-6">
-      <div className="max-w-md w-full bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-xl text-center">
-        <div className="w-16 h-16 bg-indigo-950/80 border border-indigo-900/60 rounded-full flex items-center justify-center mx-auto mb-6 text-indigo-400">
-          <Clapperboard className="w-8 h-8" />
-        </div>
-        <h2 className="text-xl font-bold text-white mb-1">Session Invitation</h2>
-        <p className="text-xs text-slate-500 font-mono mb-6">{session.id}</p>
-        
-        <div className="bg-slate-950/60 border border-slate-900 rounded-xl p-4 text-left mb-6 flex flex-col gap-2">
-          <div className="flex justify-between items-center text-xs">
-            <span className="text-slate-400">Security Gate:</span>
-            <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold ${
-              session.accessType === 'lobby' 
-                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/35'
-                : 'bg-green-500/20 text-green-400 border border-green-600/35'
-            }`}>
-              {session.accessType === 'lobby' ? 'Lobby Approval Needed' : 'Anyone Can Join'}
-            </span>
-          </div>
-          <div className="h-px bg-slate-900" />
-          <div className="flex justify-between items-center text-xs">
-            <span className="text-slate-400">Current Status:</span>
-            <span className="text-slate-300 capitalize">{session.status}</span>
-          </div>
-        </div>
+    <JoinShell>
+      <IconBadge icon={Clapperboard} tone="session" />
+      <h2 className="font-display text-display-s text-ink mb-1">Session invitation</h2>
+      <p className="text-xs text-ink-faint font-mono mb-6">{session.id}</p>
 
-        <button
-          onClick={handleJoin}
-          disabled={joinStatus === 'joining'}
-          className="flex justify-center items-center w-full px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition disabled:opacity-50"
-        >
-          {joinStatus === 'joining' ? 'Requesting Access...' : 'Request to Join Room'}
-        </button>
+      <div className="bg-panel-2 border border-hairline rounded-sm p-4 text-left mb-6 flex flex-col gap-2.5">
+        <div className="flex justify-between items-center text-xs">
+          <span className="text-ink-muted">Security gate</span>
+          <Pill variant={session.accessType === 'lobby' ? 'replay' : 'success'}>
+            {session.accessType === 'lobby' ? 'Lobby approval needed' : 'Anyone can join'}
+          </Pill>
+        </div>
+        <div className="h-px bg-hairline" />
+        <div className="flex justify-between items-center text-xs">
+          <span className="text-ink-muted">Current status</span>
+          <span className="text-ink capitalize">{session.status}</span>
+        </div>
       </div>
-    </div>
+
+      <Button onClick={handleJoin} loading={joinStatus === 'joining'} className="w-full">
+        {joinStatus === 'joining' ? 'Requesting access...' : 'Request to join room'}
+      </Button>
+    </JoinShell>
   );
 }

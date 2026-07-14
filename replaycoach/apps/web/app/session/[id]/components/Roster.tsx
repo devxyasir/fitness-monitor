@@ -85,7 +85,7 @@ export function Roster({ sessionId, isCoach }: RosterProps) {
           onClick={() => setExpanded((e) => !e)}
           className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-ink"
         >
-          <span className="w-1.5 h-1.5 rounded-full bg-live" />
+          <span className="w-1.5 h-1.5 rounded-full bg-success" />
           {realParticipants.length} in call
           <span className="text-ink-faint">{expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}</span>
         </button>

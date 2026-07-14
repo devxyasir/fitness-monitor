@@ -42,7 +42,7 @@ export default function DemoVideoModal({ open, onClose }: { open: boolean; onClo
         className="relative w-full max-w-4xl animate-settle"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="relative rounded-lg overflow-hidden border border-hairline bg-panel shadow-2xl" style={{ boxShadow: '0 24px 80px -20px rgba(99,102,241,0.35)' }}>
+        <div className="relative rounded-lg overflow-hidden border border-hairline bg-panel shadow-lg">
           <video
             ref={videoRef}
             src="/media/demo.mp4"

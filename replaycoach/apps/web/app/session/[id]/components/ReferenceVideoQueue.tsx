@@ -87,14 +87,14 @@ export function ReferenceVideoQueue({ sessionId, refreshToken }: ReferenceVideoQ
                 ) : v.status === 'failed' ? (
                   <CircleAlert className="w-3.5 h-3.5 text-danger" />
                 ) : (
-                  <Play className="w-3.5 h-3.5 text-brand-violet fill-current" />
+                  <Play className="w-3.5 h-3.5 text-session fill-current" />
                 )}
                 Video {i + 1}
               </span>
               <span
                 className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
                   v.status === 'ready'
-                    ? 'bg-live/10 text-live border border-live/30'
+                    ? 'bg-success/10 text-success border border-success/30'
                     : v.status === 'failed'
                       ? 'bg-danger/10 text-danger border border-danger/30'
                       : 'bg-replay/10 text-replay border border-replay/30 animate-pulse'

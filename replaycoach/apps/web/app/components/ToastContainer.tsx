@@ -5,7 +5,7 @@ import { useToastStore, type ToastVariant } from '../../stores/toast-store';
 
 const VARIANT_STYLES: Record<ToastVariant, { className: string; icon: typeof Info }> = {
   error: { className: 'bg-danger/10 border-danger/30 text-danger', icon: AlertTriangle },
-  success: { className: 'bg-live/10 border-live/30 text-live', icon: CheckCircle2 },
+  success: { className: 'bg-success/10 border-success/30 text-success', icon: CheckCircle2 },
   info: { className: 'bg-panel border-hairline text-ink', icon: Info },
 };
 

@@ -4,12 +4,15 @@ import { useEffect, useRef } from 'react';
 import { usePoseStore } from '../../../../stores/pose-store';
 import { keypointNamesFor, skeletonConnectionsFor, type KeypointFormat } from '@replaycoach/types';
 
-// The signature neon skeleton: thin indigo→violet gradient bones with a soft
-// violet glow, small glowing joint dots — one look everywhere (hero mock,
-// live overlay, analysis modals), not per-limb flat colors.
-const SKELETON_INDIGO = '#6366F1';
-const SKELETON_VIOLET = '#8B5CF6';
-const SKELETON_GLOW = 'rgba(139,92,246,0.75)';
+// The signature motif: thin, flat color-session stroke, small solid joint
+// dots, zero glow/blur — confident and legible instead of decorative. Same
+// look everywhere (hero mock, live overlay, analysis modals), read from the
+// CSS custom property so it follows the active theme automatically. See
+// design/DESIGN_SYSTEM.md's "signature motif" section.
+function getSessionAccent(): string {
+  const raw = getComputedStyle(document.documentElement).getPropertyValue('--color-session').trim();
+  return raw ? `rgb(${raw})` : '#1F6F6B';
+}
 
 const HEAD_KEYPOINT_NAMES = new Set(['nose', 'head']);
 
@@ -75,18 +78,11 @@ export function SkeletonOverlay({
     const connections = skeletonConnectionsFor(format);
 
     const orderedKps = names.map((name) => kpMap.get(name));
+    const accent = getSessionAccent();
 
-    // One gradient spans the whole canvas so every bone reads as part of the
-    // same signature skeleton rather than per-limb flat colors.
-    const boneGradient = ctx.createLinearGradient(0, 0, width, height);
-    boneGradient.addColorStop(0, SKELETON_INDIGO);
-    boneGradient.addColorStop(1, SKELETON_VIOLET);
-
-    ctx.lineWidth = 1.75;
+    ctx.lineWidth = 1.5;
     ctx.lineCap = 'round';
-    ctx.strokeStyle = boneGradient;
-    ctx.shadowColor = SKELETON_GLOW;
-    ctx.shadowBlur = 6;
+    ctx.strokeStyle = accent;
 
     for (let i = 0; i < connections.length; i++) {
       const conn = connections[i]!;
@@ -103,11 +99,10 @@ export function SkeletonOverlay({
       ctx.stroke();
     }
 
-    // Small filled glowing joint dots — the head keypoint renders larger as
-    // the skeleton's visual anchor, matching the design system signature.
+    // Small filled joint dots — the head keypoint renders larger as the
+    // skeleton's visual anchor. Flat fill, no glow.
     ctx.globalAlpha = 1.0;
-    ctx.fillStyle = SKELETON_VIOLET;
-    ctx.shadowColor = SKELETON_GLOW;
+    ctx.fillStyle = accent;
     for (let i = 0; i < orderedKps.length; i++) {
       const kp = orderedKps[i];
       if (!kp || kp.score < 0.3) continue;
@@ -116,12 +111,10 @@ export function SkeletonOverlay({
       const py = kp.y * height;
       const isHead = HEAD_KEYPOINT_NAMES.has(names[i]!);
 
-      ctx.shadowBlur = isHead ? 8 : 4;
       ctx.beginPath();
-      ctx.arc(px, py, isHead ? 7 : 2.75, 0, Math.PI * 2);
+      ctx.arc(px, py, isHead ? 6 : 2.25, 0, Math.PI * 2);
       ctx.fill();
     }
-    ctx.shadowBlur = 0;
   }, [frame, width, height]);
 
   return (

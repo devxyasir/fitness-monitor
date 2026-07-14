@@ -19,7 +19,7 @@ export default function DashboardRedirectPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-canvas">
       <div className="flex flex-col items-center gap-4">
-        <div className="w-10 h-10 border-4 border-brand-indigo/30 border-t-brand-indigo rounded-full animate-spin" />
+        <div className="w-10 h-10 border-4 border-brand/25 border-t-brand rounded-full animate-spin" />
         <div className="text-ink-muted text-sm">Redirecting...</div>
       </div>
     </div>
