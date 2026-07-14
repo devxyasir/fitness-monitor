@@ -62,10 +62,14 @@ const config: Config = {
         md: '10px',
         lg: '16px',
       },
+      maxWidth: {
+        content: '1320px',
+      },
       boxShadow: {
         sm: '0 1px 2px rgba(20,14,8,0.06)',
         md: '0 8px 24px -8px rgba(20,14,8,0.16)',
         lg: '0 24px 48px -16px rgba(20,14,8,0.24)',
+        xl: '0 40px 80px -24px rgba(20,14,8,0.36)',
         focus: '0 0 0 3px rgb(var(--color-brand) / 0.25)',
       },
       backdropBlur: {
@@ -100,6 +104,11 @@ const config: Config = {
           '0%, 100%': { opacity: '0.55', transform: 'scale(0.97)' },
           '50%': { opacity: '1', transform: 'scale(1)' },
         },
+        'stroke-draw': {
+          '0%, 15%': { strokeDashoffset: '160' },
+          '55%, 90%': { strokeDashoffset: '0' },
+          '100%': { strokeDashoffset: '160' },
+        },
       },
       animation: {
         rise: 'rise 260ms ease-out both',
@@ -107,6 +116,7 @@ const config: Config = {
         shimmer: 'shimmer 1.4s infinite linear',
         'dot-bounce': 'dot-bounce 1.1s ease-in-out infinite',
         'mark-breathe': 'mark-breathe 2.2s ease-in-out infinite',
+        'stroke-draw': 'stroke-draw 3.2s ease-in-out infinite',
       },
     },
   },

@@ -7,6 +7,15 @@ import DemoVideoModal from './components/DemoVideoModal';
 import { ThemeToggle } from './components/ThemeToggle';
 import { Logomark } from './components/Logomark';
 import { SkeletonMotif } from './components/SkeletonMotif';
+import { Reveal } from './components/Reveal';
+import {
+  StatStrip,
+  JointReadout,
+  ReplayScrubberMini,
+  RoomsGridMini,
+  LiveTile,
+  AnnotationDrawDemo,
+} from './components/LandingVisuals';
 import { Button } from './components/ui/Button';
 import { Card } from './components/ui/Card';
 
@@ -25,7 +34,7 @@ export default function LandingPage() {
     <div className="min-h-screen bg-canvas text-ink relative overflow-hidden">
       {/* Nav */}
       <header className="sticky top-0 z-20 bg-panel/85 backdrop-blur-md border-b border-hairline">
-        <div className="max-w-6xl mx-auto px-8 py-4 flex items-center justify-between">
+        <div className="max-w-content mx-auto px-6 lg:px-10 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <Logomark className="w-6 h-6 text-brand" />
             <span className="font-display text-display-s">ReplayCoach</span>
@@ -45,8 +54,8 @@ export default function LandingPage() {
       </header>
 
       {/* Hero */}
-      <section className="relative max-w-6xl mx-auto px-8 pt-24 pb-16">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-14 items-center">
+      <section className="relative max-w-content mx-auto px-6 lg:px-10 pt-24 pb-14">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.1fr] gap-14 items-center">
           <div className="animate-rise">
             <div className="font-mono text-xs tracking-[0.14em] text-brand uppercase mb-4">Live film room</div>
             <h1 className="font-display text-display-xl text-ink mb-5 text-balance">
@@ -65,88 +74,103 @@ export default function LandingPage() {
                 Watch demo
               </Button>
             </div>
-            <div className="mt-12 flex items-center gap-5 flex-wrap">
-              <span className="font-mono text-[0.6875rem] text-ink-faint uppercase tracking-widest">Used by coaching programs at</span>
-              <span className="font-display text-display-s text-ink-faint text-sm">Ironforge Barbell</span>
-              <span className="font-display text-display-s text-ink-faint text-sm">Meridian Track Club</span>
-              <span className="font-display text-display-s text-ink-faint text-sm">Northline Gymnastics</span>
-            </div>
           </div>
 
           <HeroMock />
         </div>
       </section>
 
+      {/* Stat strip */}
+      <section className="relative max-w-content mx-auto px-6 lg:px-10 py-10 border-t border-hairline">
+        <Reveal>
+          <StatStrip />
+        </Reveal>
+      </section>
+
       {/* Demo showcase */}
-      <section className="relative max-w-6xl mx-auto px-8 pb-20">
-        <button
-          type="button"
-          onClick={() => setDemoOpen(true)}
-          className="group relative w-full rounded-lg overflow-hidden border border-hairline bg-panel block text-left"
-          aria-label="Play product demo video"
-        >
-          <div className="relative aspect-video flex items-center justify-center bg-panel-2">
-            <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgb(var(--color-canvas) / 0.1), rgb(var(--color-canvas) / 0.55))' }} />
-            <span className="absolute top-5 left-6 font-mono text-xs tracking-[0.14em] text-brand uppercase">Product demo</span>
-            <div className="relative flex items-center justify-center w-20 h-20 rounded-full bg-brand group-hover:scale-105 transition-transform duration-200">
-              <svg width="26" height="26" viewBox="0 0 24 24" className="fill-white dark:fill-canvas" aria-hidden>
-                <path d="M8 5v14l11-7z" />
-              </svg>
+      <section className="relative max-w-content mx-auto px-6 lg:px-10 pb-20">
+        <Reveal>
+          <button
+            type="button"
+            onClick={() => setDemoOpen(true)}
+            className="group relative w-full rounded-lg overflow-hidden border border-hairline bg-panel block text-left hover:-translate-y-1 hover:shadow-xl transition-all duration-200"
+            aria-label="Play product demo video"
+          >
+            <div className="relative aspect-video flex items-center justify-center bg-panel-2">
+              <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgb(var(--color-canvas) / 0.1), rgb(var(--color-canvas) / 0.55))' }} />
+              <span className="absolute top-5 left-6 font-mono text-xs tracking-[0.14em] text-brand uppercase">Product demo</span>
+              <div className="relative flex items-center justify-center w-20 h-20 rounded-full bg-brand group-hover:scale-105 transition-transform duration-200">
+                <svg width="26" height="26" viewBox="0 0 24 24" className="fill-white dark:fill-canvas" aria-hidden>
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              </div>
+              <span className="absolute bottom-6 left-6 right-6 font-display text-display-s text-ink">
+                Watch a live coaching session — replay, skeleton overlay, and annotations in real time.
+              </span>
             </div>
-            <span className="absolute bottom-6 left-6 right-6 font-display text-display-s text-ink">
-              Watch a live coaching session — replay, skeleton overlay, and annotations in real time.
-            </span>
-          </div>
-        </button>
+          </button>
+        </Reveal>
       </section>
 
       <DemoVideoModal open={demoOpen} onClose={() => setDemoOpen(false)} />
 
       {/* Features */}
-      <section id="features" className="relative max-w-6xl mx-auto px-8 py-20">
+      <section id="features" className="relative max-w-content mx-auto px-6 lg:px-10 py-20">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          <Card accent="session" className="lg:col-span-2 lg:row-span-2 flex flex-col justify-between min-h-[320px]">
-            <div>
-              <span className="font-mono text-xs text-session uppercase tracking-widest">Signature</span>
-              <h3 className="font-display text-display-m text-ink mt-3 mb-3">Tracked joints, not a filter</h3>
-              <p className="text-ink-muted text-body-m max-w-md">
-                Every athlete gets real pose tracking during the live call — joint
-                angles update in real time, and any annotation you draw follows the
-                body instead of sitting on a fixed pixel.
-              </p>
-            </div>
-            <SkeletonMotif className="w-40 h-48 self-end" jointColor="session" />
-          </Card>
-          <Card accent="replay">
-            <span className="font-mono text-xs text-replay uppercase tracking-widest">Replay</span>
-            <h3 className="font-display text-display-s text-ink mt-3 mb-2">Rewind without dropping the call</h3>
-            <p className="text-ink-muted text-sm leading-relaxed">The last 30 seconds are always buffered — hit replay the instant something looks off.</p>
-          </Card>
-          <Card accent="analytics">
-            <span className="font-mono text-xs text-analytics uppercase tracking-widest">Rooms</span>
-            <h3 className="font-display text-display-s text-ink mt-3 mb-2">Bring the whole squad in</h3>
-            <p className="text-ink-muted text-sm leading-relaxed">One room, one cued replay, every athlete watching the same frame at once.</p>
-          </Card>
+          <Reveal className="lg:col-span-2 lg:row-span-2">
+            <Card accent="session" className="h-full flex flex-col justify-between min-h-[320px] hover:-translate-y-1 hover:shadow-md transition-all duration-200">
+              <div>
+                <span className="font-mono text-xs text-session uppercase tracking-widest">Signature</span>
+                <h3 className="font-display text-display-m text-ink mt-3 mb-3">Tracked joints, not a filter</h3>
+                <p className="text-ink-muted text-body-m max-w-md">
+                  Every athlete gets real pose tracking during the live call — joint
+                  angles update in real time, and any annotation you draw follows the
+                  body instead of sitting on a fixed pixel.
+                </p>
+                <JointReadout />
+              </div>
+              <SkeletonMotif className="w-40 h-48 self-end" jointColor="session" />
+            </Card>
+          </Reveal>
+          <Reveal delayMs={80}>
+            <Card accent="replay" className="h-full hover:-translate-y-1 hover:shadow-md transition-all duration-200">
+              <span className="font-mono text-xs text-replay uppercase tracking-widest">Replay</span>
+              <h3 className="font-display text-display-s text-ink mt-3 mb-2">Rewind without dropping the call</h3>
+              <p className="text-ink-muted text-sm leading-relaxed">The last 30 seconds are always buffered — hit replay the instant something looks off.</p>
+              <ReplayScrubberMini className="mt-4" />
+            </Card>
+          </Reveal>
+          <Reveal delayMs={160}>
+            <Card accent="analytics" className="h-full hover:-translate-y-1 hover:shadow-md transition-all duration-200">
+              <span className="font-mono text-xs text-analytics uppercase tracking-widest">Rooms</span>
+              <h3 className="font-display text-display-s text-ink mt-3 mb-2">Bring the whole squad in</h3>
+              <p className="text-ink-muted text-sm leading-relaxed">One room, one cued replay, every athlete watching the same frame at once.</p>
+              <RoomsGridMini />
+            </Card>
+          </Reveal>
         </div>
       </section>
 
       {/* How it works */}
-      <section id="how" className="relative max-w-6xl mx-auto px-8 py-20">
+      <section id="how" className="relative max-w-content mx-auto px-6 lg:px-10 py-20">
         <h2 className="font-display text-display-m text-ink mb-8">How it works</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {howItWorks.map((s) => (
-            <div key={s.step}>
-              <div className="font-mono text-xl text-brand mb-2.5">{s.step}</div>
-              <h3 className="font-display text-display-s text-ink mb-1.5">{s.title}</h3>
-              <p className="text-ink-muted text-sm leading-relaxed">{s.body}</p>
-            </div>
+          {howItWorks.map((s, i) => (
+            <Reveal key={s.step} delayMs={i * 80}>
+              <div>
+                {s.visual}
+                <div className="font-mono text-xl text-brand mt-5 mb-2.5">{s.step}</div>
+                <h3 className="font-display text-display-s text-ink mb-1.5">{s.title}</h3>
+                <p className="text-ink-muted text-sm leading-relaxed">{s.body}</p>
+              </div>
+            </Reveal>
           ))}
         </div>
       </section>
 
       {/* CTA */}
       <section className="relative border-t border-hairline">
-        <div className="max-w-6xl mx-auto px-8 py-20 text-center">
+        <div className="max-w-content mx-auto px-6 lg:px-10 py-20 text-center">
           <h2 className="font-display text-display-l text-ink mb-5">Put a skeleton on every rep.</h2>
           <Button href="/register" size="lg">Start free</Button>
         </div>
@@ -154,7 +178,7 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className="relative border-t border-hairline">
-        <div className="max-w-6xl mx-auto px-8 py-10 flex flex-wrap gap-8 justify-between items-start">
+        <div className="max-w-content mx-auto px-6 lg:px-10 py-10 flex flex-wrap gap-8 justify-between items-start">
           <div className="flex items-center gap-2.5">
             <Logomark className="w-5 h-5 text-brand" />
             <span className="font-display text-display-s text-sm">ReplayCoach</span>
@@ -185,9 +209,24 @@ function FooterCol({ title, links }: { title: string; links: string[] }) {
 }
 
 const howItWorks = [
-  { step: '01', title: 'Go live', body: 'Start a room, athletes join from any device, the skeleton overlay tracks in real time.' },
-  { step: '02', title: 'Catch the moment', body: 'Hit replay the instant something looks off — the last 30 seconds are always buffered.' },
-  { step: '03', title: 'Show the fix', body: 'Scrub frame by frame, draw over the play, and send the clip to the athlete\'s library.' },
+  {
+    step: '01',
+    title: 'Go live',
+    body: 'Start a room, athletes join from any device, the skeleton overlay tracks in real time.',
+    visual: <LiveTile />,
+  },
+  {
+    step: '02',
+    title: 'Catch the moment',
+    body: 'Hit replay the instant something looks off — the last 30 seconds are always buffered.',
+    visual: <ReplayScrubberMini className="max-w-[220px]" />,
+  },
+  {
+    step: '03',
+    title: 'Show the fix',
+    body: 'Scrub frame by frame, draw over the play, and send the clip to the athlete\'s library.',
+    visual: <AnnotationDrawDemo />,
+  },
 ];
 
 /** Layered-stack hero visual — one athlete tile at real scale with the
@@ -219,7 +258,11 @@ function HeroMock() {
           </div>
         </div>
       </div>
-      <div className="absolute -top-4 -right-4 bg-panel border border-hairline rounded-full px-3.5 py-1.5 font-mono text-xs text-ink shadow-md">
+      <div className="absolute -top-4 -right-4 flex items-center gap-1.5 bg-panel border border-hairline rounded-full pl-2.5 pr-3.5 py-1.5 font-mono text-xs text-ink shadow-md">
+        <span className="relative flex h-1.5 w-1.5">
+          <span className="absolute inline-flex h-full w-full rounded-full bg-session animate-ping opacity-75" />
+          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-session" />
+        </span>
         HIP_R <span className="text-session">168°</span>
       </div>
     </div>

@@ -202,6 +202,32 @@ no new scale needed. Page-level content padding: `p-4` mobile, `p-7` desktop
 internal padding: `p-6`. Section gaps: `space-y-6` (24px) for stacked page
 sections, `gap-5` (20px) for card grids.
 
+### 3.1 Marketing container width
+
+**Revised 2026-07-14** — `max-w-6xl` (1152px) reads as a narrow column
+stranded in the middle of a wide viewport, with the hero visual floating
+disconnected from the container's own edge. Marketing/landing sections use
+a new `max-w-content` token instead:
+
+| Token | Value | Used on |
+|---|---|---|
+| `max-w-content` | `1320px` (`theme.extend.maxWidth.content`) | Landing page sections, and any future full-width marketing page |
+
+Horizontal padding pairs with it: `px-6` mobile → `px-10` desktop (`px-6
+lg:px-10`), replacing the previous flat `px-8`. This gives more edge
+relationship at each breakpoint instead of one fixed gutter. App-shell pages
+(dashboard, session room) keep their existing `max-w-7xl` / sidebar-relative
+layout — this token is marketing-page-specific, not a global container
+change.
+
+Composition rule for hero-style two-column sections: the visual element
+(mock/screenshot/diagram) should extend toward the container's own edge
+(e.g. `lg:pr-0` on its column, or a slight negative margin on the visual
+itself) rather than centering with `mx-auto` inside its grid cell — the
+old hero's `HeroMock` used `mx-auto max-w-md lg:max-w-none`, which fought
+the wider container by re-centering the visual instead of letting it relate
+to the edge. Drop the `mx-auto max-w-md` constraint at `lg` and above.
+
 ---
 
 ## 4. Radius & elevation
@@ -228,10 +254,39 @@ out as missing from generic templates.
 | `shadow-sm` | `0 1px 2px rgba(20,14,8,0.06)` |
 | `shadow-md` | `0 8px 24px -8px rgba(20,14,8,0.16)` |
 | `shadow-lg` | `0 24px 48px -16px rgba(20,14,8,0.24)` |
+| `shadow-xl` | `0 40px 80px -24px rgba(20,14,8,0.36)` |
 | `shadow-focus` | `0 0 0 3px rgba(177,74,40,0.25)` (brand-tinted focus ring, see §10) |
 
 No `shadow-glow` carried forward — that neon-glow pattern belongs to the
 superseded indigo/violet system.
+
+### 4.1 Layered depth (hero/feature visuals)
+
+**Added 2026-07-14.** The landing hero's `HeroMock` (tilted primary card +
+a second panel-2 card peeking out behind at a counter-rotation, plus a
+floating stat chip) is the reference pattern for *any* product-preview
+visual on a marketing page — not a one-off. Apply this three-layer recipe
+wherever a section needs to show "the product," instead of a flat
+screenshot-in-a-rounded-rectangle:
+
+1. **Background layer** — a second, undecorated `bg-panel-2` card, rotated
+   3–6° opposite the primary card's tilt, offset behind it (`-right-6
+   -bottom-6` or similar), no shadow of its own (it reads as sitting behind
+   the primary layer, not floating independently).
+2. **Primary layer** — `bg-panel border border-hairline rounded-lg shadow-xl`
+   (use `shadow-xl`, not `shadow-lg`, for anything meant to read as the
+   "hero" object on the page — reserve `shadow-lg` for modals and secondary
+   floating panels), tilted 1–3° the other direction.
+3. **Floating chip layer** — one small `shadow-md` pill/badge positioned
+   with a negative offset so it overlaps the primary card's edge
+   (`-top-4 -right-4` or similar), containing a live data point (a joint
+   angle, a timestamp, a status word) — this is what sells "the product is
+   alive," not decoration for its own sake.
+
+Hover/interaction: primary and background layers get
+`hover:-translate-y-1 hover:shadow-xl transition-all duration-200` when the
+whole composition is a link/button (e.g., the demo-showcase card); static
+hero visuals don't need hover state since they're not interactive.
 
 ---
 
@@ -290,6 +345,39 @@ Every animation type above degrades to an instant state-change under this
 rule — none of them convey information through motion alone (no
 motion-only success/error signaling), so this is a complete, safe fallback
 for all of them, not just a generic override.
+
+### 5.1 Scroll-reveal and hover-lift (marketing pages)
+
+**Added 2026-07-14.** Two additional motion patterns, both purposeful
+rather than decorative — they reinforce reading order and interactivity,
+not generic "fade everything in" polish:
+
+- **Scroll reveal:** `app/components/Reveal.tsx`, a client component
+  wrapping a section (or a grid item) in an `IntersectionObserver` that
+  toggles from `opacity-0 translate-y-4` to `opacity-100 translate-y-0`
+  over `duration-500 ease-out` the first time it enters the viewport
+  (`threshold: 0.15`). Accepts a `delayMs` prop so a row of cards can stagger
+  (0ms / 80ms / 160ms). Already covered by the global
+  `prefers-reduced-motion` rule since it's a CSS transition, not a
+  JS-timed animation — no separate reduced-motion branch needed. Use on
+  feature cards, "how it works" steps, and the stat strip; do **not** use
+  on the hero (it should be visible immediately, no scroll required to see
+  the first thing a visitor sees) or on any UI inside the authenticated app
+  (dashboards should never make data wait for a scroll trigger).
+- **Hover lift:** `hover:-translate-y-1 hover:shadow-md transition-all
+  duration-200` on any card that's a real link/button (feature cards,
+  demo-showcase card). Cards that are purely illustrative (the hero mock)
+  don't get this — hover-lift signals "this is clickable," so applying it
+  to non-interactive decoration would be misleading, not polish.
+- **Live-tracking pulse:** for any UI representing a "live"/real-time
+  joint or data point (the hero's tracked-joint dot, a mini skeleton
+  mockup), pair a solid `bg-session` dot with Tailwind's built-in
+  `animate-ping` ring behind it (`absolute inset-0 rounded-full bg-session
+  animate-ping opacity-75`, solid dot on top, unchanged) — a radar-style
+  expanding ring, not a glow/blur effect (still no `shadow-glow`/neon,
+  §4). This is the one motion effect that's meaning-bearing (it signals
+  "this is happening live") — keep it to a maximum of one or two instances
+  per viewport so it doesn't read as noisy.
 
 ---
 
@@ -400,9 +488,49 @@ called for (empty states, §9), use a **custom single-color line-art SVG at
 `color-ink-faint`**, drawn in-house, depicting something specific to the
 moment (an empty film reel for "no clips yet," a paused play-button silhouette
 for "no sessions yet") rather than a generic "nothing here" icon. Each
-custom SVG must ship with an explicit dark-mode variant — see §7.1.
+custom SVG must ship with an explicit dark-mode variant — see §7.2.
 
-### 7.1 Dark-mode asset rule (hard requirement)
+### 7.1 Product visuals (marketing pages)
+
+**Added 2026-07-14.** A text-only section (eyebrow + headline + paragraph +
+button, repeated) reads as a template regardless of how good the
+typography is. Every major marketing section needs an actual visual
+anchor. Three production methods, chosen per asset — never a stock photo
+or generic icon pack:
+
+1. **Representative product mockups, built in code** — the default
+   method, and the one used throughout `landing.md`. A small, real React
+   component built from the same tokens/components as the live app (mini
+   video tile + `SkeletonMotif`, a miniature DVR scrubber, a small
+   multi-tile grid) rather than a screenshot file. This is deliberately
+   preferred over a literal screenshot: it never goes stale as the real UI
+   evolves, it's themeable (light/dark) for free since it's built from the
+   same CSS-variable tokens, and it composes with the layered-depth
+   treatment (§4.1) and hover states directly. `HeroMock` is the existing
+   example of this method — extend the same approach to every other
+   section's visual rather than introducing a second method for those.
+2. **Custom SVG diagrams** — for a concept rather than a UI surface (e.g.
+   an annotation stroke being drawn, a buffered-replay timeline), a small
+   hand-authored SVG with `stroke="currentColor"` (dark-mode-safe per §7.2)
+   and, where it depicts motion (a stroke being drawn, a scrubber moving),
+   an SVG `stroke-dasharray`/`stroke-dashoffset` reveal animation triggered
+   by `Reveal` (§5.1) rather than a rasterized GIF — same visual effect,
+   zero binary asset, themeable, respects `prefers-reduced-motion`
+   automatically as a CSS animation.
+3. **Stat block** — for any factual, defensible product characteristic
+   (not fabricated usage/social-proof numbers), a small mono-figure +
+   label pairing in the domain accent color, e.g. `30s` / "always-buffered
+   replay window". Never invent adoption/user-count numbers that aren't
+   real data — a capability stat ("real-time joint tracking") is honest
+   marketing copy; a fake "10,000+ athletes" is not.
+
+Motion in place of a GIF: anywhere the brief calls for a "looping GIF" to
+demonstrate motion (scrubbing, drawing, tracking), build it as a live
+CSS/SVG animation using the tokens in §5.1 instead of producing an actual
+`.gif` binary — same communicative goal (a static screenshot can't sell a
+real-time product), better fidelity, no asset pipeline.
+
+### 7.2 Dark-mode asset rule (hard requirement)
 
 Every custom SVG/illustration must be authored with **two real stroke/fill
 color values**, selected via the CSS-variable token (`currentColor` set from
