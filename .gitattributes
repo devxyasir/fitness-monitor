@@ -1,0 +1,17 @@
+# Force binary handling regardless of core.autocrlf — without this, video/
+# font/image bytes can get silently mangled by CRLF normalization on
+# add/checkout (this happened once to replaycoach/apps/web/public/media/
+# demo.mp4: 8.7MB -> 2.7MB with no explicit edit).
+*.mp4 -text binary
+*.mov -text binary
+*.webm -text binary
+*.woff -text binary
+*.woff2 -text binary
+*.ttf -text binary
+*.otf -text binary
+*.png -text binary
+*.jpg -text binary
+*.jpeg -text binary
+*.gif -text binary
+*.ico -text binary
+*.pdf -text binary

@@ -40,9 +40,24 @@ export const metadata: Metadata = {
   description: 'Live coaching platform with full-session DVR replay and skeleton tracking.',
 };
 
+// Runs before hydration so the page never paints one theme and then flips —
+// reads the persisted choice (default 'dark') and stamps it on <html> ahead
+// of Tailwind's CSS-variable-driven colors picking it up.
+const THEME_INIT_SCRIPT = `
+try {
+  var t = localStorage.getItem('replaycoach-theme') || 'dark';
+  document.documentElement.dataset.theme = t;
+} catch (e) {
+  document.documentElement.dataset.theme = 'dark';
+}
+`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${display.variable} ${sans.variable} ${mono.variable}`}>
+    <html lang="en" className={`${display.variable} ${sans.variable} ${mono.variable}`} data-theme="dark">
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body className="bg-canvas text-ink font-sans antialiased">
         <div
           aria-hidden

@@ -10,15 +10,20 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        canvas: '#070B14',
-        panel: '#0F1522',
-        'panel-2': '#151C2C',
-        hairline: 'rgba(148,163,184,0.12)',
+        // Theme-switchable tokens — CSS vars defined per-theme in
+        // globals.css. rgb(var(...) / <alpha-value>) keeps every existing
+        // opacity-modifier usage (bg-panel/60, border-hairline, etc.) working.
+        canvas: 'rgb(var(--color-canvas) / <alpha-value>)',
+        panel: 'rgb(var(--color-panel) / <alpha-value>)',
+        'panel-2': 'rgb(var(--color-panel-2) / <alpha-value>)',
+        hairline: 'var(--color-hairline)',
         ink: {
-          DEFAULT: '#E7ECF5',
-          muted: '#8A94A7',
-          faint: '#5A6478',
+          DEFAULT: 'rgb(var(--color-ink) / <alpha-value>)',
+          muted: 'rgb(var(--color-ink-muted) / <alpha-value>)',
+          faint: 'rgb(var(--color-ink-faint) / <alpha-value>)',
         },
+        // Accent colors are identical in both themes by design (brand,
+        // replay/live/danger semantics don't change with light/dark).
         brand: {
           indigo: '#6366F1',
           violet: '#8B5CF6',

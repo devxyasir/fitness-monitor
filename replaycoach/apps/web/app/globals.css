@@ -2,6 +2,34 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Design tokens as CSS custom properties (RGB triplets, so Tailwind's
+   `bg-canvas/50`-style opacity modifiers keep working via
+   `rgb(var(--color-x) / <alpha-value>)` in tailwind.config.ts). Dark is the
+   product's default and primary identity (the neon-skeleton-on-black-canvas
+   look) — :root holds the dark values, [data-theme="light"] overrides them.
+   No automatic prefers-color-scheme switch: an existing dark-only product
+   flipping to an unverified light theme because of someone's OS setting is
+   worse than just defaulting dark until they opt in via the toggle. */
+:root {
+  --color-canvas: 7 11 20;
+  --color-panel: 15 21 34;
+  --color-panel-2: 21 28 44;
+  --color-ink: 231 236 245;
+  --color-ink-muted: 138 148 167;
+  --color-ink-faint: 90 100 120;
+  --color-hairline: rgba(148, 163, 184, 0.12);
+}
+
+:root[data-theme='light'] {
+  --color-canvas: 246 247 251;
+  --color-panel: 255 255 255;
+  --color-panel-2: 240 242 248;
+  --color-ink: 16 22 34;
+  --color-ink-muted: 90 100 120;
+  --color-ink-faint: 138 148 167;
+  --color-hairline: rgba(15, 23, 42, 0.1);
+}
+
 /* The local self-view arrives mirrored (front-camera default); flip it back
    to true orientation — what remote participants actually see, like Zoom/
    Meet. Applied only to the local camera <video> (see VideoGrid.tsx); the

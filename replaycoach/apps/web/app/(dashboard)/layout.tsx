@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { LayoutGrid, CalendarDays, Film, Users, Settings } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth-store';
+import { ThemeToggle } from '../components/ThemeToggle';
 
 interface NavItem {
   href: string;
@@ -119,6 +120,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             >
               + New session
             </Link>
+            <ThemeToggle />
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-brand-indigo to-brand-violet flex items-center justify-center text-[0.6875rem] font-bold text-canvas">
               {user?.displayName?.charAt(0)?.toUpperCase() ?? user?.email?.charAt(0)?.toUpperCase() ?? 'U'}
             </div>

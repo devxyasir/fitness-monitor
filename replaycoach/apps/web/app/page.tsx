@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useAuthStore } from '../stores/auth-store';
 import DemoVideoModal from './components/DemoVideoModal';
+import { ThemeToggle } from './components/ThemeToggle';
 
 export default function LandingPage() {
   const { user } = useAuthStore();
@@ -41,6 +42,7 @@ export default function LandingPage() {
             <a href="#how" className="text-ink-muted text-sm hover:text-ink transition-colors">How it works</a>
           </nav>
           <div className="flex items-center gap-3">
+            <ThemeToggle />
             <Link
               href="/login"
               className="text-sm font-semibold text-ink border border-hairline rounded-full px-5 py-2.5 hover:bg-panel-2 transition-colors"
