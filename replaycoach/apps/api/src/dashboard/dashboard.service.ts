@@ -9,6 +9,7 @@ import type {
   CoachOverviewClip,
   CoachOverviewResponse,
   CoachOverviewSession,
+  CoachStudentSummary,
   DashboardRange,
   StudentOverviewResponse,
 } from './dashboard.dto';
@@ -203,6 +204,51 @@ export class DashboardService {
         date: s.scheduledAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
       })),
     };
+  }
+
+  /** A coach's "students" are derived from real session participation —
+   * there is no separate roster entity. Distinct students the coach has
+   * actually run a session with, most-recently-active first. */
+  async getCoachStudents(coachId: string): Promise<CoachStudentSummary[]> {
+    const rows = await this.participantRepo
+      .createQueryBuilder('p')
+      .innerJoin('p.session', 's')
+      .innerJoin('p.user', 'u')
+      .select('u.id', 'id')
+      .addSelect('u.email', 'email')
+      .addSelect('u.display_name', 'displayName')
+      .addSelect('u.avatar_url', 'avatarUrl')
+      .addSelect('u.status', 'status')
+      .addSelect('COUNT(DISTINCT s.id)', 'sessionsCount')
+      .addSelect('MAX(s.scheduled_at)', 'lastSessionAt')
+      .where('s.coach_id = :coachId', { coachId })
+      .andWhere("p.role_in_session = 'student'")
+      .andWhere("p.status = 'approved'")
+      .groupBy('u.id')
+      .addGroupBy('u.email')
+      .addGroupBy('u.display_name')
+      .addGroupBy('u.avatar_url')
+      .addGroupBy('u.status')
+      .orderBy('"lastSessionAt"', 'DESC')
+      .getRawMany<{
+        id: string;
+        email: string;
+        displayName: string;
+        avatarUrl: string | null;
+        status: string;
+        sessionsCount: string;
+        lastSessionAt: Date | null;
+      }>();
+
+    return rows.map((r) => ({
+      id: r.id,
+      email: r.email,
+      displayName: r.displayName,
+      avatarUrl: r.avatarUrl,
+      status: r.status,
+      sessionsCount: Number(r.sessionsCount),
+      lastSessionAt: r.lastSessionAt ? new Date(r.lastSessionAt).toISOString() : null,
+    }));
   }
 
   private formatDuration(ms: number): string {

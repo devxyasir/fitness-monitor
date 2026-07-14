@@ -25,6 +25,12 @@ export class DashboardController {
     return this.dashboardService.getCoachOverview(user.sub, safeRange);
   }
 
+  @Get('coach/students')
+  @Roles('coach', 'platform_admin')
+  async coachStudents(@CurrentUser() user: JwtPayload) {
+    return this.dashboardService.getCoachStudents(user.sub);
+  }
+
   @Get('student/overview')
   @Roles('student')
   async studentOverview(@CurrentUser() user: JwtPayload) {

@@ -27,6 +27,16 @@ export interface CoachOverviewResponse {
   recentClips: CoachOverviewClip[];
 }
 
+export interface CoachStudentSummary {
+  id: string;
+  email: string;
+  displayName: string;
+  avatarUrl: string | null;
+  status: string;
+  sessionsCount: number;
+  lastSessionAt: string | null;
+}
+
 export interface StudentOverviewResponse {
   stats: {
     sessionsAttended: number;
