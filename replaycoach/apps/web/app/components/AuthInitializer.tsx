@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { authClient } from '../../lib/auth-client';
 import { useAuthStore } from '../../stores/auth-store';
+import { PageLoader } from './ui/PageLoader';
 
 export default function AuthInitializer({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -50,14 +51,7 @@ export default function AuthInitializer({ children }: { children: React.ReactNod
   }, [accessToken, user, pathname, initializing, router]);
 
   if (initializing) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-slate-200">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-indigo-600 border-t-indigo-400 rounded-full animate-spin"></div>
-          <p className="text-sm font-semibold tracking-wide animate-pulse">Initializing ReplayCoach...</p>
-        </div>
-      </div>
-    );
+    return <PageLoader label="Loading ReplayCoach" />;
   }
 
   return <>{children}</>;

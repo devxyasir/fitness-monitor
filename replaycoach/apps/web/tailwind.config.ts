@@ -92,11 +92,21 @@ const config: Config = {
           '0%': { transform: 'rotate(0deg)' },
           '100%': { transform: 'rotate(360deg)' },
         },
+        'dot-bounce': {
+          '0%, 80%, 100%': { transform: 'translateY(0)', opacity: '0.35' },
+          '40%': { transform: 'translateY(-7px)', opacity: '1' },
+        },
+        'mark-breathe': {
+          '0%, 100%': { opacity: '0.55', transform: 'scale(0.97)' },
+          '50%': { opacity: '1', transform: 'scale(1)' },
+        },
       },
       animation: {
         rise: 'rise 260ms ease-out both',
         settle: 'settle 240ms cubic-bezier(0.16,1,0.3,1) both',
         shimmer: 'shimmer 1.4s infinite linear',
+        'dot-bounce': 'dot-bounce 1.1s ease-in-out infinite',
+        'mark-breathe': 'mark-breathe 2.2s ease-in-out infinite',
       },
     },
   },
