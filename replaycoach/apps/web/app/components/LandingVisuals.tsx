@@ -1,8 +1,34 @@
+'use client';
+
 /**
  * Small representative product mockups for the landing page — built from
  * the same tokens/components as the live app rather than screenshot files,
  * per design/DESIGN_SYSTEM.md §7.1 method 1. Purely illustrative, no data.
  */
+
+import { useState } from 'react';
+
+/** Real sourced photography (§7.1 method 4, design/ASSET_SOURCES.md).
+ * Falls back to a flat bg-panel-2 fill instead of a broken-image icon
+ * until the manually-sourced file exists at `src`. */
+export function BandPhoto({
+  src,
+  alt,
+  className = '',
+}: {
+  src: string;
+  alt: string;
+  className?: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return <div className={`bg-panel-2 ${className}`} aria-hidden />;
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={src} alt={alt} onError={() => setFailed(true)} className={`object-cover ${className}`} />
+  );
+}
 
 const STAT_ACCENT_CLASSES = {
   session: 'text-session',
@@ -61,10 +87,10 @@ export function ReplayScrubberMini({ className = '' }: { className?: string }) {
   );
 }
 
-export function RoomsGridMini() {
+export function RoomsGridMini({ className = 'mt-4 w-32' }: { className?: string }) {
   const initials = ['P', 'J', 'M', 'A'];
   return (
-    <div className="grid grid-cols-2 gap-1.5 mt-4 w-32">
+    <div className={`grid grid-cols-2 gap-1.5 ${className}`}>
       {initials.map((initial, i) => (
         <div
           key={initial}

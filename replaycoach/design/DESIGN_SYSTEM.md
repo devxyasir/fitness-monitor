@@ -490,13 +490,55 @@ moment (an empty film reel for "no clips yet," a paused play-button silhouette
 for "no sessions yet") rather than a generic "nothing here" icon. Each
 custom SVG must ship with an explicit dark-mode variant — see §7.2.
 
+### 7.3 Asset sourcing
+
+**Added 2026-07-14.** A landing page built entirely from generated
+single-color SVGs (even well-drawn ones) reads as repetitive at scale —
+every section becomes "small bordered box, one glyph, heading, paragraph."
+Real visual variety requires real sourced assets, not more hand-drawn
+icons. Two tiers, by how they get into the repo:
+
+1. **Programmatically fetched, MIT/open-licensed, vendored at build time.**
+   Icons are the proven case: [Phosphor Icons](https://phosphoricons.com)
+   (MIT), fetched via the [Iconify](https://iconify.design) API
+   (`api.iconify.design/ph:{name}-duotone.svg`) and inlined as React
+   components in `app/components/icons/index.tsx` — never fetched at
+   runtime in production. Duotone weight specifically: two `currentColor`
+   shapes (solid + 20%-opacity) baked into one icon gives real visual
+   weight without introducing a second color outside the token system.
+   This tier requires no manual step and no license/attribution tracking
+   beyond a one-line credit (MIT permits commercial use with zero
+   attribution requirement).
+2. **Manually sourced/generated photography, dropped in by the project
+   owner.** This environment can reach real HTTP endpoints but has no
+   Unsplash/Pexels API key (their search endpoints require registered
+   auth) and no image-generation model — so photography is inherently a
+   human step: either pick a real photo from Unsplash/Pexels (both free
+   for commercial use, no attribution legally required) or generate one
+   with an AI image tool. Every photograph needed, its exact generation
+   prompt, destination path, and whether it needs background removal is
+   catalogued in `design/ASSET_SOURCES.md` — implementer: check that file
+   before assuming a `public/images/landing/*.jpg` reference is dead; it's
+   an intentional placeholder path waiting for a manually-sourced file, not
+   a bug.
+
+**Never** use a raw, uncredited stock photo or icon of unknown license —
+if a source's license isn't verified (Icons8/Flaticon/SVGRepo often
+require attribution on their free tier), either attribute it correctly in
+`ASSET_SOURCES.md` or don't use it. Prefer the always-safe sources
+(Unsplash, Pexels, MIT-licensed icon sets) by default.
+
 ### 7.1 Product visuals (marketing pages)
 
-**Added 2026-07-14.** A text-only section (eyebrow + headline + paragraph +
-button, repeated) reads as a template regardless of how good the
-typography is. Every major marketing section needs an actual visual
-anchor. Three production methods, chosen per asset — never a stock photo
-or generic icon pack:
+**Added 2026-07-14, revised 2026-07-14 (visual-sourcing pass).** A
+text-only section (eyebrow + headline + paragraph + button, repeated)
+reads as a template regardless of how good the typography is — and a page
+built entirely from generated single-color glyphs reads as repetitive for
+the same reason: every section becomes "small bordered box, one icon,
+heading, paragraph." Every major marketing section needs an actual visual
+anchor, and the visual should dominate the section rather than sit as a
+small decoration beside the text. Four production methods, chosen per
+asset — never a stock photo or icon of unverified license (see §7.3):
 
 1. **Representative product mockups, built in code** — the default
    method, and the one used throughout `landing.md`. A small, real React
@@ -523,6 +565,16 @@ or generic icon pack:
    replay window". Never invent adoption/user-count numbers that aren't
    real data — a capability stat ("real-time joint tracking") is honest
    marketing copy; a fake "10,000+ athletes" is not.
+4. **Real photography, layered with a product mockup or icon** — for any
+   section whose job is to sell the human/athletic context a UI mockup
+   can't (a coach and athlete together, a team, a body in motion), a real
+   photograph per §7.3, sized to dominate the section (not a thumbnail),
+   with a product mockup or `Reveal`-animated element composited on top
+   using the layered-depth recipe (§4.1) — e.g. the `SkeletonMotif`
+   overlay positioned over an athlete photo, or a `ReplayScrubberMini` card
+   floating on a photo's negative space. This is the method that most
+   directly answers "increase visual-to-text ratio": the photo becomes the
+   section's actual focal point, copy becomes secondary.
 
 Motion in place of a GIF: anywhere the brief calls for a "looping GIF" to
 demonstrate motion (scrubbing, drawing, tracking), build it as a live
