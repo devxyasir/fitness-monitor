@@ -1,14 +1,76 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
-import { LayoutGrid, CalendarDays, Film, Users, Settings, Menu, X } from 'lucide-react';
+import { LayoutGrid, CalendarDays, Film, Users, Settings, Menu, X, LogOut } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth-store';
+import { authClient } from '../../lib/auth-client';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { Logomark } from '../components/Logomark';
 import { Button } from '../components/ui/Button';
+
+function UserMenu({ role }: { role: 'coach' | 'student' }) {
+  const { user } = useAuthStore();
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const initial = user?.displayName?.charAt(0)?.toUpperCase() ?? user?.email?.charAt(0)?.toUpperCase() ?? 'U';
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-label="Account menu"
+        aria-expanded={open}
+        className="w-8 h-8 rounded-full bg-analytics flex items-center justify-center text-[0.6875rem] font-bold text-white dark:text-canvas hover:brightness-110 transition-all"
+      >
+        {initial}
+      </button>
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 top-full mt-2 w-56 bg-panel border border-hairline rounded-md shadow-lg overflow-hidden animate-rise z-20"
+        >
+          <div className="px-3.5 py-3 border-b border-hairline">
+            <div className="text-sm font-semibold text-ink truncate">{user?.displayName ?? 'User'}</div>
+            <div className="text-xs text-ink-faint truncate">{user?.email ?? role}</div>
+          </div>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={async () => {
+              setOpen(false);
+              await authClient.logout();
+              router.push('/login');
+            }}
+            className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-danger hover:bg-danger/10 transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+            Log out
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface NavItem {
   href: string;
@@ -167,9 +229,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             </div>
             <Button href="/session/new" size="sm">+ New session</Button>
             <ThemeToggle />
-            <div className="w-8 h-8 rounded-full bg-analytics flex items-center justify-center text-[0.6875rem] font-bold text-white dark:text-canvas">
-              {user?.displayName?.charAt(0)?.toUpperCase() ?? user?.email?.charAt(0)?.toUpperCase() ?? 'U'}
-            </div>
+            <UserMenu role={role} />
           </div>
         </header>
 

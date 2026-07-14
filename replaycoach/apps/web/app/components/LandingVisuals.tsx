@@ -125,6 +125,42 @@ export function LiveTile() {
   );
 }
 
+/** Posed to match the specific runner in signature-athlete.jpg (1122x1402,
+ * exactly 4:5 — viewBox below maps 1:1 to the photo, no object-cover crop
+ * to account for). Coordinates trace the sprinter's actual silhouette:
+ * driving front leg bent up, trailing back leg extended toward the blocks,
+ * forward arm raised near the face, trailing arm swung back — unlike the
+ * generic upright SkeletonMotif, this one-off pose only fits this photo. */
+export function RunnerSkeletonOverlay({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 100 125" className={`text-session ${className ?? ''}`} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden>
+      {/* spine: head -> shoulder -> hip */}
+      <path d="M81 27 L76 40 L60 58" />
+      {/* front arm (raised toward face) */}
+      <path d="M76 40 L85 44 L91 36" />
+      {/* back arm (trailing) */}
+      <path d="M76 40 L44 40 L31 47" />
+      {/* front leg (driving knee up) */}
+      <path d="M60 58 L67 73 L57 89" />
+      {/* back leg (trailing to blocks) */}
+      <path d="M60 58 L27 80 L14 97" />
+      <g fill="currentColor" stroke="none">
+        <circle cx="81" cy="27" r="3.5" />
+        <circle cx="76" cy="40" r="1.6" />
+        <circle cx="60" cy="58" r="1.6" />
+        <circle cx="85" cy="44" r="1.6" />
+        <circle cx="91" cy="36" r="1.6" />
+        <circle cx="44" cy="40" r="1.6" />
+        <circle cx="31" cy="47" r="1.6" />
+        <circle cx="67" cy="73" r="1.6" />
+        <circle cx="57" cy="89" r="1.6" />
+        <circle cx="27" cy="80" r="1.6" />
+        <circle cx="14" cy="97" r="1.6" />
+      </g>
+    </svg>
+  );
+}
+
 export function AnnotationDrawDemo() {
   return (
     <svg

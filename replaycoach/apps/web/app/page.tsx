@@ -16,6 +16,7 @@ import {
   LiveTile,
   AnnotationDrawDemo,
   BandPhoto,
+  RunnerSkeletonOverlay,
 } from './components/LandingVisuals';
 import { BroadcastIcon, RewindIcon, AnnotateIcon, TrackingIcon, SquadIcon } from './components/icons';
 import { Button } from './components/ui/Button';
@@ -89,9 +90,9 @@ export default function LandingPage() {
       </section>
 
       {/* Editorial — the page's single largest photographic moment */}
-      <section className="relative w-full">
+      <section className="relative w-full py-16 lg:py-24">
         <Reveal>
-          <div className="relative w-full aspect-[4/5] lg:aspect-[21/9] overflow-hidden">
+          <div className="relative w-full aspect-[4/5] lg:aspect-[21/9] overflow-hidden rounded-lg lg:rounded-none">
             <BandPhoto
               src="/images/landing/editorial-review.jpg"
               alt="A coach and athlete reviewing footage together"
@@ -99,13 +100,13 @@ export default function LandingPage() {
             />
             <div
               className="absolute inset-0"
-              style={{ background: 'linear-gradient(90deg, rgb(var(--color-canvas) / 0.85), rgb(var(--color-canvas) / 0.35) 55%, rgb(var(--color-canvas) / 0.1))' }}
+              style={{ background: 'linear-gradient(90deg, rgb(var(--color-canvas) / 0.9), rgb(var(--color-canvas) / 0.4) 55%, rgb(var(--color-canvas) / 0.12))' }}
             />
             <div className="absolute inset-0 flex items-center">
               <div className="max-w-content mx-auto px-6 lg:px-10 w-full">
-                <div className="max-w-md">
+                <div className="max-w-lg">
                   <span className="font-mono text-xs tracking-[0.14em] text-brand uppercase mb-4 block">The film room</span>
-                  <p className="font-display text-display-m text-ink text-balance">
+                  <p className="font-display text-display-l text-ink text-balance">
                     Every rep gets reviewed the way it happened — together, live, with the tape right there.
                   </p>
                 </div>
@@ -124,13 +125,26 @@ export default function LandingPage() {
             className="group relative w-full rounded-lg overflow-hidden border border-hairline bg-panel block text-left hover:-translate-y-1 hover:shadow-xl transition-all duration-200"
             aria-label="Play product demo video"
           >
-            <div className="relative aspect-video flex items-center justify-center bg-panel-2">
-              <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgb(var(--color-canvas) / 0.1), rgb(var(--color-canvas) / 0.55))' }} />
+            <div className="relative aspect-video bg-panel-2">
+              <video
+                src="/media/demo.mp4"
+                muted
+                playsInline
+                preload="metadata"
+                aria-hidden
+                className="absolute inset-0 w-full h-full object-cover"
+                onLoadedMetadata={(e) => {
+                  e.currentTarget.currentTime = 2;
+                }}
+              />
+              <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgb(var(--color-canvas) / 0.15), rgb(var(--color-canvas) / 0.6))' }} />
               <span className="absolute top-5 left-6 font-mono text-xs tracking-[0.14em] text-brand uppercase">Product demo</span>
-              <div className="relative flex items-center justify-center w-20 h-20 rounded-full bg-brand group-hover:scale-105 transition-transform duration-200">
-                <svg width="26" height="26" viewBox="0 0 24 24" className="fill-white dark:fill-canvas" aria-hidden>
-                  <path d="M8 5v14l11-7z" />
-                </svg>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="flex items-center justify-center w-20 h-20 rounded-full bg-brand group-hover:scale-105 transition-transform duration-200">
+                  <svg width="26" height="26" viewBox="0 0 24 24" className="fill-white dark:fill-canvas" aria-hidden>
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                </div>
               </div>
               <span className="absolute bottom-6 left-6 right-6 font-display text-display-s text-ink">
                 Watch a live coaching session — replay, skeleton overlay, and annotations in real time.
@@ -153,7 +167,7 @@ export default function LandingPage() {
                 alt="An athlete mid-sprint, joints clearly visible for tracking"
                 className="absolute inset-0 w-full h-full"
               />
-              <SkeletonMotif className="absolute inset-0 w-full h-full p-8 opacity-90" jointColor="session" />
+              <RunnerSkeletonOverlay className="absolute inset-0 w-full h-full" />
             </div>
             <div className="flex-1">
               <TrackingIcon className="w-8 h-8 text-session mb-4" />
