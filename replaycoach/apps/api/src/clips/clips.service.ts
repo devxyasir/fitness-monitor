@@ -151,7 +151,7 @@ export class ClipsService {
   ): Promise<ClipListItem[]> {
     let clips: Clip[];
 
-    if (role === 'coach' || role === 'platform_admin') {
+    if (role === 'coach' || role === 'studio_admin' || role === 'platform_admin') {
       const where: any = { createdBy: userId };
       if (sessionId) where.sessionId = sessionId;
       clips = await this.clipRepository.find({
@@ -171,7 +171,7 @@ export class ClipsService {
 
     // Batch share counts for the coach's share button (avoids N queries).
     const sharesByClip = new Map<string, number>();
-    if ((role === 'coach' || role === 'platform_admin') && clips.length > 0) {
+    if ((role === 'coach' || role === 'studio_admin' || role === 'platform_admin') && clips.length > 0) {
       const allShares = await this.clipShareRepository.find({
         where: clips.map((c) => ({ clipId: c.id })),
       });

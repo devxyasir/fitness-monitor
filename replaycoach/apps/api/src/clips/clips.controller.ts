@@ -22,7 +22,7 @@ export class ClipsController {
   constructor(private readonly clipsService: ClipsService) {}
 
   @Post('sessions/:sessionId/clips')
-  @Roles('coach')
+  @Roles('coach', 'studio_admin')
   async create(
     @Param('sessionId') sessionId: string,
     @CurrentUser() user: JwtPayload,
@@ -48,7 +48,7 @@ export class ClipsController {
   }
 
   @Post('clips/:id/share')
-  @Roles('coach')
+  @Roles('coach', 'studio_admin')
   async share(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,

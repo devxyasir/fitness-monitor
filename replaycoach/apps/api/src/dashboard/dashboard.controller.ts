@@ -26,7 +26,7 @@ export class DashboardController {
   }
 
   @Get('coach/students')
-  @Roles('coach', 'platform_admin')
+  @Roles('coach', 'studio_admin', 'platform_admin')
   async coachStudents(@CurrentUser() user: JwtPayload) {
     return this.dashboardService.getCoachStudents(user.sub);
   }

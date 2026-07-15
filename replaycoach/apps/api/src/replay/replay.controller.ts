@@ -50,7 +50,7 @@ export class ReplayController {
 
   /** Coach triggers buffer replay for the entire room. */
   @Post('seek')
-  @Roles('coach')
+  @Roles('coach', 'studio_admin')
   @HttpCode(HttpStatus.OK)
   async seek(
     @Param('id') id: string,
@@ -68,7 +68,7 @@ export class ReplayController {
 
   /** Coach syncs seeking position for selected student participants. */
   @Post('target')
-  @Roles('coach')
+  @Roles('coach', 'studio_admin')
   @HttpCode(HttpStatus.OK)
   async target(
     @Param('id') id: string,
@@ -85,7 +85,7 @@ export class ReplayController {
 
   /** Coach ends replay for the entire room. */
   @Post('end')
-  @Roles('coach')
+  @Roles('coach', 'studio_admin')
   @HttpCode(HttpStatus.OK)
   async end(
     @Param('id') id: string,

@@ -33,7 +33,7 @@ export class SessionsController {
   ) {}
 
   @Post()
-  @Roles('coach', 'platform_admin')
+  @Roles('coach', 'studio_admin', 'platform_admin')
   async create(
     @CurrentUser() user: JwtPayload,
     @Body() dto: CreateSessionDto,

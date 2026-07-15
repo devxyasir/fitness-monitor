@@ -61,7 +61,10 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
   const [sessionEnded, setSessionEnded] = useState(false);
   const [uploadRefreshToken, setUploadRefreshToken] = useState(0);
 
-  const isCoach = user?.role === 'coach';
+  // A studio_admin is what a coach becomes once they create an organization
+  // (see OrganizationService.create) — they keep every coaching capability
+  // on top of org-admin ones, so they see the same in-room host controls.
+  const isCoach = user?.role === 'coach' || user?.role === 'studio_admin';
 
   // Real-time hooks registration
   useSessionRoom(sessionId);
