@@ -7,7 +7,7 @@ import { RecordingsModule } from '../recordings/recordings.module';
 import { SessionsModule } from '../sessions/sessions.module';
 
 @Module({
-  imports: [RecordingsModule, forwardRef(() => SessionsModule)],
+  imports: [forwardRef(() => RecordingsModule), forwardRef(() => SessionsModule)],
   controllers: [EgressWebhookController],
   providers: [LiveKitService, EgressService, CloudFrontSigner],
   exports: [LiveKitService, EgressService, CloudFrontSigner],

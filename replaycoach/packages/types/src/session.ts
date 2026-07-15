@@ -32,6 +32,14 @@ export interface UpdateSessionDto {
   accessType?: SessionAccessType;
 }
 
+/** Post-session playback of the whole-room composite recording — see
+ * apps/api/src/recordings/recordings.service.ts. */
+export interface SessionRecordingDto {
+  state: 'ready' | 'processing' | 'unavailable';
+  playUrl: string | null;
+  durationSeconds: number;
+}
+
 export interface SessionParticipantDto {
   id: string;
   sessionId: string;

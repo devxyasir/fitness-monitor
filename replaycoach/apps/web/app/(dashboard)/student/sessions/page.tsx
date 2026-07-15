@@ -89,7 +89,10 @@ export default function StudentSessionsPage() {
                       {['live', 'scheduled'].includes(s.status) ? (
                         <Button variant="session" size="sm" href={`/session/${s.id}`}>Join room</Button>
                       ) : (
-                        <Button variant="ghost" size="sm" href={`/student/clips?sessionId=${s.id}`}>View clips</Button>
+                        <div className="flex justify-end items-center gap-2">
+                          <Button variant="ghost" size="sm" href={`/session/${s.id}/review`}>Replay</Button>
+                          <Button variant="ghost" size="sm" href={`/student/clips?sessionId=${s.id}`}>View clips</Button>
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -111,7 +114,10 @@ export default function StudentSessionsPage() {
                   {['live', 'scheduled'].includes(s.status) ? (
                     <Button variant="session" size="sm" href={`/session/${s.id}`}>Join</Button>
                   ) : (
-                    <Button variant="ghost" size="sm" href={`/student/clips?sessionId=${s.id}`}>View clips</Button>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Button variant="ghost" size="sm" href={`/session/${s.id}/review`}>Replay</Button>
+                      <Button variant="ghost" size="sm" href={`/student/clips?sessionId=${s.id}`}>View clips</Button>
+                    </div>
                   )}
                 </div>
               </div>

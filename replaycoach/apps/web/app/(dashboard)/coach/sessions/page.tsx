@@ -142,7 +142,7 @@ export default function CoachSessionsPage() {
                           </>
                         ) : (
                           <>
-                            <Button variant="ghost" size="sm" href={`/session/${session.id}?replay=true`}>Replay</Button>
+                            <Button variant="ghost" size="sm" href={`/session/${session.id}/review`}>Replay</Button>
                             <Button variant="analytics" size="sm" href={`/coach/clips?sessionId=${session.id}`}>Clips</Button>
                           </>
                         )}
@@ -174,7 +174,7 @@ export default function CoachSessionsPage() {
                     </>
                   ) : (
                     <>
-                      <Button variant="ghost" size="sm" href={`/session/${session.id}?replay=true`}>Replay</Button>
+                      <Button variant="ghost" size="sm" href={`/session/${session.id}/review`}>Replay</Button>
                       <Button variant="analytics" size="sm" href={`/coach/clips?sessionId=${session.id}`}>Clips</Button>
                     </>
                   )}
