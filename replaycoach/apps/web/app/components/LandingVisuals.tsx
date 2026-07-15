@@ -40,7 +40,7 @@ export function StatStrip() {
   const stats: { value: string; label: string; accent: keyof typeof STAT_ACCENT_CLASSES }[] = [
     { value: '<150ms', label: 'Overlay latency, live', accent: 'session' },
     { value: '30s', label: 'Always-buffered replay window', accent: 'replay' },
-    { value: '33', label: 'Tracked joints per athlete', accent: 'analytics' },
+    { value: '33', label: 'Tracked joints per dancer', accent: 'analytics' },
   ];
   return (
     <div className="grid grid-cols-3 gap-4 sm:gap-8">
@@ -133,29 +133,38 @@ export function LiveTile() {
  * — a one-off pose that only fits this photo, not a generic figure. */
 export function DancerSkeletonOverlay({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 100 125" className={`text-session ${className ?? ''}`} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden>
+    <svg
+      viewBox="0 0 100 125"
+      preserveAspectRatio="none"
+      className={`text-session ${className ?? ''}`}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      aria-hidden
+    >
       {/* spine: head -> shoulder -> hip */}
-      <path d="M37 31 L45 41 L57 61" />
+      <path d="M35 34 L49 38 L55 62" />
       {/* raised arm (gripping the pole overhead) */}
-      <path d="M45 41 L55 22 L62 7" />
+      <path d="M49 38 L57 20 L62 8" />
       {/* reaching arm (extended down and out) */}
-      <path d="M45 41 L35 56 L26 75" />
+      <path d="M45 42 L36 58 L27 77" />
       {/* front leg (bent up toward the pole) */}
-      <path d="M57 61 L66 68 L60 88" />
+      <path d="M55 62 L68 70 L57 87" />
       {/* back leg (extended down to a pointed toe) */}
-      <path d="M57 61 L45 82 L33 106" />
+      <path d="M55 62 L41 85 L35 109" />
       <g fill="currentColor" stroke="none">
-        <circle cx="37" cy="31" r="3.5" />
-        <circle cx="45" cy="41" r="1.6" />
-        <circle cx="57" cy="61" r="1.6" />
-        <circle cx="55" cy="22" r="1.6" />
-        <circle cx="62" cy="7" r="1.6" />
-        <circle cx="35" cy="56" r="1.6" />
-        <circle cx="26" cy="75" r="1.6" />
-        <circle cx="66" cy="68" r="1.6" />
-        <circle cx="60" cy="88" r="1.6" />
-        <circle cx="45" cy="82" r="1.6" />
-        <circle cx="33" cy="106" r="1.6" />
+        <circle cx="35" cy="34" r="3.5" />
+        <circle cx="49" cy="38" r="1.6" />
+        <circle cx="55" cy="62" r="1.6" />
+        <circle cx="57" cy="20" r="1.6" />
+        <circle cx="62" cy="8" r="1.6" />
+        <circle cx="36" cy="58" r="1.6" />
+        <circle cx="27" cy="77" r="1.6" />
+        <circle cx="68" cy="70" r="1.6" />
+        <circle cx="57" cy="87" r="1.6" />
+        <circle cx="41" cy="85" r="1.6" />
+        <circle cx="35" cy="109" r="1.6" />
       </g>
     </svg>
   );

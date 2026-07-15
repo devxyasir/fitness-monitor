@@ -17,7 +17,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
             <span className="font-display text-display-s">ReplayCoach</span>
           </div>
           <h1 className="font-display text-display-l text-ink max-w-[24rem] text-balance">
-            The film room for movement.
+            The dance room for movement.
           </h1>
         </div>
 

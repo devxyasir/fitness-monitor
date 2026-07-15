@@ -355,7 +355,7 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
             <button
               onClick={handleCopyMeetingLink}
               className="bg-panel-2 hover:bg-panel-2/70 border border-hairline text-ink text-xs px-3 py-1.5 rounded-full font-semibold tracking-wide transition-colors inline-flex items-center gap-1.5"
-              title="Copy meeting link"
+              title="Copy session link"
             >
               {linkCopied ? (
                 <><Check className="w-3.5 h-3.5 text-success" /> Copied</>
@@ -552,7 +552,7 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
                 Exit Options
               </h3>
               <p className="text-xs text-ink-muted mt-1.5 leading-relaxed">
-                Would you like to leave the session or end this meeting permanently for everyone?
+                Would you like to leave the session or end it permanently for everyone?
               </p>
             </div>
             <div className="flex flex-col gap-2">
@@ -567,13 +567,13 @@ export default function SessionRoomPage({ params }: { params: { id: string } }) 
                 }}
                 className="w-full py-2.5 bg-danger/10 border border-danger/35 hover:bg-danger/20 text-danger text-xs font-semibold rounded-full transition-colors"
               >
-                End Meeting for Everyone
+                End Session for Everyone
               </button>
               <button
                 onClick={leaveAndExit}
                 className="w-full py-2.5 bg-panel-2 hover:bg-panel-2/70 border border-hairline text-ink text-xs font-semibold rounded-full transition-colors"
               >
-                Just Leave Meeting
+                Just Leave Session
               </button>
               <button
                 onClick={() => setShowExitModal(false)}

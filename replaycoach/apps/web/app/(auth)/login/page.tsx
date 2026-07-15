@@ -49,7 +49,7 @@ export default function LoginPage() {
         <Logomark className="w-5 h-5 text-brand flex-shrink-0" />
         <div>
           <h2 className="font-display text-display-s leading-tight">Welcome back</h2>
-          <p className="text-ink-muted text-sm mt-0.5">Sign in to your film room.</p>
+          <p className="text-ink-muted text-sm mt-0.5">Sign in to your dance room.</p>
         </div>
       </div>
 

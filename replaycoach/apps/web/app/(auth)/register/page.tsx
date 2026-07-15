@@ -114,7 +114,7 @@ export default function RegisterPage() {
     );
   }
 
-  const roleLabel = invite?.role === 'student' ? 'Student / Athlete' : 'Coach / Instructor';
+  const roleLabel = invite?.role === 'student' ? 'Student / Dancer' : 'Coach / Instructor';
 
   return (
     <>

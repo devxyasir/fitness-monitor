@@ -230,7 +230,7 @@ function InviteModal({ orgId, onClose, onCreated }: { orgId: string; onClose: ()
           autoFocus
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="athlete@example.com"
+          placeholder="dancer@example.com"
         />
         <div>
           <label className="block text-label text-ink-muted mb-1.5">Role</label>

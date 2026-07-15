@@ -178,7 +178,7 @@ export default function LandingPage() {
           {howItWorks.map((s, i) => (
             <Reveal key={s.step} delayMs={i * 80}>
               <div>
-                {s.visual}
+                <div className="aspect-video flex items-center">{s.visual}</div>
                 <div className="flex items-center gap-2.5 mt-5 mb-2.5">
                   {s.icon}
                   <span className="font-mono text-xl text-brand">{s.step}</span>
