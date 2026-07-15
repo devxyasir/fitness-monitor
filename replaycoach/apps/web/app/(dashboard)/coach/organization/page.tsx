@@ -218,7 +218,7 @@ function InviteModal({ orgId, onClose, onCreated }: { orgId: string; onClose: ()
   return (
     <Modal title="Invite someone" onClose={onClose}>
       <p className="text-ink-muted text-sm mb-5 leading-relaxed">
-        There's no email delivery yet — you'll get a link to copy and send yourself (text, WhatsApp, email, however you reach them).
+        We'll email them an invite link right away. It's also copied to your clipboard in case you'd rather send it yourself.
       </p>
       {error && <div className="mb-4"><ErrorBlock message={error} /></div>}
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">

@@ -42,9 +42,16 @@ services:
       - '7880:7880'
       - '7881:7881'
       - '7882:7882/udp'
-    command: --dev --keys devkey:secret
+    # Defaults to the zero-config local-dev quickstart (--dev, the
+    # well-known example keys). Production overrides both via a
+    # server-local, gitignored .env next to this file — never --dev in
+    # production (it's explicitly a single-process, non-production LiveKit
+    # mode: default keys, verbose debug logging, no production tuning) and
+    # never the default keys, which are public knowledge from LiveKit's own
+    # docs. See docker-compose.prod.env.example for the variables to set.
+    command: ${LIVEKIT_COMMAND:---dev --keys devkey:secret}
     environment:
-      - LIVEKIT_KEYS=devkey:secret
+      - LIVEKIT_KEYS=${LIVEKIT_KEYS:-devkey:secret}
 
 volumes:
   postgres_data:

@@ -45,4 +45,13 @@ export const configSchema = Joi.object({
 
   // Pose service
   POSE_SERVICE_URL: Joi.string().default('http://localhost:8100'),
+
+  // SMTP — optional. Without it, EmailService logs a warning and skips
+  // sending (invites still work via the manually-copied link in the UI).
+  SMTP_HOST: Joi.string().optional(),
+  SMTP_PORT: Joi.number().default(587),
+  SMTP_SECURE: Joi.boolean().default(false),
+  SMTP_USER: Joi.string().optional(),
+  SMTP_PASSWORD: Joi.string().optional(),
+  EMAIL_FROM: Joi.string().default('ReplayCoach <no-reply@morangoai.net>'),
 });

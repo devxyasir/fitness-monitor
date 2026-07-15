@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
+import { ConfigService } from '@nestjs/config';
 import { DataSource, Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -20,6 +21,7 @@ import type {
 import { User } from '../users/user.entity';
 import { UserService } from '../users/user.service';
 import { TeamsService } from '../teams/teams.service';
+import { EmailService } from '../email/email.service';
 import { Organization } from './organization.entity';
 import { OrgInvite } from './org-invite.entity';
 import type { CreateOrganizationDto, InviteToOrgDto, UpdateOrganizationDto } from './organization.dto';
@@ -39,7 +41,16 @@ export class OrganizationService {
     private readonly dataSource: DataSource,
     private readonly userService: UserService,
     private readonly teamsService: TeamsService,
+    private readonly emailService: EmailService,
+    private readonly configService: ConfigService,
   ) {}
+
+  /** Base URL for links embedded in outbound email — reuses CORS_ORIGIN
+   * (already the deployed frontend's origin) rather than a second env var. */
+  private buildInviteUrl(token: string): string {
+    const webOrigin = this.configService.get<string>('app.corsOrigin') ?? 'http://localhost:3000';
+    return `${webOrigin}/invite/${token}`;
+  }
 
   private assertOrgAdmin(orgId: string, actingUser: JwtPayload): void {
     if (actingUser.role === 'platform_admin') return;
@@ -143,7 +154,7 @@ export class OrganizationService {
     dto: InviteToOrgDto,
   ): Promise<CreateInviteResponse> {
     this.assertOrgAdmin(orgId, actingUser);
-    await this.findById(orgId);
+    const org = await this.findById(orgId);
     if (dto.teamId) {
       await this.teamsService.getTeam(orgId, dto.teamId); // throws if not found in this org
     }
@@ -159,6 +170,14 @@ export class OrganizationService {
       usedAt: null,
     });
     await this.inviteRepo.save(invite);
+
+    const inviter = await this.userService.findById(actingUser.sub);
+    void this.emailService.sendInviteEmail(invite.invitedEmail, {
+      orgName: org.name,
+      role: invite.role as 'coach' | 'student',
+      inviteUrl: this.buildInviteUrl(invite.inviteToken),
+      invitedByName: inviter?.displayName ?? 'Your coach',
+    });
 
     return { inviteToken: invite.inviteToken, expiresAt: invite.expiresAt.toISOString() };
   }
@@ -176,9 +195,9 @@ export class OrganizationService {
     await this.inviteRepo.delete({ id: inviteId });
   }
 
-  /** No email infra exists to actually re-send anything — "resend" here
-   * means "the old link stops working, here's a fresh one" (new token,
-   * reset expiry). The caller is responsible for sharing the new link. */
+  /** "Resend" rotates the token (old link stops working, fresh 7-day expiry)
+   * and re-sends the email — see EmailService for what happens if SMTP
+   * isn't configured (link still works either way). */
   async resendInvite(orgId: string, inviteId: string, actingUser: JwtPayload): Promise<CreateInviteResponse> {
     this.assertOrgAdmin(orgId, actingUser);
     const invite = await this.inviteRepo.findOne({ where: { id: inviteId, orgId } });
@@ -188,6 +207,15 @@ export class OrganizationService {
     invite.inviteToken = uuidv4();
     invite.expiresAt = new Date(Date.now() + INVITE_TTL_MS);
     await this.inviteRepo.save(invite);
+
+    const org = await this.findById(orgId);
+    const inviter = await this.userService.findById(actingUser.sub);
+    void this.emailService.sendInviteEmail(invite.invitedEmail, {
+      orgName: org.name,
+      role: invite.role as 'coach' | 'student',
+      inviteUrl: this.buildInviteUrl(invite.inviteToken),
+      invitedByName: inviter?.displayName ?? 'Your coach',
+    });
 
     return { inviteToken: invite.inviteToken, expiresAt: invite.expiresAt.toISOString() };
   }
