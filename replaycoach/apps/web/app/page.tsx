@@ -16,7 +16,7 @@ import {
   LiveTile,
   AnnotationDrawDemo,
   BandPhoto,
-  RunnerSkeletonOverlay,
+  DancerSkeletonOverlay,
 } from './components/LandingVisuals';
 import { BroadcastIcon, RewindIcon, AnnotateIcon, TrackingIcon, SquadIcon } from './components/icons';
 import { Button } from './components/ui/Button';
@@ -39,18 +39,20 @@ export default function LandingPage() {
         <div className="max-w-content mx-auto px-6 lg:px-10 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <Logomark className="w-6 h-6 text-brand" />
-            <span className="font-display text-display-s">ReplayCoach</span>
+            <span className="font-display text-display-s">MorangoAi</span>
           </div>
           <nav className="hidden md:flex items-center gap-7">
             <a href="#features" className="text-ink-muted text-sm hover:text-ink transition-colors">Product</a>
-            <a href="#how" className="text-ink-muted text-sm hover:text-ink transition-colors">How it works</a>
+            <a href="#how" className="text-ink-muted text-sm hover:text-ink transition-colors">How It Works</a>
+            <a href="#for-dancers" className="text-ink-muted text-sm hover:text-ink transition-colors">For Dancers</a>
+            <a href="#for-coaches" className="text-ink-muted text-sm hover:text-ink transition-colors">For Coaches</a>
           </nav>
           <div className="flex items-center gap-3">
             <ThemeToggle />
             <Link href="/login" className="text-sm font-semibold text-ink border border-hairline rounded-full px-5 py-2.5 hover:bg-panel-2 transition-colors">
               Log in
             </Link>
-            <Button href="/register" size="md">Start free</Button>
+            <Button href="/register" size="md">Join the Beta</Button>
           </div>
         </div>
       </header>
@@ -59,33 +61,41 @@ export default function LandingPage() {
       <section className="relative max-w-content mx-auto px-6 lg:px-10 pt-24 pb-14">
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.1fr] gap-14 items-center">
           <div className="animate-rise">
-            <div className="font-mono text-xs tracking-[0.14em] text-brand uppercase mb-4">Live film room</div>
+            <div className="font-mono text-xs tracking-[0.14em] text-brand uppercase mb-4">Movement Review for Dance</div>
             <h1 className="font-display text-display-xl text-ink mb-5 text-balance">
-              Real-time film review, built for the rep — not the meeting.
+              See how your body moves.
             </h1>
             <p className="text-ink-muted text-body-l max-w-md mb-8">
-              Run the session live, rewind any moment without dropping the call, and
-              mark exactly where the form broke — with tracked joints on every athlete.
+              Record, track and review every movement in one focused space. Study your timing, alignment and execution—alone or together with your coach.
             </p>
             <div className="flex gap-3.5 flex-wrap">
-              <Button href="/register" size="lg">Start free</Button>
+              <Button href="/register" size="lg">Start Tracking</Button>
               <Button variant="ghost" size="lg" onClick={() => setDemoOpen(true)}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
                   <path d="M8 5v14l11-7z" />
                 </svg>
-                Watch demo
+                See How It Works
               </Button>
             </div>
+            <p className="text-ink-faint text-xs mt-5 font-mono tracking-wide">Built for dancers, choreographers, instructors and studios.</p>
           </div>
 
           <HeroMock />
         </div>
       </section>
 
-      {/* Stat strip */}
-      <section className="relative max-w-content mx-auto px-6 lg:px-10 py-10 border-t border-hairline">
+      {/* Introductory statement */}
+      <section className="relative max-w-content mx-auto px-6 lg:px-10 py-16 border-t border-hairline">
         <Reveal>
-          <StatStrip />
+          <div className="max-w-2xl">
+            <span className="font-mono text-xs tracking-[0.14em] text-brand uppercase mb-4 block">Movement Happens Fast</span>
+            <h2 className="font-display text-display-l text-ink mb-5 text-balance">
+              Dance is felt in the moment. Progress begins when you can see it clearly.
+            </h2>
+            <p className="text-ink-muted text-body-m max-w-lg">
+              A transition can last less than a second, but it can change an entire performance. Review your movement in detail, return to important moments and understand what needs to change in the next take.
+            </p>
+          </div>
         </Reveal>
       </section>
 
@@ -95,7 +105,7 @@ export default function LandingPage() {
           <div className="relative w-full aspect-[4/5] lg:aspect-[21/9] overflow-hidden rounded-lg lg:rounded-none">
             <BandPhoto
               src="/images/landing/editorial-review.jpg"
-              alt="A coach and athlete reviewing footage together"
+              alt="A dancer and coach reviewing movement footage together"
               className="absolute inset-0 w-full h-full"
             />
             <div
@@ -105,9 +115,12 @@ export default function LandingPage() {
             <div className="absolute inset-0 flex items-center">
               <div className="max-w-content mx-auto px-6 lg:px-10 w-full">
                 <div className="max-w-lg">
-                  <span className="font-mono text-xs tracking-[0.14em] text-brand uppercase mb-4 block">The film room</span>
+                  <span className="font-mono text-xs tracking-[0.14em] text-brand uppercase mb-4 block">The Dance Room</span>
                   <p className="font-display text-display-l text-ink text-balance">
-                    Every rep gets reviewed the way it happened — together, live, with the tape right there.
+                    Review every take together, live, while the movement is still fresh.
+                  </p>
+                  <p className="text-ink-muted text-body-m mt-4 max-w-md">
+                    Pause, replay and discuss the precise moment where feedback belongs. No separate meeting and no relying on memory.
                   </p>
                 </div>
               </div>
@@ -147,7 +160,7 @@ export default function LandingPage() {
                 </div>
               </div>
               <span className="absolute bottom-6 left-6 right-6 font-display text-display-s text-ink">
-                Watch a live coaching session — replay, skeleton overlay, and annotations in real time.
+                Watch a live dance review session — movement tracking, frame-by-frame playback and coach notes in real time.
               </span>
             </div>
           </button>
@@ -156,82 +169,12 @@ export default function LandingPage() {
 
       <DemoVideoModal open={demoOpen} onClose={() => setDemoOpen(false)} />
 
-      {/* Feature bands — photo-dominant, alternating layout, one per domain accent */}
-      <section id="features" className="relative max-w-content mx-auto px-6 lg:px-10 py-24 space-y-24">
-        {/* Signature — Tracked joints (session, photo left) */}
-        <Reveal>
-          <div className="flex flex-col lg:flex-row items-center gap-10 lg:gap-16">
-            <div className="relative w-full lg:w-[45%] aspect-[4/5] rounded-lg overflow-hidden shadow-xl hover:-translate-y-1 hover:shadow-xl transition-all duration-200">
-              <BandPhoto
-                src="/images/landing/signature-athlete.jpg"
-                alt="An athlete mid-sprint, joints clearly visible for tracking"
-                className="absolute inset-0 w-full h-full"
-              />
-              <RunnerSkeletonOverlay className="absolute inset-0 w-full h-full" />
-            </div>
-            <div className="flex-1">
-              <TrackingIcon className="w-8 h-8 text-session mb-4" />
-              <span className="font-mono text-xs text-session uppercase tracking-widest">Signature</span>
-              <h3 className="font-display text-display-m text-ink mt-3 mb-3">Tracked joints, not a filter</h3>
-              <p className="text-ink-muted text-body-m max-w-md">
-                Every athlete gets real pose tracking during the live call — joint
-                angles update in real time, and any annotation you draw follows the
-                body instead of sitting on a fixed pixel.
-              </p>
-              <JointReadout />
-            </div>
-          </div>
-        </Reveal>
-
-        {/* Replay — Rewind without dropping the call (replay, photo right) */}
-        <Reveal>
-          <div className="flex flex-col lg:flex-row-reverse items-center gap-10 lg:gap-16">
-            <div className="relative w-full lg:w-[55%] aspect-video rounded-lg overflow-hidden shadow-xl hover:-translate-y-1 hover:shadow-xl transition-all duration-200">
-              <BandPhoto
-                src="/images/landing/replay-scrub.jpg"
-                alt="A coach's hands scrubbing a replay timeline"
-                className="absolute inset-0 w-full h-full"
-              />
-              <div className="absolute top-6 right-6 w-60 rounded-md overflow-hidden border border-hairline shadow-lg">
-                <ReplayScrubberMini />
-              </div>
-            </div>
-            <div className="flex-1">
-              <RewindIcon className="w-8 h-8 text-replay mb-4" />
-              <span className="font-mono text-xs text-replay uppercase tracking-widest">Replay</span>
-              <h3 className="font-display text-display-m text-ink mt-3 mb-3">Rewind without dropping the call</h3>
-              <p className="text-ink-muted text-body-m max-w-md">The last 30 seconds are always buffered — hit replay the instant something looks off.</p>
-            </div>
-          </div>
-        </Reveal>
-
-        {/* Rooms — Bring the whole squad in (analytics, photo left) */}
-        <Reveal>
-          <div className="flex flex-col lg:flex-row items-center gap-10 lg:gap-16">
-            <div className="relative w-full lg:w-[50%] aspect-[4/3] rounded-lg overflow-hidden shadow-xl hover:-translate-y-1 hover:shadow-xl transition-all duration-200">
-              <BandPhoto
-                src="/images/landing/rooms-squad.jpg"
-                alt="A team of athletes training together"
-                className="absolute inset-0 w-full h-full"
-              />
-              <div className="absolute bottom-6 right-6 bg-panel/90 backdrop-blur-glass border border-hairline rounded-md shadow-lg p-3">
-                <RoomsGridMini className="w-32" />
-              </div>
-            </div>
-            <div className="flex-1">
-              <SquadIcon className="w-8 h-8 text-analytics mb-4" />
-              <span className="font-mono text-xs text-analytics uppercase tracking-widest">Rooms</span>
-              <h3 className="font-display text-display-m text-ink mt-3 mb-3">Bring the whole squad in</h3>
-              <p className="text-ink-muted text-body-m max-w-md">One room, one cued replay, every athlete watching the same frame at once.</p>
-            </div>
-          </div>
-        </Reveal>
-      </section>
-
       {/* How it works */}
-      <section id="how" className="relative max-w-content mx-auto px-6 lg:px-10 py-20">
-        <h2 className="font-display text-display-m text-ink mb-8">How it works</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+      <section id="how" className="relative max-w-content mx-auto px-6 lg:px-10 py-20 border-t border-hairline">
+        <Reveal>
+          <h2 className="font-display text-display-l text-ink mb-4">From movement to meaningful feedback.</h2>
+        </Reveal>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-10">
           {howItWorks.map((s, i) => (
             <Reveal key={s.step} delayMs={i * 80}>
               <div>
@@ -248,27 +191,219 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* CTA */}
+      {/* Feature bands — Movement tracking, Live Review, Rooms */}
+      <section id="features" className="relative max-w-content mx-auto px-6 lg:px-10 py-24 space-y-24">
+        {/* Movement Tracking (session, photo left) */}
+        <Reveal>
+          <div className="flex flex-col lg:flex-row items-center gap-10 lg:gap-16">
+            <div className="relative w-full lg:w-[45%] aspect-[4/5] rounded-lg overflow-hidden shadow-xl hover:-translate-y-1 hover:shadow-xl transition-all duration-200">
+              <BandPhoto
+                src="/images/landing/signature-athlete.jpg"
+                alt="A dancer mid-movement with body tracking overlay"
+                className="absolute inset-0 w-full h-full"
+              />
+              <DancerSkeletonOverlay className="absolute inset-0 w-full h-full" />
+            </div>
+            <div className="flex-1">
+              <TrackingIcon className="w-8 h-8 text-session mb-4" />
+              <span className="font-mono text-xs text-session uppercase tracking-widest">Movement Tracking</span>
+              <h3 className="font-display text-display-m text-ink mt-3 mb-3">Understand more than the final pose.</h3>
+              <p className="text-ink-muted text-body-m max-w-md">
+                Dance is built through transitions, timing, balance and control. Movement tracking helps you study what happened between positions—not only where the movement started and ended.
+              </p>
+              <JointReadout />
+            </div>
+          </div>
+        </Reveal>
+
+        {/* Frame-by-Frame Review (replay, photo right) */}
+        <Reveal>
+          <div className="flex flex-col lg:flex-row-reverse items-center gap-10 lg:gap-16">
+            <div className="relative w-full lg:w-[55%] aspect-video rounded-lg overflow-hidden shadow-xl hover:-translate-y-1 hover:shadow-xl transition-all duration-200">
+              <BandPhoto
+                src="/images/landing/replay-scrub.jpg"
+                alt="Frame-by-frame review of dance transitions"
+                className="absolute inset-0 w-full h-full"
+              />
+              <div className="absolute top-6 right-6 w-60 rounded-md overflow-hidden border border-hairline shadow-lg">
+                <ReplayScrubberMini />
+              </div>
+            </div>
+            <div className="flex-1">
+              <RewindIcon className="w-8 h-8 text-replay mb-4" />
+              <span className="font-mono text-xs text-replay uppercase tracking-widest">Frame-by-Frame</span>
+              <h3 className="font-display text-display-m text-ink mt-3 mb-3">Slow down fast combinations</h3>
+              <p className="text-ink-muted text-body-m max-w-md">Slow down important transitions and technical details. The last 30 seconds are always buffered — review the instant something needs attention.</p>
+            </div>
+          </div>
+        </Reveal>
+
+        {/* Live Dance Room (analytics, photo left) */}
+        <Reveal>
+          <div className="flex flex-col lg:flex-row items-center gap-10 lg:gap-16">
+            <div className="relative w-full lg:w-[50%] aspect-[4/3] rounded-lg overflow-hidden shadow-xl hover:-translate-y-1 hover:shadow-xl transition-all duration-200">
+              <BandPhoto
+                src="/images/landing/rooms-squad.jpg"
+                alt="Dancers and choreographer reviewing performance together"
+                className="absolute inset-0 w-full h-full"
+              />
+              <div className="absolute bottom-6 right-6 bg-panel/90 backdrop-blur-glass border border-hairline rounded-md shadow-lg p-3">
+                <RoomsGridMini className="w-32" />
+              </div>
+            </div>
+            <div className="flex-1">
+              <SquadIcon className="w-8 h-8 text-analytics mb-4" />
+              <span className="font-mono text-xs text-analytics uppercase tracking-widest">Live Dance Room</span>
+              <h3 className="font-display text-display-m text-ink mt-3 mb-3">Review movement as it happens</h3>
+              <p className="text-ink-muted text-body-m max-w-md">Review performances with dancers, coaches and choreographers in real time. One room, one cued take, everyone watching the same moment at once.</p>
+            </div>
+          </div>
+        </Reveal>
+      </section>
+
+      {/* Everything needed to study movement clearly */}
+      <section className="relative max-w-content mx-auto px-6 lg:px-10 py-20 border-t border-hairline">
+        <Reveal>
+          <h2 className="font-display text-display-l text-ink mb-10">Everything needed to study movement clearly.</h2>
+        </Reveal>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {featuresList.map((f, i) => (
+            <Reveal key={f.title} delayMs={i * 60}>
+              <div className="bg-panel border border-hairline rounded-lg p-6 hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
+                <h3 className="font-display text-display-s text-ink mb-2">{f.title}</h3>
+                <p className="text-ink-muted text-sm leading-relaxed">{f.body}</p>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+      </section>
+
+      {/* For Dancers */}
+      <section id="for-dancers" className="relative max-w-content mx-auto px-6 lg:px-10 py-20 border-t border-hairline">
+        <Reveal>
+          <span className="font-mono text-xs tracking-[0.14em] text-brand uppercase mb-4 block">For Dancers</span>
+          <h2 className="font-display text-display-l text-ink mb-5">Practise with greater awareness.</h2>
+          <p className="text-ink-muted text-body-m max-w-lg mb-10">
+            See what happened during your movement instead of depending only on how it felt. Review your timing, transitions, alignment and control before returning to the studio floor.
+          </p>
+        </Reveal>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {forDancers.map((item, i) => (
+            <Reveal key={item.title} delayMs={i * 60}>
+              <div className="bg-panel border border-hairline rounded-lg p-6 hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
+                <h3 className="font-display text-display-s text-ink mb-2">{item.title}</h3>
+                <p className="text-ink-muted text-sm leading-relaxed">{item.body}</p>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+        <div className="mt-8">
+          <Button href="/register" size="lg">Track Your Movement</Button>
+        </div>
+      </section>
+
+      {/* For Coaches and Choreographers */}
+      <section id="for-coaches" className="relative max-w-content mx-auto px-6 lg:px-10 py-20 border-t border-hairline">
+        <Reveal>
+          <span className="font-mono text-xs tracking-[0.14em] text-brand uppercase mb-4 block">For Coaches and Choreographers</span>
+          <h2 className="font-display text-display-l text-ink mb-5">Give feedback dancers can see.</h2>
+          <p className="text-ink-muted text-body-m max-w-lg mb-10">
+            Move beyond general comments. Show dancers the precise moment where timing, alignment, energy or execution needs attention.
+          </p>
+        </Reveal>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {forCoaches.map((item, i) => (
+            <Reveal key={item.title} delayMs={i * 60}>
+              <div className="bg-panel border border-hairline rounded-lg p-6 hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
+                <h3 className="font-display text-display-s text-ink mb-2">{item.title}</h3>
+                <p className="text-ink-muted text-sm leading-relaxed">{item.body}</p>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+        <div className="mt-8">
+          <Button href="/register" size="lg">Open a Dance Room</Button>
+        </div>
+      </section>
+
+      {/* Use Cases */}
+      <section className="relative max-w-content mx-auto px-6 lg:px-10 py-20 border-t border-hairline">
+        <Reveal>
+          <h2 className="font-display text-display-l text-ink mb-10">Built for every stage of dance development.</h2>
+        </Reveal>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {useCases.map((uc, i) => (
+            <Reveal key={uc.title} delayMs={i * 60}>
+              <div className="bg-panel border border-hairline rounded-lg p-6 hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
+                <h3 className="font-display text-display-s text-ink mb-2">{uc.title}</h3>
+                <p className="text-ink-muted text-sm leading-relaxed">{uc.body}</p>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+      </section>
+
+      {/* Philosophy */}
+      <section className="relative max-w-content mx-auto px-6 lg:px-10 py-20 border-t border-hairline">
+        <Reveal>
+          <div className="max-w-2xl">
+            <span className="font-mono text-xs tracking-[0.14em] text-brand uppercase mb-4 block">More Than Fitness</span>
+            <h2 className="font-display text-display-l text-ink mb-5">Dance is not a collection of repetitions.</h2>
+            <p className="text-ink-muted text-body-m max-w-lg">
+              It is timing, expression, intention, control and movement through space. The platform is designed to help dancers study the complete performance—not simply count how many times a movement was completed.
+            </p>
+          </div>
+        </Reveal>
+      </section>
+
+      {/* FAQs */}
+      <section className="relative max-w-content mx-auto px-6 lg:px-10 py-20 border-t border-hairline">
+        <Reveal>
+          <h2 className="font-display text-display-l text-ink mb-10">Frequently asked questions</h2>
+        </Reveal>
+        <div className="space-y-6 max-w-2xl">
+          {faqs.map((faq, i) => (
+            <Reveal key={i} delayMs={i * 40}>
+              <div className="border-b border-hairline pb-6">
+                <h3 className="font-display text-display-s text-ink mb-2">{faq.q}</h3>
+                <p className="text-ink-muted text-sm leading-relaxed">{faq.a}</p>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+      </section>
+
+      {/* Final CTA */}
       <section className="relative border-t border-hairline">
         <div className="max-w-content mx-auto px-6 lg:px-10 py-20 text-center">
-          <h2 className="font-display text-display-l text-ink mb-5">Put a skeleton on every rep.</h2>
-          <Button href="/register" size="lg">Start free</Button>
+          <span className="font-mono text-xs tracking-[0.14em] text-brand uppercase mb-4 block">Move. Review. Refine.</span>
+          <h2 className="font-display text-display-l text-ink mb-5">Turn every rehearsal into a clearer next step.</h2>
+          <p className="text-ink-muted text-body-m max-w-md mx-auto mb-8">
+            Record your movement, review the details and return to the floor with greater awareness.
+          </p>
+          <div className="flex gap-3.5 flex-wrap justify-center">
+            <Button href="/register" size="lg">Start Tracking Movement</Button>
+            <Button href="/register" variant="ghost" size="lg">Join the Beta</Button>
+          </div>
         </div>
       </section>
 
       {/* Footer */}
       <footer className="relative border-t border-hairline">
         <div className="max-w-content mx-auto px-6 lg:px-10 py-10 flex flex-wrap gap-8 justify-between items-start">
-          <div className="flex items-center gap-2.5">
-            <Logomark className="w-5 h-5 text-brand" />
-            <span className="font-display text-display-s text-sm">ReplayCoach</span>
+          <div>
+            <div className="flex items-center gap-2.5 mb-2">
+              <Logomark className="w-5 h-5 text-brand" />
+              <span className="font-display text-display-s text-sm">MorangoAi</span>
+            </div>
+            <p className="text-ink-faint text-xs max-w-xs">Movement review for dancers, choreographers, instructors and studios.</p>
           </div>
           <div className="flex gap-12 flex-wrap">
-            <FooterCol title="Product" links={['Features', 'How it works']} />
-            <FooterCol title="Company" links={['About', 'Contact']} />
-            <FooterCol title="Legal" links={['Privacy', 'Terms']} />
+            <FooterCol title="Product" links={['Product', 'How It Works', 'Features']} />
+            <FooterCol title="For" links={['For Dancers', 'For Coaches']} />
+            <FooterCol title="Legal" links={['Privacy', 'Terms', 'Contact']} />
           </div>
-          <div className="font-mono text-xs text-ink-faint">© 2026 ReplayCoach</div>
+          <div className="font-mono text-xs text-ink-faint">Powered by MorangoAi</div>
         </div>
       </footer>
     </div>
@@ -291,31 +426,70 @@ function FooterCol({ title, links }: { title: string; links: string[] }) {
 const howItWorks = [
   {
     step: '01',
-    title: 'Go live',
-    body: 'Start a room, athletes join from any device, the skeleton overlay tracks in real time.',
+    title: 'Record a take',
+    body: 'Capture a short combination, dance phrase, rehearsal or complete performance.',
     visual: <LiveTile />,
     icon: <BroadcastIcon className="w-5 h-5 text-brand" />,
   },
   {
     step: '02',
-    title: 'Catch the moment',
-    body: 'Hit replay the instant something looks off — the last 30 seconds are always buffered.',
+    title: 'Track the movement',
+    body: 'Follow how your body moves through space and return to the exact moments that matter.',
     visual: <ReplayScrubberMini className="max-w-[220px]" />,
     icon: <RewindIcon className="w-5 h-5 text-brand" />,
   },
   {
     step: '03',
-    title: 'Show the fix',
-    body: 'Scrub frame by frame, draw over the play, and send the clip to the athlete\'s library.',
+    title: 'Review and refine',
+    body: 'Study your performance independently or review it live with an instructor, choreographer or coach.',
     visual: <AnnotationDrawDemo />,
     icon: <AnnotateIcon className="w-5 h-5 text-brand" />,
   },
 ];
 
-/** Layered-stack hero visual — one athlete tile at real scale with the
- * signature joint motif, tilted with a second card peeking out behind it
- * (physical logic per design/DESIGN_SYSTEM.md §8.2, replacing the old flat
- * two-tile mock). */
+const featuresList = [
+  { title: 'Movement Tracking', body: 'Follow how the body changes position throughout a dance sequence.' },
+  { title: 'Frame-by-Frame Playback', body: 'Slow down fast combinations and examine transitions in detail.' },
+  { title: 'Live Dance Room', body: 'Review performances with dancers, coaches and choreographers in real time.' },
+  { title: 'Side-by-Side Comparison', body: 'Compare different takes or place a dancer\'s performance beside a reference.' },
+  { title: 'Timestamped Feedback', body: 'Connect each comment to the exact moment it addresses.' },
+  { title: 'Practice History', body: 'Organise previous sessions and review development over time.' },
+];
+
+const forDancers = [
+  { title: 'Study difficult combinations', body: 'Break complex choreography into clearer moments.' },
+  { title: 'Compare different takes', body: 'See what changed between one performance and the next.' },
+  { title: 'Keep feedback organised', body: 'Return to previous notes without searching through messages and videos.' },
+  { title: 'Understand your progress', body: 'Build a visible record of your development across rehearsals.' },
+];
+
+const forCoaches = [
+  { title: 'Review performances remotely', body: 'Provide structured feedback without requiring another studio session.' },
+  { title: 'Connect notes to movement', body: 'Place comments directly beside the relevant moment.' },
+  { title: 'Compare interpretation and execution', body: 'Review how choreography changes between demonstrations and performances.' },
+  { title: 'Build a clearer learning process', body: 'Give dancers feedback they can revisit before their next rehearsal.' },
+];
+
+const useCases = [
+  { title: 'Solo Practice', body: 'Review combinations and performances between studio sessions.' },
+  { title: 'Dance Classes', body: 'Help students understand corrections through visible examples.' },
+  { title: 'Choreography Development', body: 'Compare interpretations and refine movement choices.' },
+  { title: 'Remote Coaching', body: 'Review and discuss movement without being in the same location.' },
+  { title: 'Audition Preparation', body: 'Study performance details before submitting or attending an audition.' },
+  { title: 'Studio Training', body: 'Maintain structured feedback across classes, teams and productions.' },
+];
+
+const faqs = [
+  { q: 'Is the platform only for professional dancers?', a: 'No. It can support students, emerging dancers, professional performers, instructors and choreographers.' },
+  { q: 'Which dance styles can be reviewed?', a: 'The platform is designed around body movement rather than one specific dance style, making it suitable for different forms of dance and movement practice.' },
+  { q: 'Does it replace a dance instructor?', a: 'No. It gives instructors and dancers a clearer way to review, communicate and revisit feedback.' },
+  { q: 'Can I compare multiple performances?', a: 'Where comparison is enabled, different takes can be reviewed together to identify changes in timing, positioning and execution.' },
+  { q: 'Can an instructor review a session remotely?', a: 'Live or shared review tools can allow dancers and instructors to examine the same performance without being in the same studio.' },
+  { q: 'Is my footage private?', a: 'Yes. Your video content is stored securely with access controls. Only people you invite can view your sessions and performances.' },
+];
+
+/** Layered-stack hero visual — one dancer tile at real scale with the
+ * signature joint motif, tilted with a second card peeking out behind it */
 function HeroMock() {
   return (
     <div aria-hidden className="relative animate-settle mx-auto max-w-md lg:max-w-none" style={{ transform: 'rotate(-2deg)' }}>
@@ -327,7 +501,7 @@ function HeroMock() {
         <div className="relative bg-panel-2 border border-hairline rounded-md aspect-[4/3] overflow-hidden flex items-end p-2">
           <SkeletonMotif className="absolute inset-0 w-full h-full p-6" jointColor="session" />
           <span className="relative text-xs text-ink bg-panel/80 backdrop-blur-sm rounded-full px-2.5 py-1 border border-hairline">
-            Priya N. — Sprint mechanics
+            Maya R. — Contemporary sequence
           </span>
         </div>
         <div className="mt-3 bg-panel-2 border border-hairline rounded-sm p-3">

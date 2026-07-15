@@ -43,25 +43,25 @@ const mono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: 'ReplayCoach',
-  description: 'Live coaching platform with full-session DVR replay and skeleton tracking.',
+  title: 'Dance Movement Tracking and Review | MorangoAi',
+  description: 'Track, review and understand dance movement through detailed video analysis, live feedback and performance comparison for dancers, coaches and choreographers.',
 };
 
 // Runs before hydration so the page never paints one theme and then flips —
-// reads the persisted choice (default 'dark') and stamps it on <html> ahead
+// reads the persisted choice (default 'light') and stamps it on <html> ahead
 // of Tailwind's CSS-variable-driven colors picking it up.
 const THEME_INIT_SCRIPT = `
 try {
-  var t = localStorage.getItem('replaycoach-theme') || 'dark';
+  var t = localStorage.getItem('replaycoach-theme') || 'light';
   document.documentElement.dataset.theme = t;
 } catch (e) {
-  document.documentElement.dataset.theme = 'dark';
+  document.documentElement.dataset.theme = 'light';
 }
 `;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${display.variable} ${sans.variable} ${mono.variable}`} data-theme="dark">
+    <html lang="en" className={`${display.variable} ${sans.variable} ${mono.variable}`} data-theme="light">
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>

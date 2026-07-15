@@ -1,7 +1,8 @@
 /**
- * theme-store — light/dark theme, persisted to localStorage. Dark is the
- * product default (see globals.css); light is an explicit opt-in via the
- * toggle, never auto-applied from prefers-color-scheme.
+ * theme-store — light/dark theme, persisted to localStorage. Light is the
+ * product default (see app/layout.tsx's anti-FOUC script); dark is an
+ * explicit opt-in via the toggle, never auto-applied from
+ * prefers-color-scheme.
  */
 import { create } from 'zustand';
 
@@ -23,9 +24,9 @@ interface ThemeState {
 export const useThemeStore = create<ThemeState>((set, get) => ({
   // The anti-flash inline script (see app/layout.tsx) already set
   // document.documentElement.dataset.theme before hydration — read that back
-  // instead of defaulting to 'dark' here, or the store and DOM could disagree
-  // on first toggle.
-  theme: (typeof document !== 'undefined' && (document.documentElement.dataset['theme'] as Theme)) || 'dark',
+  // instead of defaulting here, or the store and DOM could disagree on
+  // first toggle.
+  theme: (typeof document !== 'undefined' && (document.documentElement.dataset['theme'] as Theme)) || 'light',
 
   setTheme: (theme) => {
     applyTheme(theme);
