@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import type { InvitePreviewDto } from '@replaycoach/types';
 import { authClient } from '../../../lib/auth-client';
+import { orgClient } from '../../../lib/org-client';
 import { Logomark } from '../../components/Logomark';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -23,14 +25,35 @@ export default function RegisterPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get('redirectTo');
+  const inviteToken = searchParams.get('invite');
+
+  const [invite, setInvite] = useState<InvitePreviewDto | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [inviteLoading, setInviteLoading] = useState(!!inviteToken);
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
-  const [role, setRole] = useState<'coach' | 'student'>('coach');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [passwordTouched, setPasswordTouched] = useState(false);
+
+  // An invite token in the URL determines the whole flow: fetch its preview
+  // once so we know who's inviting them to what, and lock role/org to it —
+  // a self-selected role is never trusted once a real invite is present.
+  useEffect(() => {
+    if (!inviteToken) return;
+    orgClient
+      .getInvitePreview(inviteToken)
+      .then((preview) => {
+        if (preview.expired) setInviteError('This invite link has expired. Ask your coach to send a new one.');
+        else if (preview.alreadyUsed) setInviteError('This invite has already been used.');
+        else setInvite(preview);
+      })
+      .catch(() => setInviteError('This invite link is invalid.'))
+      .finally(() => setInviteLoading(false));
+  }, [inviteToken]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,12 +61,18 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      const user = await authClient.register({ email, password, displayName, role });
+      const user = await authClient.register({
+        email,
+        password,
+        displayName,
+        role: invite?.role ?? 'coach',
+        ...(inviteToken ? { inviteToken } : {}),
+      });
       const isValidRedirect = redirectTo && redirectTo.startsWith('/') && !redirectTo.startsWith('//');
       if (isValidRedirect) {
         router.push(redirectTo);
       } else if (user.role === 'platform_admin' || user.role === 'studio_admin' || user.role === 'coach') {
-        router.push('/coach');
+        router.push(user.orgId ? '/coach' : '/onboarding/organization');
       } else {
         router.push('/student/sessions');
       }
@@ -57,13 +86,49 @@ export default function RegisterPage() {
   const passwordValid = PASSWORD_RULES.every((r) => r.test(password));
   const canSubmit = displayName.trim().length > 0 && email.trim().length > 0 && passwordValid && !loading;
 
+  // Waiting on the invite preview — don't flash the wrong form.
+  if (inviteToken && inviteLoading) {
+    return (
+      <div className="flex items-center gap-2.5 mb-5">
+        <Logomark className="w-5 h-5 text-brand flex-shrink-0 animate-mark-breathe" />
+        <p className="text-ink-muted text-sm">Checking your invite…</p>
+      </div>
+    );
+  }
+
+  // Invalid/expired/used invite — don't silently fall back to open signup
+  // (that would defeat the point of gating student registration at all).
+  if (inviteToken && inviteError) {
+    return (
+      <>
+        <div className="flex items-center gap-2.5 mb-5">
+          <Logomark className="w-5 h-5 text-brand flex-shrink-0" />
+          <h2 className="font-display text-display-s leading-tight">Invite link problem</h2>
+        </div>
+        <ErrorBlock message={inviteError} />
+        <div className="text-center mt-6 text-sm text-ink-muted">
+          Already have an account?{' '}
+          <Link href="/login" className="text-brand hover:brightness-110 font-semibold">Log in</Link>
+        </div>
+      </>
+    );
+  }
+
+  const roleLabel = invite?.role === 'student' ? 'Student / Athlete' : 'Coach / Instructor';
+
   return (
     <>
       <div className="flex items-center gap-2.5 mb-5">
         <Logomark className="w-5 h-5 text-brand flex-shrink-0" />
         <div>
-          <h2 className="font-display text-display-s leading-tight">Create your account</h2>
-          <p className="text-ink-muted text-sm mt-0.5">Set up your coaching room in a minute.</p>
+          <h2 className="font-display text-display-s leading-tight">
+            {invite ? `Join ${invite.orgName}` : 'Start your coaching organization'}
+          </h2>
+          <p className="text-ink-muted text-sm mt-0.5">
+            {invite
+              ? `You've been invited as a ${roleLabel.toLowerCase()}${invite.teamName ? ` on ${invite.teamName}` : ''}.`
+              : 'Create your account and set up your organization in a minute.'}
+          </p>
         </div>
       </div>
 
@@ -139,18 +204,13 @@ export default function RegisterPage() {
           )}
         </div>
 
-        <div>
-          <label htmlFor="reg-role" className="block text-label text-ink-muted mb-1.5">I am registering as a</label>
-          <select
-            id="reg-role"
-            value={role}
-            onChange={(e) => setRole(e.target.value as 'coach' | 'student')}
-            className="w-full bg-panel-2 border border-hairline rounded-sm px-3.5 py-2.5 text-sm text-ink transition-all duration-150 focus:outline-none focus-visible:border-brand focus-visible:shadow-focus"
-          >
-            <option value="coach">Coach / Instructor</option>
-            <option value="student">Student / Athlete</option>
-          </select>
-        </div>
+        {/* No role picker: an invite locks the role, and open signup is
+            coach-only (the org-founding path) — see auth.service.ts. */}
+        {invite && (
+          <div className="text-xs text-ink-faint bg-panel-2 border border-hairline rounded-sm px-3.5 py-2.5">
+            Joining as <span className="text-ink font-medium">{roleLabel}</span>
+          </div>
+        )}
 
         <Button type="submit" disabled={!canSubmit} loading={loading} className="mt-2 w-full">
           {loading ? 'Creating account…' : 'Create account'}
@@ -177,6 +237,11 @@ export default function RegisterPage() {
           Log in
         </Link>
       </div>
+      {!invite && (
+        <p className="text-center mt-3 text-xs text-ink-faint">
+          Student or coach invited by an organization? Use the invite link they sent you instead.
+        </p>
+      )}
     </>
   );
 }

@@ -38,4 +38,8 @@ export interface RegisterRequest {
   password: string;
   displayName: string;
   role: Extract<UserRole, 'coach' | 'student'>;
+  /** Redeems an org (and optionally team) invite as part of registration —
+   * the invite's org/role win over `role` above. Required for `role:
+   * 'student'` — a student account can't self-register without one. */
+  inviteToken?: string;
 }

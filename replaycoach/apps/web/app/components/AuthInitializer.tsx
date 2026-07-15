@@ -37,16 +37,33 @@ export default function AuthInitializer({ children }: { children: React.ReactNod
   useEffect(() => {
     if (initializing) return;
 
-    const isPublicRoute = pathname === '/login' || pathname === '/register' || pathname === '/';
+    // /invite/* is public (a visitor with no account yet must be able to see
+    // it) but, unlike /login and /register, an already-authenticated visitor
+    // stays on it too — accepting an invite while logged in is the whole
+    // point of that page, not something to redirect away from.
+    const isInviteRoute = pathname?.startsWith('/invite/') ?? false;
+    const isPublicRoute = pathname === '/login' || pathname === '/register' || pathname === '/' || isInviteRoute;
+    const isOrgOnboardingRoute = pathname === '/onboarding/organization';
 
     if (!accessToken && !isPublicRoute) {
       router.push(`/login?redirectTo=${encodeURIComponent(pathname)}`);
-    } else if (accessToken && isPublicRoute) {
+    } else if (accessToken && isPublicRoute && !isInviteRoute) {
       if (user?.role === 'student') {
         router.push('/student/sessions');
       } else {
         router.push('/coach/sessions');
       }
+    } else if (
+      accessToken &&
+      !isOrgOnboardingRoute &&
+      !isInviteRoute &&
+      (user?.role === 'coach' || user?.role === 'studio_admin') &&
+      user?.orgId === null
+    ) {
+      // A coach/studio_admin with no organization yet can't do anything
+      // useful in the dashboard — every screen assumes org context. Force
+      // the one-time "name your organization" step before anything else.
+      router.push('/onboarding/organization');
     }
   }, [accessToken, user, pathname, initializing, router]);
 

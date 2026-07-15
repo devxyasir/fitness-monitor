@@ -52,6 +52,18 @@ export class AuthService {
    * self-signup default).
    */
   async register(dto: RegisterDto): Promise<AuthResult> {
+    // A student account only ever makes sense attached to the coach/org that
+    // brought them onto the platform — an org-less, un-invited "student" has
+    // no roster, no coach, and nothing to do here. Coaches keep the open
+    // self-signup path (that's how a new organization's founding account
+    // gets created — see OrganizationService.create) since gating that too
+    // would leave no way to bootstrap a brand-new deployment's first admin.
+    if (!dto.inviteToken && dto.role === 'student') {
+      throw new ForbiddenException(
+        'Student accounts require an invitation from a coach or organization. Ask your coach for an invite link.',
+      );
+    }
+
     let orgId: string | null = null;
     let role = dto.role;
     let teamId: string | null = null;
