@@ -44,7 +44,7 @@ export default function OrganizationOnboardingPage() {
           <SkeletonMotif className="absolute -right-10 -bottom-5 w-[360px] h-[420px] opacity-[0.10]" jointColor="brand" />
           <div className="flex items-center gap-2.5 mb-7">
             <Logomark className="w-5 h-5 text-brand" />
-            <span className="font-display text-display-s">ReplayCoach</span>
+            <span className="font-display text-display-s">LetsMove</span>
           </div>
           <h1 className="font-display text-display-l text-ink max-w-[24rem] text-balance">
             One organization. Every coach, every student, one place.

@@ -43,7 +43,7 @@ const mono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: 'Dance Movement Tracking and Review | MorangoAi',
+  title: 'Dance Movement Tracking and Review | LetsMove',
   description: 'Track, review and understand dance movement through detailed video analysis, live feedback and performance comparison for dancers, coaches and choreographers.',
 };
 

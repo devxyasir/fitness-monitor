@@ -42,7 +42,7 @@ export function renderInviteEmailHtml(params: InviteEmailParams): string {
           <tr>
             <td style="padding:36px 40px 28px;">
               <div style="font-family:Georgia,'Times New Roman',serif;font-size:15px;font-weight:700;color:${BRAND};letter-spacing:0.02em;">
-                ReplayCoach
+                LetsMove
               </div>
             </td>
           </tr>
@@ -56,7 +56,7 @@ export function renderInviteEmailHtml(params: InviteEmailParams): string {
           <tr>
             <td style="padding:0 40px 28px;">
               <p style="margin:0;font-size:15px;line-height:1.6;color:${INK_MUTED};">
-                ${escapedInvitedBy} invited you to join <strong style="color:${INK};">${escapedOrgName}</strong> on ReplayCoach as ${roleLabel}.
+                ${escapedInvitedBy} invited you to join <strong style="color:${INK};">${escapedOrgName}</strong> on LetsMove as ${roleLabel}.
               </p>
             </td>
           </tr>
@@ -102,7 +102,7 @@ export function renderInviteEmailHtml(params: InviteEmailParams): string {
 export function renderInviteEmailText(params: InviteEmailParams): string {
   const { orgName, role, inviteUrl, invitedByName } = params;
   const roleLabel = role === 'student' ? 'a student' : 'a coach';
-  return `${invitedByName} invited you to join ${orgName} on ReplayCoach as ${roleLabel}.
+  return `${invitedByName} invited you to join ${orgName} on LetsMove as ${roleLabel}.
 
 Accept your invite: ${inviteUrl}
 

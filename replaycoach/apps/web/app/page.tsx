@@ -39,7 +39,7 @@ export default function LandingPage() {
         <div className="max-w-content mx-auto px-6 lg:px-10 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <Logomark className="w-6 h-6 text-brand" />
-            <span className="font-display text-display-s">MorangoAi</span>
+            <span className="font-display text-display-s">LetsMove</span>
           </div>
           <nav className="hidden md:flex items-center gap-7">
             <a href="#features" className="text-ink-muted text-sm hover:text-ink transition-colors">Product</a>
@@ -394,7 +394,7 @@ export default function LandingPage() {
           <div>
             <div className="flex items-center gap-2.5 mb-2">
               <Logomark className="w-5 h-5 text-brand" />
-              <span className="font-display text-display-s text-sm">MorangoAi</span>
+              <span className="font-display text-display-s text-sm">LetsMove</span>
             </div>
             <p className="text-ink-faint text-xs max-w-xs">Movement review for dancers, choreographers, instructors and studios.</p>
           </div>

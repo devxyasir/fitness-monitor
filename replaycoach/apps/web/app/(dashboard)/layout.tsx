@@ -186,7 +186,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       <aside className="hidden lg:flex w-[240px] flex-shrink-0 bg-panel border-r border-hairline flex-col py-5 px-3.5 sticky top-0 h-screen">
         <div className="flex items-center gap-2.5 px-2.5 mb-6">
           <Logomark className="w-5 h-5 text-brand" />
-          <div className="font-display text-sm font-medium">ReplayCoach</div>
+          <div className="font-display text-sm font-medium">LetsMove</div>
           <span className="ml-auto font-mono text-[0.625rem] text-ink-faint uppercase">{role}</span>
         </div>
 
@@ -205,7 +205,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           <aside className="relative w-[260px] max-w-[80vw] h-full bg-panel border-r border-hairline flex flex-col py-5 px-3.5 animate-rise">
             <div className="flex items-center gap-2.5 px-2.5 mb-6">
               <Logomark className="w-5 h-5 text-brand" />
-              <div className="font-display text-sm font-medium">ReplayCoach</div>
+              <div className="font-display text-sm font-medium">LetsMove</div>
               <button
                 type="button"
                 onClick={() => setMobileNavOpen(false)}

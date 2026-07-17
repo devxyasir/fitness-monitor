@@ -53,5 +53,5 @@ export const configSchema = Joi.object({
   SMTP_SECURE: Joi.boolean().default(false),
   SMTP_USER: Joi.string().optional(),
   SMTP_PASSWORD: Joi.string().optional(),
-  EMAIL_FROM: Joi.string().default('ReplayCoach <no-reply@morangoai.net>'),
+  EMAIL_FROM: Joi.string().default('LetsMove <no-reply@morangoai.net>'),
 });

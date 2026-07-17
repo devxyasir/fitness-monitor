@@ -68,7 +68,7 @@ export default function AuthInitializer({ children }: { children: React.ReactNod
   }, [accessToken, user, pathname, initializing, router]);
 
   if (initializing) {
-    return <PageLoader label="Loading ReplayCoach" />;
+    return <PageLoader label="Loading LetsMove" />;
   }
 
   return <>{children}</>;

@@ -22,7 +22,7 @@ export class EmailService {
     const host = this.configService.get<string>('smtp.host');
     const user = this.configService.get<string>('smtp.user');
     const password = this.configService.get<string>('smtp.password');
-    this.from = this.configService.get<string>('smtp.from') ?? 'ReplayCoach <no-reply@morangoai.net>';
+    this.from = this.configService.get<string>('smtp.from') ?? 'LetsMove <no-reply@morangoai.net>';
 
     if (host && user && password) {
       this.transporter = nodemailer.createTransport({
@@ -37,7 +37,7 @@ export class EmailService {
   }
 
   async sendInviteEmail(to: string, params: InviteEmailParams): Promise<void> {
-    const subject = `You're invited to join ${params.orgName} on ReplayCoach`;
+    const subject = `You're invited to join ${params.orgName} on LetsMove`;
 
     if (!this.transporter) {
       this.logger.log(`[email skipped, no SMTP configured] Invite for ${to}: ${params.inviteUrl}`);

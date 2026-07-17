@@ -131,7 +131,7 @@ export default function SessionJoinPage({ params }: { params: { id: string } }) 
       <JoinShell>
         <IconBadge icon={Lock} tone="brand" />
         <h2 className="font-display text-display-s text-ink mb-2">Sign in required</h2>
-        <p className="text-ink-muted text-sm mb-6">You must be signed in to join coaching sessions on ReplayCoach.</p>
+        <p className="text-ink-muted text-sm mb-6">You must be signed in to join coaching sessions on LetsMove.</p>
         <Button href={`/login?redirect=/session/join/${inviteCode}`} className="w-full">Sign in & join session</Button>
       </JoinShell>
     );

@@ -14,7 +14,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
 
           <div className="flex items-center gap-2.5 mb-7">
             <Logomark className="w-5 h-5 text-brand" />
-            <span className="font-display text-display-s">ReplayCoach</span>
+            <span className="font-display text-display-s">LetsMove</span>
           </div>
           <h1 className="font-display text-display-l text-ink max-w-[24rem] text-balance">
             The dance room for movement.
