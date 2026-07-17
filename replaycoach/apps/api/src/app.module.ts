@@ -26,6 +26,7 @@ import {
   ReferenceVideo,
   TrackedAnnotation,
 } from './database/entities/others.entities';
+import { SystemSetting } from './system-settings/system-setting.entity';
 
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
@@ -88,6 +89,7 @@ import { SystemSettingsModule } from './system-settings/system-settings.module';
           AuditLog,
           ReferenceVideo,
           TrackedAnnotation,
+          SystemSetting,
         ],
         migrations: [],
       }),
