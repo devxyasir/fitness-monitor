@@ -22,11 +22,27 @@ const SESSION_HINT_COOKIE = 'rc_has_session';
  * See 13_Frontend_Architecture.md §5 and 06_Authentication_Authorization_RBAC.md.
  */
 export function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+
+  // /admin/login is the dedicated admin entry point — the one route under
+  // /admin/* that must stay reachable with no session (AdminAuthGuard/the
+  // page itself handle the rest of the admin auth flow client-side).
+  // Without this, the matcher below (which intentionally covers all of
+  // /admin/:path*) would bounce an unauthenticated visitor away from the
+  // login page before they could ever see it.
+  if (pathname === '/admin/login') {
+    return NextResponse.next();
+  }
+
   const hasSession = request.cookies.has(SESSION_HINT_COOKIE);
 
   if (!hasSession) {
-    const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('redirectTo', request.nextUrl.pathname);
+    // Route unauthenticated /admin/* visitors to the dedicated admin login
+    // rather than the general one — mirrors AuthInitializer.tsx's
+    // client-side redirect logic for the same distinction.
+    const isAdminRoute = pathname.startsWith('/admin');
+    const loginUrl = new URL(isAdminRoute ? '/admin/login' : '/login', request.url);
+    loginUrl.searchParams.set('redirectTo', pathname);
     return NextResponse.redirect(loginUrl);
   }
 
