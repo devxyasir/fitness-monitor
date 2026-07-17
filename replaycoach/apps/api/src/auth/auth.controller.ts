@@ -18,6 +18,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { AuthService } from './auth.service';
 import {
+  AdminElevateDto,
   ForgotPasswordDto,
   LoginDto,
   RegisterDto,
@@ -61,11 +62,30 @@ export class AuthController {
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   async login(
     @Body() dto: LoginDto,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<TokenResponse> {
-    const { tokenResponse, refreshToken, rememberMe, expiresAt } = await this.authService.login(dto);
+    const { tokenResponse, refreshToken, rememberMe, expiresAt } = await this.authService.login(dto, req.ip);
     setRefreshCookie(res, refreshToken, this.configService, { rememberMe, expiresAt });
     return tokenResponse;
+  }
+
+  /**
+   * POST /auth/admin/elevate — step-up re-verification for an
+   * already-logged-in platform_admin whose `adminAuthAt` has gone stale.
+   * Requires a valid access token (any freshness); re-checks the password
+   * and mints a fresh one with a new `adminAuthAt`. Throttled the same as
+   * /auth/login since it's another password-guessing surface.
+   */
+  @Post('admin/elevate')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  async elevate(
+    @CurrentUser() payload: JwtPayload,
+    @Body() dto: AdminElevateDto,
+  ): Promise<TokenResponse> {
+    return this.authService.elevate(payload.sub, dto.password);
   }
 
   /** POST /auth/refresh — reads httpOnly cookie, issues new token pair. */

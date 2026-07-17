@@ -23,6 +23,12 @@ export default () => ({
     cookieSameSite: process.env['AUTH_COOKIE_SAMESITE'] ?? 'strict',
     cookieDomain: process.env['AUTH_COOKIE_DOMAIN'] ?? '',
   },
+  admin: {
+    // How long a platform_admin's `adminAuthAt` claim stays "fresh" before
+    // AdminElevatedGuard requires a step-up re-verification (POST
+    // /auth/admin/elevate). Independent of the access token's own TTL.
+    elevationTtl: process.env['ADMIN_ELEVATION_TTL'] ?? '30m',
+  },
   callback: {
     secret: process.env['CALLBACK_TOKEN_SECRET'],
   },

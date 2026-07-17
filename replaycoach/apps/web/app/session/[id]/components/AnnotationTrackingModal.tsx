@@ -452,17 +452,39 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
     }
   };
 
+  // Raw pointermove fires far more often than the display can usefully
+  // redraw (a fast mouse can emit well over 100 events/sec) — every call
+  // used to trigger setMousePos synchronously, and both canvas-redraw
+  // effects depend on mousePos, so each stray move forced two full-canvas
+  // redraws. That's extra work competing with the frame-stepping/playback
+  // redraws for the same main thread, worsening the reported jank. Coalesce
+  // to at most one mousePos update per animation frame instead.
+  const pendingMouseMoveRef = useRef<{ x: number; y: number } | null>(null);
+  const mouseMoveRafRef = useRef<number | null>(null);
+
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!isCoach || !refId) return;
     const rect = annCanvasRef.current!.getBoundingClientRect();
     const px = ((e.clientX - rect.left) / rect.width) * videoRect.width;
     const py = ((e.clientY - rect.top) / rect.height) * videoRect.height;
-    setMousePos({ x: px, y: py });
-    const joint = nearestJoint(px, py);
-    if (joint !== hoveredJoint) setHoveredJoint(joint);
+    pendingMouseMoveRef.current = { x: px, y: py };
+    if (mouseMoveRafRef.current !== null) return;
+    mouseMoveRafRef.current = requestAnimationFrame(() => {
+      mouseMoveRafRef.current = null;
+      const pos = pendingMouseMoveRef.current;
+      if (!pos) return;
+      setMousePos(pos);
+      const joint = nearestJoint(pos.x, pos.y);
+      setHoveredJoint((prev) => (joint !== prev ? joint : prev));
+    });
   };
 
   const handlePointerLeave = () => {
+    if (mouseMoveRafRef.current !== null) {
+      cancelAnimationFrame(mouseMoveRafRef.current);
+      mouseMoveRafRef.current = null;
+    }
+    pendingMouseMoveRef.current = null;
     setHoveredJoint(null);
     setMousePos(null);
   };
@@ -563,19 +585,81 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
     } catch (e) { console.error(e); }
   };
 
-  const changeSelectedLabel = async (lbl: string) => {
-    if (!refId || !selectedId) return;
-    const ann = annotations.find((a) => a.id === selectedId);
-    if (!ann) return;
-    s.applyRemoteUpdate({ ...ann, label: lbl || null });
-    try {
-      const upd = await apiClient.patch<{ label: string | null }, TrackedAnnotation>(
-        `/sessions/${sessionId}/reference/${refId}/annotations/${selectedId}`,
-        { label: lbl || null }
-      );
-      s.applyRemoteUpdate(upd);
-    } catch (e) { console.error('[AnnotationTracking] failed to update label', e); }
+  // Text note input: a local draft decoupled from the store, not a
+  // per-keystroke PATCH. The old version bound the <input> straight to the
+  // store and fired a network request on every character — with no
+  // debounce, in-flight requests could resolve out of order and each one
+  // unconditionally overwrote the store's label (see applyRemoteUpdate),
+  // so a slower response for an earlier, shorter draft could land after a
+  // newer one and visibly revert/truncate what the coach had just typed.
+  // labelSeqRef guards against exactly that: only the response to the
+  // *most recently sent* request is ever applied.
+  const [labelDraft, setLabelDraft] = useState('');
+  // Mirrors labelDraft synchronously — the flush-on-switch effect's cleanup
+  // needs the *latest* typed value, but effect closures only see whatever
+  // labelDraft was when the effect last re-ran (i.e. when selectedId last
+  // changed), which goes stale on every subsequent keystroke. A ref sidesteps
+  // that instead of adding labelDraft to the dependency array (which would
+  // re-run the flush/reload effect on every keystroke — the opposite of
+  // what it's for).
+  const labelDraftRef = useRef('');
+  const labelDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const labelSeqRef = useRef(0);
+
+  const commitLabel = (targetId: string, lbl: string) => {
+    if (!refId) return;
+    const seq = ++labelSeqRef.current;
+    apiClient
+      .patch<{ label: string | null }, TrackedAnnotation>(
+        `/sessions/${sessionId}/reference/${refId}/annotations/${targetId}`,
+        { label: lbl || null },
+      )
+      .then((upd) => {
+        // A newer edit (or a switch to a different annotation) has already
+        // superseded this request — applying it now would clobber
+        // whatever's current with a stale value.
+        if (seq === labelSeqRef.current) s.applyRemoteUpdate(upd);
+      })
+      .catch((e) => console.error('[AnnotationTracking] failed to update label', e));
   };
+
+  const handleLabelDraftChange = (lbl: string) => {
+    setLabelDraft(lbl);
+    labelDraftRef.current = lbl;
+    if (!selectedId) return;
+    // Optimistic local update so the on-video/canvas label preview tracks
+    // what's being typed, without waiting on the network.
+    const ann = annotations.find((a) => a.id === selectedId);
+    if (ann) s.applyRemoteUpdate({ ...ann, label: lbl || null });
+
+    if (labelDebounceRef.current) clearTimeout(labelDebounceRef.current);
+    labelDebounceRef.current = setTimeout(() => {
+      labelDebounceRef.current = null;
+      commitLabel(selectedId, lbl);
+    }, 500);
+  };
+
+  // Switching which annotation is selected: load the new selection's
+  // current label into the draft. The cleanup (returned function) runs
+  // right before that, still closed over the *previous* selectedId — it
+  // flushes any unsaved debounced edit on the annotation being navigated
+  // away from, reading labelDraftRef (not labelDraft) so it sees the
+  // latest keystroke rather than whatever the draft was when this effect
+  // last ran.
+  useEffect(() => {
+    const newLabel = selectedId ? annotations.find((a) => a.id === selectedId)?.label ?? '' : '';
+    setLabelDraft(newLabel);
+    labelDraftRef.current = newLabel;
+
+    return () => {
+      if (labelDebounceRef.current) {
+        clearTimeout(labelDebounceRef.current);
+        labelDebounceRef.current = null;
+        if (selectedId) commitLabel(selectedId, labelDraftRef.current);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
 
   const togglePlay = () => {
     const v = videoRef.current; if (!v || !(fps > 0)) return;
@@ -583,8 +667,21 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
   };
   const step = (d: number) => {
     const v = videoRef.current; if (!v || !(fps > 0)) return;
+    // Ignore a new step while the previous one's seek hasn't landed yet —
+    // without this, rapid clicking/key-repeat on step queues overlapping
+    // <video>.currentTime seeks on the same element, a well-known source of
+    // stuck/janky seeking in browsers (H.264 seeks to arbitrary non-keyframe
+    // times aren't instant: the decoder has to find the nearest prior
+    // keyframe and decode forward).
+    if (v.seeking) return;
     const clamped = Math.max(0, Math.min(frameCount > 0 ? frameCount - 1 : frameIndex + d, frameIndex + d));
-    v.currentTime = clamped / fps; s.setFrameIndex(clamped);
+    v.currentTime = clamped / fps;
+    // frameIndex is NOT set here — the rAF loop above is the single writer,
+    // updating it once video.currentTime actually reflects the completed
+    // seek. Writing it optimistically here too (as before) raced with that
+    // loop: whichever one landed second could visibly flicker/jump the
+    // frame counter back if the real seek didn't land exactly on
+    // clamped/fps (float/container frame-time rounding).
   };
 
   // Server-side export: sends annotation data to the backend pose-service
@@ -798,8 +895,8 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
                     <input
                       id="annotation-label-input"
                       type="text"
-                      value={annotations.find((a) => a.id === selectedId)?.label ?? ''}
-                      onChange={(e) => changeSelectedLabel(e.target.value)}
+                      value={labelDraft}
+                      onChange={(e) => handleLabelDraftChange(e.target.value)}
                       placeholder="e.g. Keep elbow high"
                       className="w-full bg-panel border border-hairline rounded-lg px-2.5 py-1.5 text-xs text-ink placeholder-ink-faint focus:outline-none focus:border-session"
                     />

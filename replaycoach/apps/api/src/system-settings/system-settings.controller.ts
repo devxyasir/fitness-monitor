@@ -1,6 +1,14 @@
 import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
 
-import type { EmailTemplateSettings, JwtPayload, SmtpSettings, SystemSettingsDto, ThemeSettings } from '@replaycoach/types';
+import type {
+  EmailTemplateSettings,
+  JwtPayload,
+  PlatformSettings,
+  SmtpSettings,
+  SystemSettingsDto,
+  SystemStatusDto,
+  ThemeSettings,
+} from '@replaycoach/types';
 
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -8,7 +16,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { SystemSettingsService } from './system-settings.service';
-import { UpdateEmailTemplatesDto, UpdateSmtpDto, UpdateThemeDto } from './system-settings.dto';
+import { UpdateEmailTemplatesDto, UpdatePlatformDto, UpdateSmtpDto, UpdateThemeDto } from './system-settings.dto';
 
 /** Platform-wide config, editable only by platform_admin — the deployment
  * operator, not a per-org studio_admin (branding for an individual org's
@@ -31,6 +39,16 @@ export class SystemSettingsController {
   @Get('theme')
   async getPublicTheme(): Promise<ThemeSettings> {
     return this.settingsService.getTheme();
+  }
+
+  /** Public — the root layout checks this before rendering anything, to
+   * show a maintenance page to non-admin visitors. Deliberately minimal
+   * (just the one boolean the frontend actually needs to branch on). */
+  @Public()
+  @Get('status')
+  async getPublicStatus(): Promise<SystemStatusDto> {
+    const platform = await this.settingsService.getPlatform();
+    return { maintenanceMode: platform.maintenanceMode };
   }
 
   @Get()
@@ -58,5 +76,11 @@ export class SystemSettingsController {
     @CurrentUser() user: JwtPayload,
   ): Promise<EmailTemplateSettings> {
     return this.settingsService.updateEmailTemplates(dto, user.sub);
+  }
+
+  @Patch('platform')
+  @Roles('platform_admin')
+  async updatePlatform(@Body() dto: UpdatePlatformDto, @CurrentUser() user: JwtPayload): Promise<PlatformSettings> {
+    return this.settingsService.updatePlatform(dto, user.sub);
   }
 }

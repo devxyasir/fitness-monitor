@@ -198,6 +198,22 @@ export class RefreshTokenService {
     await this.repo.delete({ userId });
   }
 
+  /** Active (non-rotated, non-expired) sessions for a user — the admin
+   * security panel's "log out this device" list. */
+  async listActiveForUser(userId: string): Promise<RefreshToken[]> {
+    return this.repo.find({
+      where: { userId, rotatedAt: IsNull(), expiresAt: MoreThan(new Date()) },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  /** Revoke a single session by its own row id — used by the admin security
+   * panel, which only ever has the row id (never the raw token). Scoped to
+   * `userId` so one user's session id can't be used to revoke another's. */
+  async revokeById(tokenId: string, userId: string): Promise<void> {
+    await this.repo.delete({ id: tokenId, userId });
+  }
+
   /** Purge expired and old rotated-out tokens — run periodically (cron job, Phase 2). */
   async purgeExpired(): Promise<void> {
     await this.repo.delete({ expiresAt: LessThan(new Date()) });

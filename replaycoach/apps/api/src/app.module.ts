@@ -47,6 +47,8 @@ import { RecordingsModule } from './recordings/recordings.module';
 import { ReferenceModule } from './reference/reference.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { SystemSettingsModule } from './system-settings/system-settings.module';
+import { AuditModule } from './audit/audit.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -112,6 +114,8 @@ import { SystemSettingsModule } from './system-settings/system-settings.module';
     ReferenceModule,
     DashboardModule,
     SystemSettingsModule,
+    AuditModule,
+    AdminModule,
   ],
   providers: [
     // Global by default: every route requires a valid access token and

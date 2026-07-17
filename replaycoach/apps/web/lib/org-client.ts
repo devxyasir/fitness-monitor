@@ -16,6 +16,7 @@ import type {
   SendOrgMessageDto,
   SendOrgMessageResult,
   UpdateOrganizationDto,
+  UpdateOrgStatusDto,
   UserDto,
 } from '@replaycoach/types';
 import { apiClient } from './api-client';
@@ -35,6 +36,16 @@ async function getOrganization(orgId: string): Promise<OrganizationDto> {
 
 async function updateOrganization(orgId: string, dto: UpdateOrganizationDto): Promise<OrganizationDto> {
   return apiClient.patch(`/organizations/${orgId}`, dto);
+}
+
+/** platform_admin only — suspend/reactivate. */
+async function setOrgStatus(orgId: string, dto: UpdateOrgStatusDto): Promise<OrganizationDto> {
+  return apiClient.patch(`/organizations/${orgId}/status`, dto);
+}
+
+/** platform_admin only — requires the org to already be empty. */
+async function deleteOrganization(orgId: string): Promise<void> {
+  return apiClient.del(`/organizations/${orgId}`);
 }
 
 async function listMembers(orgId: string): Promise<UserDto[]> {
@@ -83,6 +94,8 @@ export const orgClient = {
   listAllOrganizations,
   getOrganization,
   updateOrganization,
+  setOrgStatus,
+  deleteOrganization,
   listMembers,
   removeMember,
   createInvite,

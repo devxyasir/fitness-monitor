@@ -102,10 +102,11 @@ describe('AuthController', () => {
       });
 
       const dto = { email: 'login@test.com', password: 'Password1!' };
-      const result = await controller.login(dto, res);
+      const req = mockRequest();
+      const result = await controller.login(dto, req, res);
 
       expect(result).toEqual(tokenReponse);
-      expect(mockAuthService.login).toHaveBeenCalledWith(dto);
+      expect(mockAuthService.login).toHaveBeenCalledWith(dto, req.ip);
       expect(res.cookie).toHaveBeenCalledWith('rc_refresh', 'refresh-567', expect.any(Object));
     });
   });

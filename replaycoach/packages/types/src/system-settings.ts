@@ -54,10 +54,33 @@ export interface UpdateEmailTemplatesDto {
   invite?: Partial<InviteEmailTemplate>;
 }
 
+// ─── Platform toggles ────────────────────────────────────────────────────
+
+export interface PlatformSettings {
+  /** Non-admin visitors see a full-page maintenance notice instead of the
+   * app; platform_admin always bypasses so they can turn it back off. */
+  maintenanceMode: boolean;
+  /** When false, POST /auth/register without an inviteToken is blocked —
+   * invite-based registration is a separate code path and stays open. */
+  allowPublicRegistration: boolean;
+}
+
+export interface UpdatePlatformSettingsDto {
+  maintenanceMode?: boolean;
+  allowPublicRegistration?: boolean;
+}
+
+/** Public (unauthenticated) — GET /system-settings/status, checked by the
+ * root layout before anything else renders for a non-admin visitor. */
+export interface SystemStatusDto {
+  maintenanceMode: boolean;
+}
+
 // ─── Aggregate ───────────────────────────────────────────────────────────
 
 export interface SystemSettingsDto {
   smtp: SmtpSettings;
   theme: ThemeSettings;
   emailTemplates: EmailTemplateSettings;
+  platform: PlatformSettings;
 }

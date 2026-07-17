@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
-import { LayoutGrid, CalendarDays, Film, Users, Settings, Menu, X, Building2, ShieldCheck, SlidersHorizontal } from 'lucide-react';
+import { LayoutGrid, CalendarDays, Film, Users, Settings, Menu, X, Building2, ShieldCheck } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth-store';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { Logomark } from '../components/Logomark';
@@ -89,34 +89,14 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       )}
 
       {user?.role === 'platform_admin' && (
-        <>
-          <Link
-            href="/admin"
-            onClick={onNavigate}
-            aria-current={pathname === '/admin' ? 'page' : undefined}
-            className={`flex items-center gap-2.5 px-2.5 py-2 rounded-sm text-sm transition-colors border-l-[3px] ${
-              pathname === '/admin'
-                ? 'bg-panel-2 text-ink font-medium border-brand pl-[10px]'
-                : 'text-ink-muted hover:bg-panel-2 hover:text-ink border-transparent'
-            }`}
-          >
-            <ShieldCheck className="w-4 h-4" />
-            <span>All organizations</span>
-          </Link>
-          <Link
-            href="/admin/settings"
-            onClick={onNavigate}
-            aria-current={pathname === '/admin/settings' ? 'page' : undefined}
-            className={`flex items-center gap-2.5 px-2.5 py-2 rounded-sm text-sm transition-colors border-l-[3px] ${
-              pathname === '/admin/settings'
-                ? 'bg-panel-2 text-ink font-medium border-brand pl-[10px]'
-                : 'text-ink-muted hover:bg-panel-2 hover:text-ink border-transparent'
-            }`}
-          >
-            <SlidersHorizontal className="w-4 h-4" />
-            <span>Platform settings</span>
-          </Link>
-        </>
+        <Link
+          href="/admin"
+          onClick={onNavigate}
+          className="flex items-center gap-2.5 px-2.5 py-2 rounded-sm text-sm text-ink-muted hover:bg-panel-2 hover:text-ink transition-colors border-l-[3px] border-transparent"
+        >
+          <ShieldCheck className="w-4 h-4" />
+          <span>Platform admin</span>
+        </Link>
       )}
 
       <Link

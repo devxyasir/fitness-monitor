@@ -11,6 +11,7 @@ import { OrganizationController } from './organization.controller';
 import { InvitesController } from './invites.controller';
 import { OrganizationService } from './organization.service';
 import { OrganizationGuard } from './organization.guard';
+import { AuditModule } from '../audit/audit.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { OrganizationGuard } from './organization.guard';
     UserModule,
     TeamsModule,
     EmailModule,
+    AuditModule,
   ],
   providers: [OrganizationService, OrganizationGuard],
   controllers: [OrganizationController, InvitesController],

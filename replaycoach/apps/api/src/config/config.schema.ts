@@ -19,6 +19,9 @@ export const configSchema = Joi.object({
   AUTH_COOKIE_SAMESITE: Joi.string().valid('strict', 'lax', 'none').default('strict'),
   AUTH_COOKIE_DOMAIN: Joi.string().allow('').optional(),
 
+  // Admin step-up re-auth freshness window (see AdminElevatedGuard)
+  ADMIN_ELEVATION_TTL: Joi.string().default('30m'),
+
   // Redis — required
   REDIS_URL: Joi.string().default('redis://localhost:6379'),
 

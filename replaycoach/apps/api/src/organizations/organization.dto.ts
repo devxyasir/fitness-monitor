@@ -24,6 +24,11 @@ export class UpdateOrganizationDto {
   branding?: Record<string, unknown>;
 }
 
+export class UpdateOrgStatusDto {
+  @IsEnum(['active', 'suspended'])
+  status!: 'active' | 'suspended';
+}
+
 export class InviteToOrgDto {
   @IsEmail()
   @IsAllowedEmailProvider()

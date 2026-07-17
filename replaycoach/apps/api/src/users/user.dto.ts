@@ -54,6 +54,24 @@ export class UpdateUserStatusDto {
   status!: UserStatus;
 }
 
+export class UpdateUserRoleDto {
+  @IsEnum(['platform_admin', 'studio_admin', 'coach', 'student'])
+  role!: UserRole;
+}
+
+export class TotpVerifyDto {
+  @IsString()
+  @MinLength(6)
+  @MaxLength(6)
+  token!: string;
+}
+
+export class TotpDisableDto {
+  @IsString()
+  @MinLength(1)
+  password!: string;
+}
+
 export class ListUsersQueryDto {
   @IsOptional()
   @IsString()
@@ -66,6 +84,11 @@ export class ListUsersQueryDto {
   @IsOptional()
   @IsEnum(['active', 'pending', 'suspended', 'disabled'])
   status?: UserStatus;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  search?: string;
 
   @IsOptional()
   @Type(() => Number)

@@ -16,13 +16,21 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 
-import type { JwtPayload, UserDto, UserListResponse } from '@replaycoach/types';
+import type { JwtPayload, TotpEnrollResponse, UserDto, UserListResponse } from '@replaycoach/types';
 
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { ChangePasswordDto, ListUsersQueryDto, UpdateUserDto, UpdateUserStatusDto } from './user.dto';
+import {
+  ChangePasswordDto,
+  ListUsersQueryDto,
+  TotpDisableDto,
+  TotpVerifyDto,
+  UpdateUserDto,
+  UpdateUserRoleDto,
+  UpdateUserStatusDto,
+} from './user.dto';
 import { UserService } from './user.service';
 import { AvatarService } from './avatar.service';
 
@@ -74,6 +82,23 @@ export class UserController {
     await this.userService.changePassword(payload.sub, dto.currentPassword, dto.newPassword);
   }
 
+  @Post('me/totp/enroll')
+  async enrollTotp(@CurrentUser() payload: JwtPayload): Promise<TotpEnrollResponse> {
+    return this.userService.enrollTotp(payload.sub);
+  }
+
+  @Post('me/totp/confirm')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async confirmTotp(@CurrentUser() payload: JwtPayload, @Body() dto: TotpVerifyDto): Promise<void> {
+    await this.userService.confirmTotp(payload.sub, dto.token);
+  }
+
+  @Post('me/totp/disable')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async disableTotp(@CurrentUser() payload: JwtPayload, @Body() dto: TotpDisableDto): Promise<void> {
+    await this.userService.disableTotp(payload.sub, dto.password);
+  }
+
   /** Self-service account deactivation (soft delete). Logs the caller out
    * client-side is the frontend's job; server-side, the row simply stops
    * being findable so every subsequent request 401s. */
@@ -93,7 +118,7 @@ export class UserController {
     @Query() query: ListUsersQueryDto,
   ): Promise<UserListResponse> {
     return this.userService.listUsers(
-      { orgId: query.orgId, role: query.role, status: query.status },
+      { orgId: query.orgId, role: query.role, status: query.status, search: query.search },
       query.page ?? 1,
       query.pageSize ?? 20,
       payload,
@@ -123,6 +148,19 @@ export class UserController {
     @CurrentUser() payload: JwtPayload,
   ): Promise<UserDto> {
     const updated = await this.userService.setStatus(id, dto.status, payload);
+    return this.userService.toDto(updated);
+  }
+
+  /** platform_admin only — role changes are a stronger privilege than
+   * status changes (see UserService.setRole). */
+  @Patch(':id/role')
+  @Roles('platform_admin')
+  async setRole(
+    @Param('id') id: string,
+    @Body() dto: UpdateUserRoleDto,
+    @CurrentUser() payload: JwtPayload,
+  ): Promise<UserDto> {
+    const updated = await this.userService.setRole(id, dto.role, payload);
     return this.userService.toDto(updated);
   }
 }

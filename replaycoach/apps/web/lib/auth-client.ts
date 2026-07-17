@@ -1,5 +1,5 @@
 import { useAuthStore } from '../stores/auth-store';
-import type { LoginRequest, RegisterRequest, TokenResponse, UserDto } from '@replaycoach/types';
+import type { AdminElevateRequest, LoginRequest, RegisterRequest, TokenResponse, UserDto } from '@replaycoach/types';
 
 const API_BASE_URL = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001';
 
@@ -24,6 +24,23 @@ function decodeJwtExpMs(token: string): number | null {
     if (!payload) return null;
     const json = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/'))) as { exp?: number };
     return typeof json.exp === 'number' ? json.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Reads the `adminAuthAt` claim (epoch ms) out of the current access
+ * token, unverified — same "decode, don't verify, it's the server's job"
+ * pattern as decodeJwtExpMs. Used by the admin shell's elevation countdown
+ * and by AdminAuthGuard's initial (pre-first-API-call) freshness check. */
+function getAdminAuthAt(): number | null {
+  const token = useAuthStore.getState().accessToken;
+  if (!token) return null;
+  try {
+    const payload = token.split('.')[1];
+    if (!payload) return null;
+    const json = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/'))) as { adminAuthAt?: number };
+    return typeof json.adminAuthAt === 'number' ? json.adminAuthAt : null;
   } catch {
     return null;
   }
@@ -224,6 +241,35 @@ async function logout(): Promise<void> {
   }
 }
 
+/**
+ * Step-up re-verification for the admin area (POST /auth/admin/elevate) —
+ * re-checks the password and swaps in a freshly-elevated access token
+ * without touching the refresh-token session (unlike login/refresh, this
+ * never rotates the refresh cookie). Used by AdminElevateModal when an API
+ * call comes back with the ADMIN_ELEVATION_REQUIRED code.
+ */
+async function elevateAdmin(payload: AdminElevateRequest): Promise<void> {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/v1/auth/admin/elevate`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+    credentials: 'include',
+    timeout: 15000,
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ message: 'Incorrect password' })) as { message?: string };
+    throw new Error(errorData.message ?? 'Incorrect password');
+  }
+
+  const { accessToken } = (await res.json()) as TokenResponse;
+  const existingUser = useAuthStore.getState().user;
+  if (existingUser) {
+    useAuthStore.getState().setAuth(accessToken, existingUser);
+  }
+  scheduleSilentRefresh(accessToken);
+}
+
 // ─── Cross-tab logout sync ───────────────────────────────────────────────
 // Each tab has its own in-memory access token (deliberately — see auth-store.ts),
 // so a tab that logs out doesn't automatically tell any other open tab. Since
@@ -250,4 +296,4 @@ if (typeof window !== 'undefined') {
   });
 }
 
-export const authClient = { login, register, refresh, logout };
+export const authClient = { login, register, refresh, logout, elevateAdmin, getAdminAuthAt };

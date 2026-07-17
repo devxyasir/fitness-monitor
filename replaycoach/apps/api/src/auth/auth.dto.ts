@@ -2,6 +2,7 @@ import {
   IsBoolean,
   IsEmail,
   IsEnum,
+  IsIn,
   IsOptional,
   IsString,
   Matches,
@@ -57,6 +58,19 @@ export class LoginDto {
   @IsOptional()
   @IsBoolean()
   rememberMe?: boolean;
+
+  /** Set by the dedicated /admin/login page — see AuthService.login. */
+  @IsOptional()
+  @IsIn(['admin'])
+  context?: 'admin';
+}
+
+/** POST /auth/admin/elevate — re-verifies an already-logged-in
+ * platform_admin's password to refresh a stale `adminAuthAt` claim. */
+export class AdminElevateDto {
+  @IsString()
+  @MinLength(1)
+  password!: string;
 }
 
 export class ForgotPasswordDto {

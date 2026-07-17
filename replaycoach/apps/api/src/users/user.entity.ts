@@ -58,6 +58,24 @@ export class User {
   @Column({ name: 'last_login_at', type: 'timestamptz', nullable: true })
   lastLoginAt!: Date | null;
 
+  /** Captured at login (AuthService.login) — surfaced on the admin security
+   * panel and written into audit-log entries. Null until first login after
+   * this column was introduced. */
+  @Column({ name: 'last_login_ip', type: 'inet', nullable: true })
+  lastLoginIp!: string | null;
+
+  /** Optional, self-service TOTP 2FA — a platform_admin can enable it for
+   * their own account. Never mandatory-on-login. Secret/backup codes are
+   * never exposed past enrollment (UserDto only ever carries `totpEnabled`). */
+  @Column({ name: 'totp_secret', type: 'varchar', length: 255, nullable: true })
+  totpSecret!: string | null;
+
+  @Column({ name: 'totp_enabled', type: 'boolean', default: false })
+  totpEnabled!: boolean;
+
+  @Column({ name: 'totp_backup_codes', type: 'jsonb', nullable: true })
+  totpBackupCodes!: string[] | null;
+
   /**
    * Increment on password change or forced logout.
    * Carried in access JWT; validated against DB value.

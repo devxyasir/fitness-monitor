@@ -3,6 +3,7 @@ import localFont from 'next/font/local';
 import AuthInitializer from './components/AuthInitializer';
 import { ToastContainer } from './components/ToastContainer';
 import { ThemeColorOverride } from './components/ThemeColorOverride';
+import { MaintenanceGate } from './components/MaintenanceGate';
 
 import './globals.css';
 
@@ -76,7 +77,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
         <ThemeColorOverride />
-        <AuthInitializer>{children}</AuthInitializer>
+        <AuthInitializer>
+          <MaintenanceGate>{children}</MaintenanceGate>
+        </AuthInitializer>
         <ToastContainer />
       </body>
     </html>

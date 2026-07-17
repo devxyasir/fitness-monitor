@@ -1,12 +1,15 @@
 import { useAuthStore } from '../stores/auth-store';
 
-const LIVEKIT_URL = process.env['NEXT_PUBLIC_LIVEKIT_URL'] ?? 'ws://localhost:7880';
 const API_BASE_URL = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001';
 
-export function getLiveKitUrl(): string {
-  return LIVEKIT_URL;
-}
-
+/**
+ * The LiveKit connection URL is authoritative from the server (the `url`
+ * field on JoinSessionResponse, sourced from LIVEKIT_URL on the API) — NOT
+ * from a frontend env var. There used to be a NEXT_PUBLIC_LIVEKIT_URL-backed
+ * getLiveKitUrl() here, but nothing ever called it; its presence made it look
+ * like changing that frontend var would repoint the connection; it doesn't.
+ * Only apps/api's LIVEKIT_URL env matters — update it there.
+ */
 export interface JoinSessionResponse {
   participant: {
     id: string;

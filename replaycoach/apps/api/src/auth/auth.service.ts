@@ -20,6 +20,8 @@ import { User } from '../users/user.entity';
 import { RefreshTokenService } from './refresh-token.service';
 import type { RegisterDto, LoginDto } from './auth.dto';
 import { parseDurationMs } from './duration.util';
+import { AuditService } from '../audit/audit.service';
+import { SystemSettingsService } from '../system-settings/system-settings.service';
 
 /** What the controller needs to both respond to the client and set the refresh cookie. */
 interface AuthResult {
@@ -37,6 +39,8 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly refreshTokenService: RefreshTokenService,
     private readonly configService: ConfigService,
+    private readonly auditService: AuditService,
+    private readonly systemSettingsService: SystemSettingsService,
     @InjectDataSource()
     private readonly dataSource: DataSource,
   ) {}
@@ -62,6 +66,16 @@ export class AuthService {
       throw new ForbiddenException(
         'Student accounts require an invitation from a coach or organization. Ask your coach for an invite link.',
       );
+    }
+
+    // Invite-based registration is a separate, already-gated code path
+    // (the invite itself is the authorization) — this toggle only affects
+    // open self-signup.
+    if (!dto.inviteToken) {
+      const { allowPublicRegistration } = await this.systemSettingsService.getPlatform();
+      if (!allowPublicRegistration) {
+        throw new ForbiddenException('New signups are currently closed. Ask your coach or organization for an invite link.');
+      }
     }
 
     let orgId: string | null = null;
@@ -116,8 +130,10 @@ export class AuthService {
     return this.issueTokenPair(user.id, user.email, user.role, user.orgId, user.sessionVersion, true);
   }
 
-  /** Login with email/password. */
-  async login(dto: LoginDto): Promise<AuthResult> {
+  /** Login with email/password. `ip` is captured onto the user row and used
+   * for both the admin security panel and audit-log entries — previously
+   * captured nowhere. */
+  async login(dto: LoginDto, ip?: string | null): Promise<AuthResult> {
     const user = await this.userService.findByEmail(dto.email);
 
     // Use constant-time comparison to prevent user enumeration via timing attacks.
@@ -133,9 +149,57 @@ export class AuthService {
     }
 
     this.assertActiveStatus(user.status);
-    await this.userService.touchLastLogin(user.id);
 
-    return this.issueTokenPair(user.id, user.email, user.role, user.orgId, user.sessionVersion, dto.rememberMe ?? false);
+    // The dedicated /admin/login page sends context: 'admin' — reject any
+    // non-platform_admin credential pair outright rather than silently
+    // issuing a normal session through the admin entry point.
+    if (dto.context === 'admin' && user.role !== 'platform_admin') {
+      throw new ForbiddenException('This login is for platform administrators only.');
+    }
+
+    await this.userService.touchLastLogin(user.id, ip);
+
+    if (dto.context === 'admin') {
+      void this.auditService.record(user.id, 'admin.login', 'user', user.id, {}, ip ?? null);
+    }
+
+    return this.issueTokenPair(
+      user.id,
+      user.email,
+      user.role,
+      user.orgId,
+      user.sessionVersion,
+      dto.rememberMe ?? false,
+      dto.context === 'admin' ? Date.now() : undefined,
+    );
+  }
+
+  /**
+   * Step-up re-verification for an already-logged-in platform_admin whose
+   * `adminAuthAt` has gone stale (AdminElevatedGuard's TTL). Re-checks the
+   * password and mints a fresh access token with a new `adminAuthAt` —
+   * deliberately does NOT touch the refresh-token session, since this is
+   * purely an access-token privilege refresh, not a new login.
+   */
+  async elevate(userId: string, password: string): Promise<TokenResponse> {
+    const user = await this.userService.findById(userId);
+    const valid = await argon2.verify(user.passwordHash, password).catch(() => false);
+    if (!valid) throw new UnauthorizedException('Incorrect password');
+    if (user.role !== 'platform_admin') {
+      throw new ForbiddenException('Admin elevation is only available for platform administrators');
+    }
+    this.assertActiveStatus(user.status);
+
+    const payload: JwtPayload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      orgId: user.orgId,
+      sessionVersion: user.sessionVersion,
+      adminAuthAt: Date.now(),
+    };
+    void this.auditService.record(user.id, 'admin.elevate', 'user', user.id, {});
+    return { accessToken: this.jwtService.sign(payload) };
   }
 
   /**
@@ -231,6 +295,7 @@ export class AuthService {
     orgId: string | null,
     sessionVersion: number,
     rememberMe: boolean,
+    adminAuthAt?: number,
   ): Promise<AuthResult> {
     const payload: JwtPayload = {
       sub: userId,
@@ -238,6 +303,7 @@ export class AuthService {
       role: role as JwtPayload['role'],
       orgId,
       sessionVersion,
+      ...(adminAuthAt !== undefined ? { adminAuthAt } : {}),
     };
 
     const accessToken = this.jwtService.sign(payload);

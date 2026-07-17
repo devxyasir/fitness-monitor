@@ -6,14 +6,17 @@ import { Repository } from 'typeorm';
 import type {
   EmailTemplateSettings,
   InviteEmailTemplate,
+  PlatformSettings,
   SmtpSettings,
   SystemSettingsDto,
   ThemeColorSet,
   ThemeSettings,
+  UpdatePlatformSettingsDto,
   UpdateSmtpSettingsDto,
 } from '@replaycoach/types';
 
 import { SystemSetting } from './system-setting.entity';
+import { AuditService } from '../audit/audit.service';
 
 const DEFAULT_THEME: ThemeSettings = {
   light: { brand: '#B14A28', session: '#1F6F6B', analytics: '#8A6222' },
@@ -24,6 +27,11 @@ const DEFAULT_INVITE_TEMPLATE: InviteEmailTemplate = {
   subject: "You're invited to join {{orgName}} on LetsMove",
   heading: "You're invited to join {{orgName}}",
   bodyIntro: '{{invitedByName}} invited you to join {{orgName}} on LetsMove as {{role}}.',
+};
+
+const DEFAULT_PLATFORM: PlatformSettings = {
+  maintenanceMode: false,
+  allowPublicRegistration: true,
 };
 
 /** Deep-partial theme/template update shapes — a plain `Partial<T>` only
@@ -55,6 +63,7 @@ export class SystemSettingsService {
     @InjectRepository(SystemSetting)
     private readonly repo: Repository<SystemSetting>,
     private readonly configService: ConfigService,
+    private readonly auditService: AuditService,
   ) {}
 
   private async getRaw<T>(key: SystemSetting['key']): Promise<T | null> {
@@ -108,6 +117,7 @@ export class SystemSettingsService {
       password: dto.password ?? existing.password,
     };
     await this.upsert('smtp', merged, actingUserId);
+    void this.auditService.record(actingUserId, 'settings.smtp_updated', 'system_setting', null, {});
     return this.getSmtp();
   }
 
@@ -128,6 +138,7 @@ export class SystemSettingsService {
       dark: { ...existing.dark, ...dto.dark },
     };
     await this.upsert('theme', merged, actingUserId);
+    void this.auditService.record(actingUserId, 'settings.theme_updated', 'system_setting', null, {});
     return merged;
   }
 
@@ -142,17 +153,34 @@ export class SystemSettingsService {
     const existing = await this.getEmailTemplates();
     const merged: EmailTemplateSettings = { invite: { ...existing.invite, ...dto.invite } };
     await this.upsert('email_templates', merged, actingUserId);
+    void this.auditService.record(actingUserId, 'settings.email_templates_updated', 'system_setting', null, {});
+    return merged;
+  }
+
+  // ─── Platform toggles ────────────────────────────────────────────────
+
+  async getPlatform(): Promise<PlatformSettings> {
+    const stored = await this.getRaw<Partial<PlatformSettings>>('platform');
+    return { ...DEFAULT_PLATFORM, ...stored };
+  }
+
+  async updatePlatform(dto: UpdatePlatformSettingsDto, actingUserId: string): Promise<PlatformSettings> {
+    const existing = await this.getPlatform();
+    const merged: PlatformSettings = { ...existing, ...dto };
+    await this.upsert('platform', merged, actingUserId);
+    void this.auditService.record(actingUserId, 'settings.platform_updated', 'system_setting', null, { ...dto });
     return merged;
   }
 
   // ─── Aggregate (for the admin settings page's single load) ───────────
 
   async getAll(): Promise<SystemSettingsDto> {
-    const [smtp, theme, emailTemplates] = await Promise.all([
+    const [smtp, theme, emailTemplates, platform] = await Promise.all([
       this.getSmtp(),
       this.getTheme(),
       this.getEmailTemplates(),
+      this.getPlatform(),
     ]);
-    return { smtp, theme, emailTemplates };
+    return { smtp, theme, emailTemplates, platform };
   }
 }

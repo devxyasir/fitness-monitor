@@ -152,6 +152,55 @@ export class SessionsService {
       .getMany();
   }
 
+  /**
+   * Platform-admin cross-org session listing — `findAll`'s platform_admin
+   * branch above returns literally every session ever, unpaginated and
+   * unfiltered, which is fine for internal callers but not an admin table.
+   * This is an additive new method (findAll itself is untouched, still used
+   * by the non-admin GET /sessions route) mirroring the query-builder style
+   * already used in dashboard.service.ts's getCoachOverview.
+   */
+  async findAllForAdmin(
+    filters: {
+      status?: SessionStatus | undefined;
+      orgId?: string | undefined;
+      coachId?: string | undefined;
+      since?: string | undefined;
+      until?: string | undefined;
+    },
+    page: number,
+    pageSize: number,
+  ): Promise<{ items: Session[]; total: number; page: number; pageSize: number }> {
+    const safePageSize = Math.min(Math.max(1, pageSize || 20), 100);
+    const safePage = Math.max(1, page || 1);
+
+    // Entity property names (camelCase) throughout — mixing raw snake_case
+    // column names into .orderBy() alongside leftJoinAndSelect breaks
+    // TypeORM's internal alias resolution for paginated queries (confirmed
+    // via manual testing against AuditService.list's identical pattern).
+    const qb = this.sessionRepository
+      .createQueryBuilder('s')
+      .leftJoinAndSelect('s.coach', 'coach')
+      .leftJoinAndSelect('s.organization', 'org')
+      .loadRelationCountAndMap('s.participantCount', 's.participants', 'p', (participantQb) =>
+        participantQb.andWhere("p.status = 'approved'"),
+      )
+      .orderBy('s.scheduledAt', 'DESC');
+
+    if (filters.status) qb.andWhere('s.status = :status', { status: filters.status });
+    if (filters.orgId) qb.andWhere('s.orgId = :orgId', { orgId: filters.orgId });
+    if (filters.coachId) qb.andWhere('s.coachId = :coachId', { coachId: filters.coachId });
+    if (filters.since) qb.andWhere('s.scheduledAt >= :since', { since: new Date(filters.since) });
+    if (filters.until) qb.andWhere('s.scheduledAt <= :until', { until: new Date(filters.until) });
+
+    const [items, total] = await qb
+      .skip((safePage - 1) * safePageSize)
+      .take(safePageSize)
+      .getManyAndCount();
+
+    return { items, total, page: safePage, pageSize: safePageSize };
+  }
+
   async update(id: string, dto: UpdateSessionDto): Promise<Session> {
     const session = await this.findById(id);
     if (!session) {

@@ -22,6 +22,7 @@ import { LiveKitService, liveKitRoomName } from '../media/livekit.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { CreateSessionDto, UpdateSessionDto } from './session.dto';
 import type { JwtPayload, SessionStatus } from '@replaycoach/types';
+import { AuditService } from '../audit/audit.service';
 
 @Controller('sessions')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -30,6 +31,7 @@ export class SessionsController {
     private readonly sessionsService: SessionsService,
     private readonly livekitService: LiveKitService,
     private readonly realtimeGateway: RealtimeGateway,
+    private readonly auditService: AuditService,
   ) {}
 
   @Post()
@@ -97,6 +99,15 @@ export class SessionsController {
     const updated = await this.sessionsService.updateStatus(id, status);
     if (status === 'ended') {
       this.realtimeGateway.emitSessionTerminated(id);
+    }
+    // Audit only the genuine "admin acting on someone else's session" case —
+    // a coach ending their own session is ordinary usage, not an admin
+    // action, and would otherwise flood the log with non-admin noise.
+    if (user.role === 'platform_admin' && session.coachId !== user.sub) {
+      void this.auditService.record(user.sub, 'session.force_status_change', 'session', id, {
+        from: session.status,
+        to: status,
+      });
     }
     return updated;
   }

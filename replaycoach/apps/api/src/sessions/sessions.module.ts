@@ -10,6 +10,7 @@ import { User } from '../users/user.entity';
 import { MediaModule } from '../media/media.module';
 import { RealtimeModule } from '../realtime/realtime.module';
 import { PoseModule } from '../pose/pose.module';
+import { AuditModule } from '../audit/audit.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { PoseModule } from '../pose/pose.module';
     forwardRef(() => MediaModule),
     forwardRef(() => RealtimeModule),
     PoseModule,
+    AuditModule,
   ],
   providers: [SessionsService, SessionsGuard],
   controllers: [SessionsController],

@@ -84,3 +84,13 @@ export class UpdateEmailTemplatesDto {
   @Type(() => InviteEmailTemplateDto)
   invite?: InviteEmailTemplateDto;
 }
+
+export class UpdatePlatformDto {
+  @IsOptional()
+  @IsBoolean()
+  maintenanceMode?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  allowPublicRegistration?: boolean;
+}

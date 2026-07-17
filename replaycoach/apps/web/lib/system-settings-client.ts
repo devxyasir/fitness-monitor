@@ -2,10 +2,13 @@
 
 import type {
   EmailTemplateSettings,
+  PlatformSettings,
   SmtpSettings,
   SystemSettingsDto,
+  SystemStatusDto,
   ThemeSettings,
   UpdateEmailTemplatesDto,
+  UpdatePlatformSettingsDto,
   UpdateSmtpSettingsDto,
 } from '@replaycoach/types';
 import { apiClient } from './api-client';
@@ -17,6 +20,12 @@ async function getAll(): Promise<SystemSettingsDto> {
 /** Public — no auth required, safe to call before login (marketing pages). */
 async function getPublicTheme(): Promise<ThemeSettings> {
   return apiClient.get('/system-settings/theme');
+}
+
+/** Public — checked by the root layout before rendering anything, to show
+ * a maintenance page to non-admin visitors. */
+async function getPublicStatus(): Promise<SystemStatusDto> {
+  return apiClient.get('/system-settings/status');
 }
 
 async function updateSmtp(dto: UpdateSmtpSettingsDto): Promise<SmtpSettings> {
@@ -31,4 +40,16 @@ async function updateEmailTemplates(dto: UpdateEmailTemplatesDto): Promise<Email
   return apiClient.patch('/system-settings/email-templates', dto);
 }
 
-export const systemSettingsClient = { getAll, getPublicTheme, updateSmtp, updateTheme, updateEmailTemplates };
+async function updatePlatform(dto: UpdatePlatformSettingsDto): Promise<PlatformSettings> {
+  return apiClient.patch('/system-settings/platform', dto);
+}
+
+export const systemSettingsClient = {
+  getAll,
+  getPublicTheme,
+  getPublicStatus,
+  updateSmtp,
+  updateTheme,
+  updateEmailTemplates,
+  updatePlatform,
+};

@@ -45,12 +45,21 @@ export default function AuthInitializer({ children }: { children: React.ReactNod
     // stuck on the logged-out header instead of retrying) — the landing
     // page's header just reflects current auth state reactively instead.
     const isInviteRoute = pathname?.startsWith('/invite/') ?? false;
-    const staysVisibleWhenAuthed = pathname === '/' || isInviteRoute;
+    // /admin/login is the dedicated admin entry point — never force a
+    // redirect away from it (an authenticated non-admin can still see the
+    // form; the page itself and the backend both reject non-admin
+    // credentials). The rest of /admin/* is handled by AdminAuthGuard, not
+    // this generic redirect — it only needs to know where to SEND an
+    // unauthenticated visitor (see below), not gate it here too.
+    const isAdminLoginRoute = pathname === '/admin/login';
+    const isAdminRoute = pathname?.startsWith('/admin') ?? false;
+    const staysVisibleWhenAuthed = pathname === '/' || isInviteRoute || isAdminLoginRoute;
     const isPublicRoute = pathname === '/login' || pathname === '/register' || staysVisibleWhenAuthed;
     const isOrgOnboardingRoute = pathname === '/onboarding/organization';
 
     if (!accessToken && !isPublicRoute) {
-      router.push(`/login?redirectTo=${encodeURIComponent(pathname)}`);
+      const loginPath = isAdminRoute ? '/admin/login' : '/login';
+      router.push(`${loginPath}?redirectTo=${encodeURIComponent(pathname)}`);
     } else if (accessToken && isPublicRoute && !staysVisibleWhenAuthed) {
       if (user?.role === 'student') {
         router.push('/student/sessions');

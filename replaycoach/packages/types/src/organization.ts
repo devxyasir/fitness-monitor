@@ -9,14 +9,24 @@ import type { UserRole } from './auth';
 export type OrgSettings = Record<string, any>;
 export type OrgBranding = Record<string, any>;
 
+/** 'suspended' is a platform_admin moderation flag — org admins/coaches see
+ * a banner; it does not (in this phase) cascade into locking out members'
+ * own sessions, which nothing currently reads. */
+export type OrgStatus = 'active' | 'suspended';
+
 export interface OrganizationDto {
   id: string;
   name: string;
   planTier: string;
+  status: OrgStatus;
   settings: OrgSettings;
   branding: OrgBranding;
   createdBy: string | null;
   createdAt: string;
+}
+
+export interface UpdateOrgStatusDto {
+  status: OrgStatus;
 }
 
 export interface CreateOrganizationDto {

@@ -6,7 +6,7 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
-import type { OrgBranding, OrgSettings } from '@replaycoach/types';
+import type { OrgBranding, OrgSettings, OrgStatus } from '@replaycoach/types';
 
 import { User } from '../users/user.entity';
 import { OrgInvite } from './org-invite.entity';
@@ -21,6 +21,10 @@ export class Organization {
 
   @Column({ type: 'varchar', length: 50, default: 'free', name: 'plan_tier' })
   planTier!: string;
+
+  /** platform_admin moderation flag — see migration 020's doc comment. */
+  @Column({ type: 'varchar', length: 20, default: 'active' })
+  status!: OrgStatus;
 
   /** Open bag, no fixed schema — see packages/types/src/organization.ts. */
   @Column({ type: 'jsonb', default: {} })

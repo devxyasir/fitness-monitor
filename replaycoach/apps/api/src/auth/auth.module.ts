@@ -7,6 +7,8 @@ import { ThrottlerModule } from '@nestjs/throttler';
 
 import { UserModule } from '../users/user.module';
 import { OrganizationModule } from '../organizations/organization.module';
+import { AuditModule } from '../audit/audit.module';
+import { SystemSettingsModule } from '../system-settings/system-settings.module';
 import { RefreshToken } from './refresh-token.entity';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -31,9 +33,11 @@ import { RefreshTokenCleanupService } from './refresh-token-cleanup.service';
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
     UserModule,
     OrganizationModule,
+    AuditModule,
+    SystemSettingsModule,
   ],
   providers: [AuthService, RefreshTokenService, RefreshTokenCleanupService, JwtStrategy],
   controllers: [AuthController],
-  exports: [AuthService, JwtStrategy],
+  exports: [AuthService, JwtStrategy, RefreshTokenService],
 })
 export class AuthModule {}

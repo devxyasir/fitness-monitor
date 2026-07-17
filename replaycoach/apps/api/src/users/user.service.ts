@@ -5,14 +5,24 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { FindOptionsWhere, Repository } from 'typeorm';
+import { FindOptionsWhere, ILike, Repository } from 'typeorm';
 import * as argon2 from 'argon2';
+import { authenticator } from 'otplib';
+import { randomBytes } from 'crypto';
 
-import type { JwtPayload, UserDto, UserListResponse, UserStatus } from '@replaycoach/types';
+import type {
+  JwtPayload,
+  TotpEnrollResponse,
+  UserDto,
+  UserListResponse,
+  UserRole,
+  UserStatus,
+} from '@replaycoach/types';
 
 import { User } from './user.entity';
 import type { CreateUserDto, UpdateUserDto } from './user.dto';
 import { AvatarService } from './avatar.service';
+import { AuditService } from '../audit/audit.service';
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 100;
@@ -23,6 +33,7 @@ export class UserService {
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
     private readonly avatarService: AvatarService,
+    private readonly auditService: AuditService,
   ) {}
 
   /** `orgId`/`role` overrides let AuthService assign both from a redeemed
@@ -89,8 +100,8 @@ export class UserService {
     await repo.increment({ id }, 'sessionVersion', 1);
   }
 
-  async touchLastLogin(id: string): Promise<void> {
-    await this.userRepo.update({ id }, { lastLoginAt: new Date() });
+  async touchLastLogin(id: string, ip?: string | null): Promise<void> {
+    await this.userRepo.update({ id }, { lastLoginAt: new Date(), lastLoginIp: ip ?? null });
   }
 
   /**
@@ -117,9 +128,38 @@ export class UserService {
       throw new ForbiddenException('Insufficient role');
     }
 
+    const previousStatus = target.status;
     target.status = status;
     await this.userRepo.save(target);
     await this.incrementSessionVersion(targetId);
+    void this.auditService.record(actingUser.sub, 'user.status_changed', 'user', targetId, {
+      from: previousStatus,
+      to: status,
+    });
+    return target;
+  }
+
+  /**
+   * Admin-facing role change — platform_admin only (unlike status changes,
+   * which studio_admin can also perform within their org: a role change is
+   * a stronger privilege escalation/de-escalation and stays admin-exclusive).
+   * Bumps sessionVersion: a demoted admin's already-issued token would
+   * otherwise keep working at the old (higher) privilege level until it
+   * naturally expires.
+   */
+  async setRole(targetId: string, role: UserRole, actingUser: JwtPayload): Promise<User> {
+    if (actingUser.role !== 'platform_admin') {
+      throw new ForbiddenException('Only a platform admin can change roles');
+    }
+    const target = await this.findById(targetId);
+    const previousRole = target.role;
+    target.role = role;
+    await this.userRepo.save(target);
+    await this.incrementSessionVersion(targetId);
+    void this.auditService.record(actingUser.sub, 'user.role_changed', 'user', targetId, {
+      from: previousRole,
+      to: role,
+    });
     return target;
   }
 
@@ -132,7 +172,7 @@ export class UserService {
   }
 
   async listUsers(
-    filter: { orgId?: string | undefined; role?: string | undefined; status?: string | undefined },
+    filter: { orgId?: string | undefined; role?: string | undefined; status?: string | undefined; search?: string | undefined },
     page: number,
     pageSize: number,
     actingUser: JwtPayload,
@@ -156,8 +196,19 @@ export class UserService {
     const safePageSize = Math.min(Math.max(1, pageSize || DEFAULT_PAGE_SIZE), MAX_PAGE_SIZE);
     const safePage = Math.max(1, page || 1);
 
+    // ILike search needs its own OR branch (email OR displayName) — TypeORM
+    // represents "where A OR B" as an array of where-clauses, each carrying
+    // the same base filters so search doesn't bypass org/role/status scoping.
+    const search = filter.search?.trim();
+    const whereClauses: FindOptionsWhere<User>[] = search
+      ? [
+          { ...where, email: ILike(`%${search}%`) },
+          { ...where, displayName: ILike(`%${search}%`) },
+        ]
+      : [where];
+
     const [rows, total] = await this.userRepo.findAndCount({
-      where,
+      where: whereClauses,
       order: { createdAt: 'DESC' },
       skip: (safePage - 1) * safePageSize,
       take: safePageSize,
@@ -169,6 +220,80 @@ export class UserService {
       page: safePage,
       pageSize: safePageSize,
     };
+  }
+
+  // ─── TOTP 2FA (optional, self-service — platform_admin accounts only) ──
+
+  /** Generates a new secret + backup codes and stores them un-enabled —
+   * `totpEnabled` only flips to true once `confirmTotp` verifies the user
+   * actually has it working, so a half-finished enrollment never locks
+   * anyone out. Re-enrolling overwrites any previous (unconfirmed) secret. */
+  async enrollTotp(id: string): Promise<TotpEnrollResponse> {
+    const user = await this.findById(id);
+    if (user.role !== 'platform_admin') {
+      throw new ForbiddenException('Two-factor authentication is only available for admin accounts');
+    }
+
+    const secret = authenticator.generateSecret();
+    const backupCodes = Array.from({ length: 8 }, () => randomBytes(5).toString('hex'));
+
+    user.totpSecret = secret;
+    user.totpBackupCodes = backupCodes;
+    user.totpEnabled = false;
+    await this.userRepo.save(user);
+
+    return {
+      secret,
+      otpauthUrl: authenticator.keyuri(user.email, 'LetsMove Admin', secret),
+      backupCodes,
+    };
+  }
+
+  /** Confirms enrollment with a live 6-digit code from the authenticator
+   * app — this is what actually flips `totpEnabled` on. */
+  async confirmTotp(id: string, token: string): Promise<void> {
+    const user = await this.findById(id);
+    if (!user.totpSecret) {
+      throw new ForbiddenException('Start enrollment first');
+    }
+    const valid = authenticator.verify({ token, secret: user.totpSecret });
+    if (!valid) throw new ForbiddenException('Incorrect code');
+
+    user.totpEnabled = true;
+    await this.userRepo.save(user);
+  }
+
+  /** Re-verifies the account password (not the TOTP code) before turning
+   * 2FA off — mirrors changePassword's "must prove you're the real owner"
+   * pattern, since disabling 2FA is itself a security-relevant action. */
+  async disableTotp(id: string, password: string): Promise<void> {
+    const user = await this.findById(id);
+    const valid = await argon2.verify(user.passwordHash, password).catch(() => false);
+    if (!valid) throw new ForbiddenException('Incorrect password');
+
+    user.totpSecret = null;
+    user.totpBackupCodes = null;
+    user.totpEnabled = false;
+    await this.userRepo.save(user);
+  }
+
+  /** Verifies a live TOTP code OR consumes a backup code — used wherever a
+   * 2FA-enabled admin needs to prove possession (kept here rather than in
+   * AuthService since it only ever touches User-owned TOTP state). Consumed
+   * backup codes are removed so each one works exactly once. */
+  async verifyTotpOrBackupCode(id: string, code: string): Promise<boolean> {
+    const user = await this.findById(id);
+    if (!user.totpEnabled || !user.totpSecret) return false;
+
+    if (authenticator.verify({ token: code, secret: user.totpSecret })) return true;
+
+    const codes = user.totpBackupCodes ?? [];
+    const idx = codes.indexOf(code);
+    if (idx === -1) return false;
+
+    user.totpBackupCodes = codes.filter((_, i) => i !== idx);
+    await this.userRepo.save(user);
+    return true;
   }
 
   private profileCompleteness(user: User): number {
@@ -188,6 +313,8 @@ export class UserService {
       status: user.status,
       emailVerified: user.emailVerified,
       lastLoginAt: user.lastLoginAt ? user.lastLoginAt.toISOString() : null,
+      lastLoginIp: user.lastLoginIp,
+      totpEnabled: user.totpEnabled,
       profileCompleteness: this.profileCompleteness(user),
       createdAt: user.createdAt.toISOString(),
     };

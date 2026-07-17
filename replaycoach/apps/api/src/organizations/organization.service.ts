@@ -25,6 +25,7 @@ import { User } from '../users/user.entity';
 import { UserService } from '../users/user.service';
 import { TeamsService } from '../teams/teams.service';
 import { EmailService } from '../email/email.service';
+import { AuditService } from '../audit/audit.service';
 import { Organization } from './organization.entity';
 import { OrgInvite } from './org-invite.entity';
 import type { CreateOrganizationDto, InviteToOrgDto, UpdateOrganizationDto } from './organization.dto';
@@ -46,6 +47,7 @@ export class OrganizationService {
     private readonly teamsService: TeamsService,
     private readonly emailService: EmailService,
     private readonly configService: ConfigService,
+    private readonly auditService: AuditService,
   ) {}
 
   /** Base URL for links embedded in outbound email — reuses CORS_ORIGIN
@@ -168,6 +170,43 @@ export class OrganizationService {
     if (dto.settings !== undefined) org.settings = dto.settings;
     if (dto.branding !== undefined) org.branding = dto.branding;
     return this.orgRepo.save(org);
+  }
+
+  /** platform_admin only — suspends/reactivates an org. v1 deliberately
+   * stays a flag: org admins/coaches see a banner, but this does not
+   * cascade into locking out members' own sessions (nothing currently
+   * reads that consequence chain, so building it would be speculative). */
+  async setStatus(orgId: string, status: 'active' | 'suspended', actingUser: JwtPayload): Promise<Organization> {
+    if (actingUser.role !== 'platform_admin') {
+      throw new ForbiddenException('Only a platform admin can change an organization\'s status');
+    }
+    const org = await this.findById(orgId);
+    const previousStatus = org.status;
+    org.status = status;
+    await this.orgRepo.save(org);
+    void this.auditService.record(actingUser.sub, 'organization.status_changed', 'organization', orgId, {
+      from: previousStatus,
+      to: status,
+    });
+    return org;
+  }
+
+  /** platform_admin only — requires the org to already be empty (zero
+   * members) so deletion never silently orphans anyone; remove/relocate
+   * members first via the existing member-management flow. */
+  async delete(orgId: string, actingUser: JwtPayload): Promise<void> {
+    if (actingUser.role !== 'platform_admin') {
+      throw new ForbiddenException('Only a platform admin can delete an organization');
+    }
+    const org = await this.findById(orgId);
+    const memberCount = await this.userRepo.count({ where: { orgId } });
+    if (memberCount > 0) {
+      throw new BadRequestException('Remove every member before deleting an organization');
+    }
+    await this.orgRepo.delete({ id: orgId });
+    void this.auditService.record(actingUser.sub, 'organization.deleted', 'organization', orgId, {
+      name: org.name,
+    });
   }
 
   async listMembers(orgId: string): Promise<UserDto[]> {
@@ -392,6 +431,7 @@ export class OrganizationService {
       id: org.id,
       name: org.name,
       planTier: org.planTier,
+      status: org.status,
       settings: org.settings,
       branding: org.branding,
       createdBy: org.createdBy,

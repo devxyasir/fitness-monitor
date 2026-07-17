@@ -25,7 +25,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { CreateOrganizationDto, InviteToOrgDto, SendOrgMessageDto, UpdateOrganizationDto } from './organization.dto';
+import { CreateOrganizationDto, InviteToOrgDto, SendOrgMessageDto, UpdateOrganizationDto, UpdateOrgStatusDto } from './organization.dto';
 import { OrganizationService } from './organization.service';
 import { OrganizationGuard } from './organization.guard';
 
@@ -68,6 +68,26 @@ export class OrganizationController {
   ): Promise<OrganizationDto> {
     const org = await this.orgService.update(id, dto, user);
     return this.orgService.toDto(org);
+  }
+
+  @Patch(':id/status')
+  @UseGuards(OrganizationGuard)
+  @Roles('platform_admin')
+  async setStatus(
+    @Param('id') id: string,
+    @Body() dto: UpdateOrgStatusDto,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<OrganizationDto> {
+    const org = await this.orgService.setStatus(id, dto.status, user);
+    return this.orgService.toDto(org);
+  }
+
+  @Delete(':id')
+  @UseGuards(OrganizationGuard)
+  @Roles('platform_admin')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteOrg(@Param('id') id: string, @CurrentUser() user: JwtPayload): Promise<void> {
+    await this.orgService.delete(id, user);
   }
 
   @Get(':id/members')

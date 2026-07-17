@@ -16,6 +16,7 @@ import math
 import os
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 
 import cv2
@@ -29,11 +30,36 @@ logger = logging.getLogger(__name__)
 
 DOWNLOAD_TIMEOUT_S = 60
 UPLOAD_TIMEOUT_S = 120
-FFMPEG_EXIT_TIMEOUT_S = 120
+# The ffmpeg mux/re-encode step's timeout used to be a flat 120s regardless
+# of how long the source video actually was — fine for a short clip, but a
+# guaranteed timeout for any real session recording once it ran past a few
+# minutes (confirmed: "timed out after 120 seconds" on a live session
+# export). '-preset veryfast' libx264 encoding is usually well faster than
+# real-time, but this host also runs live per-participant pose inference
+# concurrently (see config.py's model_size comments on shared-CPU
+# contention), so the budget needs real margin, not just enough for an
+# idle box. Floor keeps short exports snappy; ceiling stops a pathological
+# multi-hour recording from hanging a background task indefinitely.
+FFMPEG_TIMEOUT_FLOOR_S = 120
+FFMPEG_TIMEOUT_CEILING_S = 1800
+FFMPEG_TIMEOUT_MULTIPLIER = 2.5
+
+# Wall-clock budget for the per-frame Python/OpenCV draw loop itself, same
+# pattern as reference_processor.py's MAX_PROCESSING_SECONDS — that one
+# caps at 480s because reference clips are short uploads; this path renders
+# full session recordings (up to ~90min), so the budget is larger, but the
+# principle is identical: truncate gracefully with a clear log line rather
+# than let a CPU-starved box hang a background task forever.
+MAX_PROCESSING_SECONDS = 900
+
 # Same threshold as skeleton_drawing.py's own MIN_SCORE (config-driven,
 # POSE_SKELETON_MIN_SCORE) — previously a second, independently-hardcoded
 # 0.3 here that could silently drift out of sync with the skeleton layer's.
 MIN_SCORE = settings.skeleton_min_score
+
+
+def _ffmpeg_timeout_for_duration(duration_seconds: float) -> float:
+    return min(FFMPEG_TIMEOUT_CEILING_S, max(FFMPEG_TIMEOUT_FLOOR_S, duration_seconds * FFMPEG_TIMEOUT_MULTIPLIER))
 
 
 def _hex_to_bgr(color: str) -> tuple[int, int, int]:
@@ -142,7 +168,7 @@ def _draw_annotation(frame: np.ndarray, ann: dict, kp_by_name: dict, w: int, h: 
             cv2.line(frame, b, (hx, hy), color, thickness, cv2.LINE_AA)
 
 
-def _mux_audio_video(video_path: str, audio_source_path: str, output_path: str) -> None:
+def _mux_audio_video(video_path: str, audio_source_path: str, output_path: str, timeout_s: float) -> None:
     """Mux the silent annotated video with audio from the source using FFmpeg.
 
     Re-encodes to H.264 (not '-c:v copy'): the silent video comes out of
@@ -160,13 +186,13 @@ def _mux_audio_video(video_path: str, audio_source_path: str, output_path: str) 
         "-movflags", "+faststart",
         output_path,
     ]
-    proc = subprocess.run(cmd, capture_output=True, timeout=FFMPEG_EXIT_TIMEOUT_S)
+    proc = subprocess.run(cmd, capture_output=True, timeout=timeout_s)
     if proc.returncode != 0:
         err = proc.stderr.decode("utf-8", errors="replace")[-500:]
         raise RuntimeError(f"ffmpeg audio mux failed (exit {proc.returncode}): {err}")
 
 
-def _reencode_video_only(video_path: str, output_path: str) -> None:
+def _reencode_video_only(video_path: str, output_path: str, timeout_s: float) -> None:
     """Re-encode to browser-playable H.264, no audio (source has no audio track)."""
     cmd = [
         "ffmpeg", "-y", "-loglevel", "error",
@@ -176,7 +202,7 @@ def _reencode_video_only(video_path: str, output_path: str) -> None:
         "-movflags", "+faststart",
         output_path,
     ]
-    proc = subprocess.run(cmd, capture_output=True, timeout=FFMPEG_EXIT_TIMEOUT_S)
+    proc = subprocess.run(cmd, capture_output=True, timeout=timeout_s)
     if proc.returncode != 0:
         err = proc.stderr.decode("utf-8", errors="replace")[-500:]
         raise RuntimeError(f"ffmpeg re-encode failed (exit {proc.returncode}): {err}")
@@ -231,9 +257,16 @@ def export_annotated_video(
         writer = _start_video_writer(silent_path, width, height, fps)
 
         idx = 0
+        start_time = time.monotonic()
         while True:
             ok, frame = cap.read()
             if not ok:
+                break
+            if time.monotonic() - start_time > MAX_PROCESSING_SECONDS:
+                logger.warning(
+                    "Export %s: hit MAX_PROCESSING_SECONDS cap (%ds) at frame %d, truncating",
+                    ref_id, MAX_PROCESSING_SECONDS, idx,
+                )
                 break
             kp_by_name = frames_by_index.get(idx, {})
 
@@ -268,18 +301,23 @@ def export_annotated_video(
 
         cap.release()
         writer.release()
-        logger.info("Export %s: rendered %d frames, muxing audio", ref_id, idx)
+        rendered_duration_s = idx / fps if fps else 0.0
+        mux_timeout_s = _ffmpeg_timeout_for_duration(rendered_duration_s)
+        logger.info(
+            "Export %s: rendered %d frames (%.0fs), muxing audio (timeout %.0fs)",
+            ref_id, idx, rendered_duration_s, mux_timeout_s,
+        )
 
         out_fd, out_path = tempfile.mkstemp(suffix=".mp4")
         os.close(out_fd)
         try:
-            _mux_audio_video(silent_path, local_path, out_path)
+            _mux_audio_video(silent_path, local_path, out_path, mux_timeout_s)
         except RuntimeError as mux_err:
             # Common cause: the source reference video has no audio track
             # (`-map 1:a:0` has nothing to map). Fall back to a video-only
             # re-encode so export still succeeds and is browser-playable.
             logger.warning("Export %s: audio mux failed (%s), falling back to video-only", ref_id, mux_err)
-            _reencode_video_only(silent_path, out_path)
+            _reencode_video_only(silent_path, out_path, mux_timeout_s)
 
         logger.info("Export %s: upload", ref_id)
         with open(out_path, "rb") as f:

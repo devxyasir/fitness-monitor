@@ -26,19 +26,46 @@ function getHeaders(): Record<string, string> {
   return headers;
 }
 
+/** Thrown by every apiClient method on a non-ok response. Extends Error so
+ * existing `.message`-only callers keep working unchanged; `code`/`status`
+ * are extra, opt-in fields — e.g. the admin UI checks `code ===
+ * 'ADMIN_ELEVATION_REQUIRED'` to show a step-up modal instead of a generic
+ * error toast. */
+export class ApiError extends Error {
+  status: number;
+  code?: string;
+
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    if (code !== undefined) this.code = code;
+  }
+}
+
 /** Nest's default error body is `{ statusCode, message, error }` — surface
  * `message` when present so callers see the real reason (e.g. "Only the
- * session coach can manage reference videos") instead of a bare status code. */
+ * session coach can manage reference videos") instead of a bare status code.
+ * A `{ code, message }` body (see AdminElevatedGuard) additionally carries
+ * a machine-readable `code`. */
 async function throwApiError(res: Response, formattedPath: string): Promise<never> {
   let detail = '';
+  let code: string | undefined;
   try {
     const body = await res.clone().json();
     if (typeof body?.message === 'string') detail = body.message;
     else if (Array.isArray(body?.message)) detail = body.message.join(', ');
+    // The global HttpExceptionFilter (apps/api/src/common/filters/http-exception.filter.ts)
+    // only ever passes through {statusCode, error, message, requestId} —
+    // `error` is what AdminElevatedGuard repurposes as a machine-readable
+    // code (e.g. 'ADMIN_ELEVATION_REQUIRED'); for ordinary exceptions it's
+    // just Nest's default short label ('Forbidden', 'Not Found', etc), which
+    // never collides with a code any caller actually checks for.
+    if (typeof body?.error === 'string') code = body.error;
   } catch {
     // Non-JSON error body — fall back to the generic message below.
   }
-  throw new Error(detail || `API error ${res.status}: ${formattedPath}`);
+  throw new ApiError(detail || `API error ${res.status}: ${formattedPath}`, res.status, code);
 }
 
 async function fetchWithAuth(path: string, options: RequestInit): Promise<Response> {

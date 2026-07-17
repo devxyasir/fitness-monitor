@@ -2,16 +2,18 @@
 
 import { useEffect, useState } from 'react';
 import type { SystemSettingsDto } from '@replaycoach/types';
-import { systemSettingsClient } from '../../../../lib/system-settings-client';
-import { toast } from '../../../../stores/toast-store';
-import { Card } from '../../../components/ui/Card';
-import { Input } from '../../../components/ui/Input';
-import { Button } from '../../../components/ui/Button';
-import { Tabs } from '../../../components/ui/Tabs';
-import { SkeletonRows, ErrorBlock } from '../../../components/ui/StateBlocks';
+import { systemSettingsClient } from '../../../lib/system-settings-client';
+import { toast } from '../../../stores/toast-store';
+import { Card } from '../../components/ui/Card';
+import { Input } from '../../components/ui/Input';
+import { Button } from '../../components/ui/Button';
+import { Tabs } from '../../components/ui/Tabs';
+import { SkeletonRows, ErrorBlock } from '../../components/ui/StateBlocks';
 
-export default function PlatformSettingsPage() {
-  const [tab, setTab] = useState<'smtp' | 'theme' | 'templates'>('smtp');
+type TabKey = 'smtp' | 'theme' | 'templates' | 'platform';
+
+export default function AdminSettingsPage() {
+  const [tab, setTab] = useState<TabKey>('smtp');
   const [settings, setSettings] = useState<SystemSettingsDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -34,9 +36,9 @@ export default function PlatformSettingsPage() {
 
   return (
     <div className="max-w-2xl">
-      <h2 className="font-display text-display-m text-ink mb-1">Platform settings</h2>
+      <h1 className="font-display text-display-m text-ink mb-1">Settings</h1>
       <p className="text-ink-muted text-sm mb-6">
-        Deployment-wide configuration — email delivery, brand colors, and invite email copy.
+        Deployment-wide configuration — email delivery, brand colors, invite email copy, and platform toggles.
       </p>
 
       <Tabs
@@ -44,9 +46,10 @@ export default function PlatformSettingsPage() {
           { key: 'smtp', label: 'Email delivery' },
           { key: 'theme', label: 'Brand colors' },
           { key: 'templates', label: 'Invite email' },
+          { key: 'platform', label: 'Platform' },
         ]}
         active={tab}
-        onChange={(k) => setTab(k as 'smtp' | 'theme' | 'templates')}
+        onChange={(k) => setTab(k as TabKey)}
       />
 
       <div className="mt-5">
@@ -58,8 +61,10 @@ export default function PlatformSettingsPage() {
           <SmtpTab settings={settings.smtp} onSaved={load} />
         ) : tab === 'theme' ? (
           <ThemeTab settings={settings.theme} onSaved={load} />
-        ) : (
+        ) : tab === 'templates' ? (
           <TemplatesTab settings={settings.emailTemplates} onSaved={load} />
+        ) : (
+          <PlatformTab settings={settings.platform} onSaved={load} />
         )}
       </div>
     </div>
@@ -245,5 +250,81 @@ function TemplatesTab({ settings, onSaved }: { settings: SystemSettingsDto['emai
         </Button>
       </form>
     </Card>
+  );
+}
+
+function PlatformTab({ settings, onSaved }: { settings: SystemSettingsDto['platform']; onSaved: () => void }) {
+  const [maintenanceMode, setMaintenanceMode] = useState(settings.maintenanceMode);
+  const [allowPublicRegistration, setAllowPublicRegistration] = useState(settings.allowPublicRegistration);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await systemSettingsClient.updatePlatform({ maintenanceMode, allowPublicRegistration });
+      toast.success('Platform settings saved.');
+      onSaved();
+    } catch (err: unknown) {
+      toast.error((err as Error).message ?? 'Could not save platform settings.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Card>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+        <ToggleRow
+          label="Maintenance mode"
+          description="Non-admin visitors see a maintenance page instead of the app. You stay able to log in and turn it back off."
+          checked={maintenanceMode}
+          onChange={setMaintenanceMode}
+        />
+        <ToggleRow
+          label="Allow public registration"
+          description="When off, only invite-based signup works — the open coach self-signup form is blocked."
+          checked={allowPublicRegistration}
+          onChange={setAllowPublicRegistration}
+        />
+        <Button type="submit" loading={loading} className="self-start">
+          {loading ? 'Saving…' : 'Save platform settings'}
+        </Button>
+      </form>
+    </Card>
+  );
+}
+
+function ToggleRow({
+  label,
+  description,
+  checked,
+  onChange,
+}: {
+  label: string;
+  description: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <div className="min-w-0">
+        <div className="text-sm font-medium text-ink">{label}</div>
+        <p className="text-xs text-ink-muted mt-0.5 leading-relaxed">{description}</p>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        onClick={() => onChange(!checked)}
+        className={`relative flex-shrink-0 w-11 h-6 rounded-full transition-colors ${checked ? 'bg-analytics' : 'bg-hairline'}`}
+      >
+        <span
+          className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white dark:bg-canvas shadow-sm transition-transform ${
+            checked ? 'translate-x-5' : 'translate-x-0'
+          }`}
+        />
+      </button>
+    </div>
   );
 }
