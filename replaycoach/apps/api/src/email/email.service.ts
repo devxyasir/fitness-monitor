@@ -1,56 +1,54 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
-import type { Transporter } from 'nodemailer';
 
-import { renderInviteEmailHtml, renderInviteEmailText, type InviteEmailParams } from './templates/invite-email';
+import { SystemSettingsService } from '../system-settings/system-settings.service';
+import {
+  renderInviteEmailHtml,
+  renderInviteEmailSubject,
+  renderInviteEmailText,
+  type InviteEmailParams,
+} from './templates/invite-email';
 
 /**
- * SMTP is optional (see config.schema.ts) — without it, this logs a warning
- * and returns without sending. That keeps invite creation itself always
- * working (the UI still shows/copies the link) even before SMTP is
- * configured on a fresh deployment, rather than the whole invite flow
- * hard-failing on a missing mail server.
+ * SMTP config is DB-backed (SystemSettingsService, admin-editable) with env
+ * vars as the seed/fallback for a fresh deployment — see that service for
+ * the precedence rule. Rebuilding the transporter per send (instead of once
+ * at construction) is what makes credentials editable at runtime without a
+ * process restart; nodemailer transporter construction is cheap (no
+ * connection opened until send).
  */
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
-  private transporter: Transporter | null = null;
-  private readonly from: string;
 
-  constructor(private readonly configService: ConfigService) {
-    const host = this.configService.get<string>('smtp.host');
-    const user = this.configService.get<string>('smtp.user');
-    const password = this.configService.get<string>('smtp.password');
-    this.from = this.configService.get<string>('smtp.from') ?? 'LetsMove <no-reply@morangoai.net>';
+  constructor(private readonly settingsService: SystemSettingsService) {}
 
-    if (host && user && password) {
-      this.transporter = nodemailer.createTransport({
-        host,
-        port: this.configService.get<number>('smtp.port') ?? 587,
-        secure: this.configService.get<boolean>('smtp.secure') ?? false,
-        auth: { user, pass: password },
-      });
-    } else {
-      this.logger.warn('SMTP not configured (SMTP_HOST/SMTP_USER/SMTP_PASSWORD) — emails will be logged, not sent.');
-    }
-  }
+  async sendInviteEmail(to: string, params: Omit<InviteEmailParams, 'template'>): Promise<void> {
+    const [smtp, emailTemplates] = await Promise.all([
+      this.settingsService.getSmtpForSending(),
+      this.settingsService.getEmailTemplates(),
+    ]);
+    const fullParams: InviteEmailParams = { ...params, template: emailTemplates.invite };
 
-  async sendInviteEmail(to: string, params: InviteEmailParams): Promise<void> {
-    const subject = `You're invited to join ${params.orgName} on LetsMove`;
-
-    if (!this.transporter) {
+    if (!smtp.host || !smtp.user || !smtp.password) {
+      this.logger.warn('SMTP not configured — emails will be logged, not sent.');
       this.logger.log(`[email skipped, no SMTP configured] Invite for ${to}: ${params.inviteUrl}`);
       return;
     }
 
     try {
-      await this.transporter.sendMail({
-        from: this.from,
+      const transporter = nodemailer.createTransport({
+        host: smtp.host,
+        port: smtp.port ?? 587,
+        secure: smtp.secure ?? false,
+        auth: { user: smtp.user, pass: smtp.password },
+      });
+      await transporter.sendMail({
+        from: smtp.from,
         to,
-        subject,
-        html: renderInviteEmailHtml(params),
-        text: renderInviteEmailText(params),
+        subject: renderInviteEmailSubject(fullParams),
+        html: renderInviteEmailHtml(fullParams),
+        text: renderInviteEmailText(fullParams),
       });
     } catch (err) {
       // An invite is still valid and usable via its link even if delivery

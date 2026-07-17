@@ -1,4 +1,5 @@
 import { IsEmail, IsEnum, IsObject, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
+import { IsAllowedEmailProvider } from '../common/validators/allowed-email-provider.validator';
 
 export class CreateOrganizationDto {
   @IsString()
@@ -25,6 +26,7 @@ export class UpdateOrganizationDto {
 
 export class InviteToOrgDto {
   @IsEmail()
+  @IsAllowedEmailProvider()
   email!: string;
 
   @IsEnum(['coach', 'student'])

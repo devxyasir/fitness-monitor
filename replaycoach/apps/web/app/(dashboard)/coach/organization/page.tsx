@@ -21,11 +21,21 @@ function timeUntil(iso: string): string {
   return days === 1 ? '1 day left' : `${days} days left`;
 }
 
+/** Gmail/Outlook/Yahoo only — mirrors the server-side allowlist
+ * (allowed-email-provider.validator.ts) so invalid domains get caught
+ * before the round trip, not just after a 400. */
+const ALLOWED_EMAIL_DOMAINS = ['gmail.com', 'outlook.com', 'hotmail.com', 'live.com', 'yahoo.com'];
+function isAllowedEmailProvider(email: string): boolean {
+  const domain = email.split('@')[1]?.toLowerCase();
+  return !!domain && ALLOWED_EMAIL_DOMAINS.includes(domain);
+}
+
 export default function OrganizationPage() {
   const { user } = useAuthStore();
   const orgId = user?.orgId;
+  const isOrgAdmin = user?.role === 'studio_admin' || user?.role === 'platform_admin';
 
-  const [tab, setTab] = useState<'members' | 'invites'>('members');
+  const [tab, setTab] = useState<'members' | 'invites'>(isOrgAdmin ? 'members' : 'invites');
   const [members, setMembers] = useState<UserDto[]>([]);
   const [invites, setInvites] = useState<OrgInviteDto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,10 +103,12 @@ export default function OrganizationPage() {
       <div className="flex items-center justify-between flex-wrap gap-3 mb-6">
         <div>
           <h2 className="font-display text-display-m text-ink">Organization</h2>
-          <p className="text-ink-muted text-sm mt-1">Manage who's part of your organization and pending invites.</p>
+          <p className="text-ink-muted text-sm mt-1">
+            {isOrgAdmin ? "Manage who's part of your organization and pending invites." : 'Invite your students and track who has joined.'}
+          </p>
         </div>
         <Button onClick={() => setInviteModalOpen(true)}>
-          <UserPlus className="w-4 h-4" /> Invite someone
+          <UserPlus className="w-4 h-4" /> {isOrgAdmin ? 'Invite someone' : 'Invite a student'}
         </Button>
       </div>
 
@@ -127,7 +139,7 @@ export default function OrganizationPage() {
                   </div>
                   <div className="flex items-center gap-3 flex-shrink-0">
                     <Pill variant={m.role === 'student' ? 'scheduled' : 'success'}>{m.role.replace('_', ' ')}</Pill>
-                    {m.id !== user?.id && (
+                    {isOrgAdmin && m.id !== user?.id && (
                       <button
                         type="button"
                         onClick={() => handleRemoveMember(m.id, m.displayName)}
@@ -181,6 +193,7 @@ export default function OrganizationPage() {
       {inviteModalOpen && orgId && (
         <InviteModal
           orgId={orgId}
+          canInviteCoaches={isOrgAdmin}
           onClose={() => setInviteModalOpen(false)}
           onCreated={() => {
             setInviteModalOpen(false);
@@ -193,18 +206,32 @@ export default function OrganizationPage() {
   );
 }
 
-function InviteModal({ orgId, onClose, onCreated }: { orgId: string; onClose: () => void; onCreated: () => void }) {
+function InviteModal({
+  orgId,
+  canInviteCoaches,
+  onClose,
+  onCreated,
+}: {
+  orgId: string;
+  canInviteCoaches: boolean;
+  onClose: () => void;
+  onCreated: () => void;
+}) {
   const [email, setEmail] = useState('');
+  // A plain coach can only ever invite students — no picker needed, the
+  // choice doesn't exist for them (matches the server-side rule).
   const [role, setRole] = useState<'coach' | 'student'>('student');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const emailValid = email.trim().length > 0 && isAllowedEmailProvider(email.trim());
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
     try {
-      const { inviteToken } = await orgClient.createInvite(orgId, { email, role });
+      const { inviteToken } = await orgClient.createInvite(orgId, { email, role: canInviteCoaches ? role : 'student' });
       const link = `${window.location.origin}/invite/${inviteToken}`;
       await navigator.clipboard.writeText(link);
       toast.success('Invite link copied to clipboard — send it to them directly.');
@@ -216,42 +243,47 @@ function InviteModal({ orgId, onClose, onCreated }: { orgId: string; onClose: ()
   };
 
   return (
-    <Modal title="Invite someone" onClose={onClose}>
+    <Modal title={canInviteCoaches ? 'Invite someone' : 'Invite a student'} onClose={onClose}>
       <p className="text-ink-muted text-sm mb-5 leading-relaxed">
         We'll email them an invite link right away. It's also copied to your clipboard in case you'd rather send it yourself.
       </p>
       {error && <div className="mb-4"><ErrorBlock message={error} /></div>}
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <Input
-          id="invite-email"
-          type="email"
-          label="Their email"
-          required
-          autoFocus
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="dancer@example.com"
-        />
         <div>
-          <label className="block text-label text-ink-muted mb-1.5">Role</label>
-          <div className="flex gap-2">
-            {(['student', 'coach'] as const).map((r) => (
-              <button
-                key={r}
-                type="button"
-                onClick={() => setRole(r)}
-                className={`flex-1 px-3.5 py-2.5 rounded-sm text-sm border transition-colors ${
-                  role === r ? 'bg-brand/10 border-brand text-brand font-medium' : 'bg-panel-2 border-hairline text-ink-muted hover:text-ink'
-                }`}
-              >
-                {r === 'student' ? 'Student' : 'Coach'}
-              </button>
-            ))}
-          </div>
+          <Input
+            id="invite-email"
+            type="email"
+            label="Their email"
+            required
+            autoFocus
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="dancer@gmail.com"
+          />
+          <p className="text-xs text-ink-faint mt-1.5">Gmail, Outlook, or Yahoo addresses only.</p>
         </div>
+        {canInviteCoaches && (
+          <div>
+            <label className="block text-label text-ink-muted mb-1.5">Role</label>
+            <div className="flex gap-2">
+              {(['student', 'coach'] as const).map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setRole(r)}
+                  className={`flex-1 px-3.5 py-2.5 rounded-sm text-sm border transition-colors ${
+                    role === r ? 'bg-brand/10 border-brand text-brand font-medium' : 'bg-panel-2 border-hairline text-ink-muted hover:text-ink'
+                  }`}
+                >
+                  {r === 'student' ? 'Student' : 'Coach'}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="flex gap-3 mt-2">
           <Button type="button" variant="ghost" onClick={onClose} className="flex-1">Cancel</Button>
-          <Button type="submit" disabled={!email.trim() || loading} loading={loading} className="flex-1">
+          <Button type="submit" disabled={!emailValid || loading} loading={loading} className="flex-1">
             <Copy className="w-4 h-4" /> {loading ? 'Creating…' : 'Create & copy link'}
           </Button>
         </div>

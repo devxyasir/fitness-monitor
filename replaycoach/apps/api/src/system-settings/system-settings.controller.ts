@@ -1,0 +1,62 @@
+import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
+
+import type { EmailTemplateSettings, JwtPayload, SmtpSettings, SystemSettingsDto, ThemeSettings } from '@replaycoach/types';
+
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
+import { Public } from '../common/decorators/public.decorator';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { SystemSettingsService } from './system-settings.service';
+import { UpdateEmailTemplatesDto, UpdateSmtpDto, UpdateThemeDto } from './system-settings.dto';
+
+/** Platform-wide config, editable only by platform_admin — the deployment
+ * operator, not a per-org studio_admin (branding for an individual org's
+ * own look-and-feel is a separate, already-existing concept:
+ * Organization.branding via PATCH /organizations/:id). */
+// Deliberately no class-level @Roles() — RolesGuard falls back to
+// class-level metadata via getAllAndOverride() when a method has none, so a
+// class-level @Roles('platform_admin') would still gate the @Public() theme
+// route below (JwtAuthGuard skips auth for it, but RolesGuard would then
+// see no request.user and 403). Each protected route names its own role.
+@Controller('system-settings')
+@UseGuards(JwtAuthGuard, RolesGuard)
+export class SystemSettingsController {
+  constructor(private readonly settingsService: SystemSettingsService) {}
+
+  /** Public — every visitor's browser needs the brand colors to render the
+   * site (including logged-out marketing pages), not just admins. Colors
+   * only — SMTP/email-template content stays behind the admin-only GET. */
+  @Public()
+  @Get('theme')
+  async getPublicTheme(): Promise<ThemeSettings> {
+    return this.settingsService.getTheme();
+  }
+
+  @Get()
+  @Roles('platform_admin')
+  async getAll(): Promise<SystemSettingsDto> {
+    return this.settingsService.getAll();
+  }
+
+  @Patch('smtp')
+  @Roles('platform_admin')
+  async updateSmtp(@Body() dto: UpdateSmtpDto, @CurrentUser() user: JwtPayload): Promise<SmtpSettings> {
+    return this.settingsService.updateSmtp(dto, user.sub);
+  }
+
+  @Patch('theme')
+  @Roles('platform_admin')
+  async updateTheme(@Body() dto: UpdateThemeDto, @CurrentUser() user: JwtPayload): Promise<ThemeSettings> {
+    return this.settingsService.updateTheme(dto, user.sub);
+  }
+
+  @Patch('email-templates')
+  @Roles('platform_admin')
+  async updateEmailTemplates(
+    @Body() dto: UpdateEmailTemplatesDto,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<EmailTemplateSettings> {
+    return this.settingsService.updateEmailTemplates(dto, user.sub);
+  }
+}

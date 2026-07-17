@@ -61,6 +61,21 @@ export class UserService {
     return this.userRepo.save(user);
   }
 
+  /** Self-service password change (an already-logged-in user, not the
+   * token-based forgot/reset flow in AuthService). Requires the current
+   * password to prevent a hijacked session from silently locking the real
+   * owner out. Bumps sessionVersion — every other device gets logged out,
+   * same as a suspend/reactivate or org-creation role change. */
+  async changePassword(id: string, currentPassword: string, newPassword: string): Promise<void> {
+    const user = await this.findById(id);
+    const valid = await argon2.verify(user.passwordHash, currentPassword).catch(() => false);
+    if (!valid) throw new ForbiddenException('Current password is incorrect');
+
+    user.passwordHash = await argon2.hash(newPassword, { type: argon2.argon2id });
+    await this.userRepo.save(user);
+    await this.incrementSessionVersion(id);
+  }
+
   async incrementSessionVersion(id: string, manager?: Repository<User>): Promise<void> {
     const repo = manager ?? this.userRepo;
     await repo.increment({ id }, 'sessionVersion', 1);

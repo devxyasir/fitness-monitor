@@ -45,6 +45,7 @@ import { ClipsModule } from './clips/clips.module';
 import { RecordingsModule } from './recordings/recordings.module';
 import { ReferenceModule } from './reference/reference.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { SystemSettingsModule } from './system-settings/system-settings.module';
 
 @Module({
   imports: [
@@ -108,6 +109,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
     RecordingsModule,
     ReferenceModule,
     DashboardModule,
+    SystemSettingsModule,
   ],
   providers: [
     // Global by default: every route requires a valid access token and

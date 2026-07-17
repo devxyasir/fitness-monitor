@@ -7,11 +7,28 @@
  * not flexbox/grid — for reliable rendering across email clients.
  */
 
+import type { InviteEmailTemplate } from '@replaycoach/types';
+
 export interface InviteEmailParams {
   orgName: string;
   role: 'coach' | 'student';
   inviteUrl: string;
   invitedByName: string;
+  /** Admin-editable copy (see SystemSettingsService) — subject/heading/
+   * bodyIntro support {{orgName}}, {{invitedByName}}, {{role}} placeholders. */
+  template: InviteEmailTemplate;
+}
+
+function fillPlaceholders(text: string, params: Omit<InviteEmailParams, 'template' | 'inviteUrl'>): string {
+  const roleLabel = params.role === 'student' ? 'a student' : 'a coach';
+  return text
+    .replace(/\{\{orgName\}\}/g, params.orgName)
+    .replace(/\{\{invitedByName\}\}/g, params.invitedByName)
+    .replace(/\{\{role\}\}/g, roleLabel);
+}
+
+export function renderInviteEmailSubject(params: InviteEmailParams): string {
+  return fillPlaceholders(params.template.subject, params);
 }
 
 const BRAND = '#B14A28';
@@ -22,17 +39,16 @@ const PANEL = '#FFFFFF';
 const HAIRLINE = '#E4DDD2';
 
 export function renderInviteEmailHtml(params: InviteEmailParams): string {
-  const { orgName, role, inviteUrl, invitedByName } = params;
-  const roleLabel = role === 'student' ? 'a student' : 'a coach';
-  const escapedOrgName = escapeHtml(orgName);
-  const escapedInvitedBy = escapeHtml(invitedByName);
+  const { inviteUrl } = params;
+  const heading = escapeHtml(fillPlaceholders(params.template.heading, params));
+  const bodyIntro = escapeHtml(fillPlaceholders(params.template.bodyIntro, params));
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>You're invited to ${escapedOrgName}</title>
+<title>${heading}</title>
 </head>
 <body style="margin:0;padding:0;background-color:${CANVAS};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:${CANVAS};padding:40px 16px;">
@@ -49,14 +65,14 @@ export function renderInviteEmailHtml(params: InviteEmailParams): string {
           <tr>
             <td style="padding:0 40px 8px;">
               <div style="font-family:Georgia,'Times New Roman',serif;font-size:24px;line-height:1.3;color:${INK};font-weight:600;">
-                You're invited to join ${escapedOrgName}
+                ${heading}
               </div>
             </td>
           </tr>
           <tr>
             <td style="padding:0 40px 28px;">
               <p style="margin:0;font-size:15px;line-height:1.6;color:${INK_MUTED};">
-                ${escapedInvitedBy} invited you to join <strong style="color:${INK};">${escapedOrgName}</strong> on LetsMove as ${roleLabel}.
+                ${bodyIntro}
               </p>
             </td>
           </tr>
@@ -100,11 +116,10 @@ export function renderInviteEmailHtml(params: InviteEmailParams): string {
 }
 
 export function renderInviteEmailText(params: InviteEmailParams): string {
-  const { orgName, role, inviteUrl, invitedByName } = params;
-  const roleLabel = role === 'student' ? 'a student' : 'a coach';
-  return `${invitedByName} invited you to join ${orgName} on LetsMove as ${roleLabel}.
+  const bodyIntro = fillPlaceholders(params.template.bodyIntro, params);
+  return `${bodyIntro}
 
-Accept your invite: ${inviteUrl}
+Accept your invite: ${params.inviteUrl}
 
 This invite expires in 7 days. If you weren't expecting this, you can safely ignore this email.
 

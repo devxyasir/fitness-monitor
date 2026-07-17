@@ -15,6 +15,7 @@ import type {
   CreateInviteResponse,
   JwtPayload,
   OrganizationDto,
+  OrganizationSummaryDto,
   OrgInviteDto,
   UserDto,
 } from '@replaycoach/types';
@@ -39,6 +40,14 @@ export class OrganizationController {
   ): Promise<OrganizationDto> {
     const org = await this.orgService.create(dto, user);
     return this.orgService.toDto(org);
+  }
+
+  /** Platform-wide cross-org listing — platform_admin only (a studio_admin
+   * only ever sees their own org via GET /organizations/:id). */
+  @Get()
+  @Roles('platform_admin')
+  async listAll(): Promise<OrganizationSummaryDto[]> {
+    return this.orgService.listAll();
   }
 
   @Get(':id')
@@ -80,7 +89,7 @@ export class OrganizationController {
 
   @Post(':id/invite')
   @UseGuards(OrganizationGuard)
-  @Roles('platform_admin', 'studio_admin')
+  @Roles('platform_admin', 'studio_admin', 'coach')
   async invite(
     @Param('id') orgId: string,
     @CurrentUser() user: JwtPayload,
@@ -91,14 +100,14 @@ export class OrganizationController {
 
   @Get(':id/invites')
   @UseGuards(OrganizationGuard)
-  @Roles('platform_admin', 'studio_admin')
+  @Roles('platform_admin', 'studio_admin', 'coach')
   async listInvites(@Param('id') orgId: string, @CurrentUser() user: JwtPayload): Promise<OrgInviteDto[]> {
     return this.orgService.listInvites(orgId, user);
   }
 
   @Delete(':id/invites/:inviteId')
   @UseGuards(OrganizationGuard)
-  @Roles('platform_admin', 'studio_admin')
+  @Roles('platform_admin', 'studio_admin', 'coach')
   @HttpCode(HttpStatus.NO_CONTENT)
   async revokeInvite(
     @Param('id') orgId: string,
@@ -110,7 +119,7 @@ export class OrganizationController {
 
   @Post(':id/invites/:inviteId/resend')
   @UseGuards(OrganizationGuard)
-  @Roles('platform_admin', 'studio_admin')
+  @Roles('platform_admin', 'studio_admin', 'coach')
   async resendInvite(
     @Param('id') orgId: string,
     @Param('inviteId') inviteId: string,

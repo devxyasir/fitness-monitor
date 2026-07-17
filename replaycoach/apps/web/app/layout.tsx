@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import localFont from 'next/font/local';
 import AuthInitializer from './components/AuthInitializer';
 import { ToastContainer } from './components/ToastContainer';
+import { ThemeColorOverride } from './components/ThemeColorOverride';
 
 import './globals.css';
 
@@ -74,6 +75,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               'radial-gradient(600px circle at 15% 10%, rgb(var(--color-brand) / 0.08), transparent 60%), radial-gradient(700px circle at 85% 90%, rgb(var(--color-session) / 0.06), transparent 60%)',
           }}
         />
+        <ThemeColorOverride />
         <AuthInitializer>{children}</AuthInitializer>
         <ToastContainer />
       </body>

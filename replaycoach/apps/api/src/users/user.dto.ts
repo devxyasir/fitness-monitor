@@ -1,6 +1,9 @@
 import { Type } from 'class-transformer';
-import { IsEmail, IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { IsEmail, IsEnum, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
 import type { UserRole, UserStatus } from '@replaycoach/types';
+
+// Mirrors apps/api/src/auth/auth.dto.ts's PASSWORD_REGEX exactly.
+const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
 
 export class CreateUserDto {
   @IsEmail()
@@ -31,6 +34,19 @@ export class UpdateUserDto {
   @IsString()
   @MaxLength(512)
   avatarUrl?: string;
+}
+
+export class ChangePasswordDto {
+  @IsString()
+  currentPassword!: string;
+
+  @IsString()
+  @MinLength(8)
+  @MaxLength(128)
+  @Matches(PASSWORD_REGEX, {
+    message: 'Password must be at least 8 chars with uppercase, lowercase, and a digit',
+  })
+  newPassword!: string;
 }
 
 export class UpdateUserStatusDto {

@@ -23,6 +23,14 @@ export interface CreateOrganizationDto {
   name: string;
 }
 
+/** Platform-admin cross-org listing — an OrganizationDto plus roster
+ * counts, computed server-side rather than requiring a second round trip
+ * per org to list its members just to count them. */
+export interface OrganizationSummaryDto extends OrganizationDto {
+  coachCount: number;
+  studentCount: number;
+}
+
 export interface UpdateOrganizationDto {
   name?: string;
   settings?: OrgSettings;

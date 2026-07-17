@@ -11,6 +11,7 @@ import type {
   InvitePreviewDto,
   InviteToOrgDto,
   OrganizationDto,
+  OrganizationSummaryDto,
   OrgInviteDto,
   UpdateOrganizationDto,
   UserDto,
@@ -19,6 +20,11 @@ import { apiClient } from './api-client';
 
 async function createOrganization(dto: CreateOrganizationDto): Promise<OrganizationDto> {
   return apiClient.post('/organizations', dto);
+}
+
+/** platform_admin only — every organization on the deployment. */
+async function listAllOrganizations(): Promise<OrganizationSummaryDto[]> {
+  return apiClient.get('/organizations');
 }
 
 async function getOrganization(orgId: string): Promise<OrganizationDto> {
@@ -66,6 +72,7 @@ async function acceptInvite(token: string): Promise<UserDto> {
 
 export const orgClient = {
   createOrganization,
+  listAllOrganizations,
   getOrganization,
   updateOrganization,
   listMembers,

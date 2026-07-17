@@ -14,6 +14,7 @@ import type {
   InvitePreviewDto,
   JwtPayload,
   OrganizationDto,
+  OrganizationSummaryDto,
   OrgInviteDto,
   UserDto,
 } from '@replaycoach/types';
@@ -56,6 +57,22 @@ export class OrganizationService {
     if (actingUser.role === 'platform_admin') return;
     if (actingUser.role === 'studio_admin' && actingUser.orgId === orgId) return;
     throw new ForbiddenException('Only an organization admin can do this');
+  }
+
+  /** Invite creation follows the org hierarchy: an admin can invite anyone
+   * (coach or student) into their org; a plain coach can only invite
+   * students — matching "the admin brings on coaches, coaches bring on
+   * their own students" rather than requiring the admin to hand-invite
+   * every single student in the studio. */
+  private assertCanInvite(orgId: string, actingUser: JwtPayload, role: 'coach' | 'student'): void {
+    if (actingUser.role === 'platform_admin') return;
+    if (actingUser.role === 'studio_admin' && actingUser.orgId === orgId) return;
+    if (actingUser.role === 'coach' && actingUser.orgId === orgId && role === 'student') return;
+    throw new ForbiddenException(
+      actingUser.role === 'coach'
+        ? 'Coaches can invite students, but only an org admin can invite other coaches'
+        : 'You do not have permission to invite people to this organization',
+    );
   }
 
   /**
@@ -110,6 +127,38 @@ export class OrganizationService {
     return org;
   }
 
+  /** platform_admin-only cross-org view — every org plus its coach/student
+   * roster counts, computed in one grouped query rather than N+1 round
+   * trips per org. */
+  async listAll(): Promise<OrganizationSummaryDto[]> {
+    const orgs = await this.orgRepo.find({ order: { createdAt: 'DESC' } });
+    if (orgs.length === 0) return [];
+
+    const counts = await this.userRepo
+      .createQueryBuilder('user')
+      .select('user.orgId', 'orgId')
+      .addSelect('user.role', 'role')
+      .addSelect('COUNT(*)', 'count')
+      .where('user.orgId IS NOT NULL')
+      .groupBy('user.orgId')
+      .addGroupBy('user.role')
+      .getRawMany<{ orgId: string; role: string; count: string }>();
+
+    const countsByOrg = new Map<string, { coachCount: number; studentCount: number }>();
+    for (const row of counts) {
+      const entry = countsByOrg.get(row.orgId) ?? { coachCount: 0, studentCount: 0 };
+      if (row.role === 'coach' || row.role === 'studio_admin') entry.coachCount += Number(row.count);
+      if (row.role === 'student') entry.studentCount += Number(row.count);
+      countsByOrg.set(row.orgId, entry);
+    }
+
+    return orgs.map((org) => ({
+      ...this.toDto(org),
+      coachCount: countsByOrg.get(org.id)?.coachCount ?? 0,
+      studentCount: countsByOrg.get(org.id)?.studentCount ?? 0,
+    }));
+  }
+
   async update(id: string, dto: UpdateOrganizationDto, actingUser: JwtPayload): Promise<Organization> {
     this.assertOrgAdmin(id, actingUser);
     const org = await this.findById(id);
@@ -153,7 +202,7 @@ export class OrganizationService {
     actingUser: JwtPayload,
     dto: InviteToOrgDto,
   ): Promise<CreateInviteResponse> {
-    this.assertOrgAdmin(orgId, actingUser);
+    this.assertCanInvite(orgId, actingUser, dto.role);
     const org = await this.findById(orgId);
     if (dto.teamId) {
       await this.teamsService.getTeam(orgId, dto.teamId); // throws if not found in this org
@@ -182,16 +231,31 @@ export class OrganizationService {
     return { inviteToken: invite.inviteToken, expiresAt: invite.expiresAt.toISOString() };
   }
 
+  /** Org admins see/manage every invite in the org; a plain coach only
+   * sees/manages the ones they personally sent (their own students) — they
+   * were never allowed to invite coaches, so there's nothing else of
+   * theirs to hide, but other coaches' invites aren't their business. */
+  private assertCanViewOrManageInvite(orgId: string, actingUser: JwtPayload, invitedBy?: string): void {
+    if (actingUser.role === 'platform_admin') return;
+    if (actingUser.role === 'studio_admin' && actingUser.orgId === orgId) return;
+    if (actingUser.role === 'coach' && actingUser.orgId === orgId && invitedBy === actingUser.sub) return;
+    throw new ForbiddenException('You do not have permission to manage this invite');
+  }
+
   async listInvites(orgId: string, actingUser: JwtPayload): Promise<OrgInviteDto[]> {
-    this.assertOrgAdmin(orgId, actingUser);
-    const invites = await this.inviteRepo.find({ where: { orgId }, order: { createdAt: 'DESC' } });
+    this.assertCanViewOrManageInvite(orgId, actingUser, actingUser.sub);
+    const isOrgAdmin = actingUser.role === 'platform_admin' || actingUser.role === 'studio_admin';
+    const invites = await this.inviteRepo.find({
+      where: isOrgAdmin ? { orgId } : { orgId, invitedBy: actingUser.sub },
+      order: { createdAt: 'DESC' },
+    });
     return invites.map((i) => this.inviteToDto(i));
   }
 
   async revokeInvite(orgId: string, inviteId: string, actingUser: JwtPayload): Promise<void> {
-    this.assertOrgAdmin(orgId, actingUser);
     const invite = await this.inviteRepo.findOne({ where: { id: inviteId, orgId } });
     if (!invite) throw new NotFoundException('Invite not found');
+    this.assertCanViewOrManageInvite(orgId, actingUser, invite.invitedBy);
     await this.inviteRepo.delete({ id: inviteId });
   }
 
@@ -199,9 +263,9 @@ export class OrganizationService {
    * and re-sends the email — see EmailService for what happens if SMTP
    * isn't configured (link still works either way). */
   async resendInvite(orgId: string, inviteId: string, actingUser: JwtPayload): Promise<CreateInviteResponse> {
-    this.assertOrgAdmin(orgId, actingUser);
     const invite = await this.inviteRepo.findOne({ where: { id: inviteId, orgId } });
     if (!invite) throw new NotFoundException('Invite not found');
+    this.assertCanViewOrManageInvite(orgId, actingUser, invite.invitedBy);
     if (invite.usedAt) throw new BadRequestException('Invite has already been used');
 
     invite.inviteToken = uuidv4();

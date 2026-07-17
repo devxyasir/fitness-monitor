@@ -8,6 +8,7 @@ export * from './session';
 export * from './replay';
 export * from './pose';
 export * from './annotation-tracking';
+export * from './system-settings';
 
 // ── Legacy / scalar type aliases ─────────────────────────────────────────────
 export type { HealthResponse } from './health';

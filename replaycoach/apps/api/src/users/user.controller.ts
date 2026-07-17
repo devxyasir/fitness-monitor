@@ -18,7 +18,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { ListUsersQueryDto, UpdateUserDto, UpdateUserStatusDto } from './user.dto';
+import { ChangePasswordDto, ListUsersQueryDto, UpdateUserDto, UpdateUserStatusDto } from './user.dto';
 import { UserService } from './user.service';
 
 @Controller('users')
@@ -39,6 +39,12 @@ export class UserController {
   ): Promise<UserDto> {
     const user = await this.userService.update(payload.sub, dto);
     return this.userService.toDto(user);
+  }
+
+  @Patch('me/password')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async changePassword(@CurrentUser() payload: JwtPayload, @Body() dto: ChangePasswordDto): Promise<void> {
+    await this.userService.changePassword(payload.sub, dto.currentPassword, dto.newPassword);
   }
 
   /** Self-service account deactivation (soft delete). Logs the caller out

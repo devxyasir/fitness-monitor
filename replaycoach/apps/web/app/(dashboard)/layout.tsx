@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
-import { LayoutGrid, CalendarDays, Film, Users, Settings, Menu, X, LogOut, Building2 } from 'lucide-react';
+import { LayoutGrid, CalendarDays, Film, Users, Settings, Menu, X, LogOut, Building2, ShieldCheck, SlidersHorizontal } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth-store';
 import { authClient } from '../../lib/auth-client';
 import { ThemeToggle } from '../components/ThemeToggle';
@@ -132,7 +132,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
       <div className="h-px bg-hairline my-3 mx-2" />
 
-      {(user?.role === 'studio_admin' || user?.role === 'platform_admin') && (
+      {(user?.role === 'studio_admin' || user?.role === 'platform_admin' || user?.role === 'coach') && (
         <Link
           href="/coach/organization"
           onClick={onNavigate}
@@ -146,6 +146,37 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           <Building2 className="w-4 h-4" />
           <span>Organization</span>
         </Link>
+      )}
+
+      {user?.role === 'platform_admin' && (
+        <>
+          <Link
+            href="/admin"
+            onClick={onNavigate}
+            aria-current={pathname === '/admin' ? 'page' : undefined}
+            className={`flex items-center gap-2.5 px-2.5 py-2 rounded-sm text-sm transition-colors border-l-[3px] ${
+              pathname === '/admin'
+                ? 'bg-panel-2 text-ink font-medium border-brand pl-[10px]'
+                : 'text-ink-muted hover:bg-panel-2 hover:text-ink border-transparent'
+            }`}
+          >
+            <ShieldCheck className="w-4 h-4" />
+            <span>All organizations</span>
+          </Link>
+          <Link
+            href="/admin/settings"
+            onClick={onNavigate}
+            aria-current={pathname === '/admin/settings' ? 'page' : undefined}
+            className={`flex items-center gap-2.5 px-2.5 py-2 rounded-sm text-sm transition-colors border-l-[3px] ${
+              pathname === '/admin/settings'
+                ? 'bg-panel-2 text-ink font-medium border-brand pl-[10px]'
+                : 'text-ink-muted hover:bg-panel-2 hover:text-ink border-transparent'
+            }`}
+          >
+            <SlidersHorizontal className="w-4 h-4" />
+            <span>Platform settings</span>
+          </Link>
+        </>
       )}
 
       <Link
