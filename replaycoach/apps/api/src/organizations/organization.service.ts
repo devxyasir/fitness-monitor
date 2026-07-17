@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
 import type {
@@ -16,6 +16,8 @@ import type {
   OrganizationDto,
   OrganizationSummaryDto,
   OrgInviteDto,
+  SendOrgMessageDto,
+  SendOrgMessageResult,
   UserDto,
 } from '@replaycoach/types';
 
@@ -395,5 +397,56 @@ export class OrganizationService {
       createdBy: org.createdBy,
       createdAt: org.createdAt.toISOString(),
     };
+  }
+
+  // ─── Org/coach → member email ────────────────────────────────────────
+
+  /** Org admins can message anyone in their org (coach or student); a plain
+   * coach can only message students. Formatting (subject suffix, sign-off)
+   * is fixed centrally in EmailService/org-message-email.ts — callers only
+   * ever supply the raw subject/message a human typed. */
+  async sendMessage(orgId: string, actingUser: JwtPayload, dto: SendOrgMessageDto): Promise<SendOrgMessageResult> {
+    if (actingUser.role === 'student') {
+      throw new ForbiddenException('Students cannot send messages.');
+    }
+    if (actingUser.role !== 'platform_admin' && actingUser.orgId !== orgId) {
+      throw new ForbiddenException('You do not have permission to message this organization.');
+    }
+    const isOrgSender = actingUser.role === 'studio_admin' || actingUser.role === 'platform_admin';
+    const org = await this.findById(orgId);
+    const sender = await this.userService.findById(actingUser.sub);
+
+    const recipients = await this.userRepo.find({ where: { id: In(dto.recipientIds), orgId } });
+    const foundIds = new Set(recipients.map((r) => r.id));
+
+    const failed: SendOrgMessageResult['failed'] = dto.recipientIds
+      .filter((id) => !foundIds.has(id))
+      .map((id) => ({ userId: id, reason: 'Not a member of this organization' }));
+
+    const eligible = recipients.filter((r) => {
+      if (!isOrgSender && r.role !== 'student') {
+        failed.push({ userId: r.id, reason: 'Coaches can only message students' });
+        return false;
+      }
+      return true;
+    });
+
+    let sent = 0;
+    for (const recipient of eligible) {
+      try {
+        await this.emailService.sendOrgMessage(recipient.email, {
+          orgName: org.name,
+          senderKind: isOrgSender ? 'organization' : 'coach',
+          senderName: sender.displayName,
+          subject: dto.subject,
+          message: dto.message,
+        });
+        sent += 1;
+      } catch (err) {
+        failed.push({ userId: recipient.id, reason: err instanceof Error ? err.message : 'Delivery failed' });
+      }
+    }
+
+    return { sent, failed };
   }
 }

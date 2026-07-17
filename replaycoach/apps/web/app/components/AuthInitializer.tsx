@@ -37,17 +37,21 @@ export default function AuthInitializer({ children }: { children: React.ReactNod
   useEffect(() => {
     if (initializing) return;
 
-    // /invite/* is public (a visitor with no account yet must be able to see
-    // it) but, unlike /login and /register, an already-authenticated visitor
-    // stays on it too — accepting an invite while logged in is the whole
-    // point of that page, not something to redirect away from.
+    // /invite/* and / (the landing page) are public — a visitor with no
+    // account yet must be able to see them — but, unlike /login and
+    // /register, an already-authenticated visitor stays on them too. Forcing
+    // a redirect away from "/" the instant a token exists raced the
+    // session-restore render (a slow/failed refresh could leave the visitor
+    // stuck on the logged-out header instead of retrying) — the landing
+    // page's header just reflects current auth state reactively instead.
     const isInviteRoute = pathname?.startsWith('/invite/') ?? false;
-    const isPublicRoute = pathname === '/login' || pathname === '/register' || pathname === '/' || isInviteRoute;
+    const staysVisibleWhenAuthed = pathname === '/' || isInviteRoute;
+    const isPublicRoute = pathname === '/login' || pathname === '/register' || staysVisibleWhenAuthed;
     const isOrgOnboardingRoute = pathname === '/onboarding/organization';
 
     if (!accessToken && !isPublicRoute) {
       router.push(`/login?redirectTo=${encodeURIComponent(pathname)}`);
-    } else if (accessToken && isPublicRoute && !isInviteRoute) {
+    } else if (accessToken && isPublicRoute && !staysVisibleWhenAuthed) {
       if (user?.role === 'student') {
         router.push('/student/sessions');
       } else {
@@ -56,7 +60,7 @@ export default function AuthInitializer({ children }: { children: React.ReactNod
     } else if (
       accessToken &&
       !isOrgOnboardingRoute &&
-      !isInviteRoute &&
+      !staysVisibleWhenAuthed &&
       (user?.role === 'coach' || user?.role === 'studio_admin') &&
       user?.orgId === null
     ) {

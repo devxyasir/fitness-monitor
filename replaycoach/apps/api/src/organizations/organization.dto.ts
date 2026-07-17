@@ -1,4 +1,4 @@
-import { IsEmail, IsEnum, IsObject, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, ArrayNotEmpty, IsArray, IsEmail, IsEnum, IsObject, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 import { IsAllowedEmailProvider } from '../common/validators/allowed-email-provider.validator';
 
 export class CreateOrganizationDto {
@@ -35,4 +35,23 @@ export class InviteToOrgDto {
   @IsOptional()
   @IsUUID()
   teamId?: string | null;
+}
+
+export class SendOrgMessageDto {
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(200)
+  @IsUUID('4', { each: true })
+  recipientIds!: string[];
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(200)
+  subject!: string;
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(10000)
+  message!: string;
 }

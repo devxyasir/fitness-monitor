@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
+import type { Transporter } from 'nodemailer';
 
 import { SystemSettingsService } from '../system-settings/system-settings.service';
 import {
@@ -8,6 +9,12 @@ import {
   renderInviteEmailText,
   type InviteEmailParams,
 } from './templates/invite-email';
+import {
+  formatOrgMessageSubject,
+  formatOrgMessageText,
+  renderOrgMessageEmailHtml,
+  type OrgMessageEmailParams,
+} from './templates/org-message-email';
 
 /**
  * SMTP config is DB-backed (SystemSettingsService, admin-editable) with env
@@ -23,28 +30,34 @@ export class EmailService {
 
   constructor(private readonly settingsService: SystemSettingsService) {}
 
+  private async getTransporter(): Promise<{ transporter: Transporter; from: string } | null> {
+    const smtp = await this.settingsService.getSmtpForSending();
+    if (!smtp.host || !smtp.user || !smtp.password) return null;
+    const transporter = nodemailer.createTransport({
+      host: smtp.host,
+      port: smtp.port ?? 587,
+      secure: smtp.secure ?? false,
+      auth: { user: smtp.user, pass: smtp.password },
+    });
+    return { transporter, from: smtp.from ?? 'LetsMove <no-reply@morangoai.net>' };
+  }
+
   async sendInviteEmail(to: string, params: Omit<InviteEmailParams, 'template'>): Promise<void> {
-    const [smtp, emailTemplates] = await Promise.all([
-      this.settingsService.getSmtpForSending(),
+    const [conn, emailTemplates] = await Promise.all([
+      this.getTransporter(),
       this.settingsService.getEmailTemplates(),
     ]);
     const fullParams: InviteEmailParams = { ...params, template: emailTemplates.invite };
 
-    if (!smtp.host || !smtp.user || !smtp.password) {
+    if (!conn) {
       this.logger.warn('SMTP not configured — emails will be logged, not sent.');
       this.logger.log(`[email skipped, no SMTP configured] Invite for ${to}: ${params.inviteUrl}`);
       return;
     }
 
     try {
-      const transporter = nodemailer.createTransport({
-        host: smtp.host,
-        port: smtp.port ?? 587,
-        secure: smtp.secure ?? false,
-        auth: { user: smtp.user, pass: smtp.password },
-      });
-      await transporter.sendMail({
-        from: smtp.from,
+      await conn.transporter.sendMail({
+        from: conn.from,
         to,
         subject: renderInviteEmailSubject(fullParams),
         html: renderInviteEmailHtml(fullParams),
@@ -57,5 +70,22 @@ export class EmailService {
       // waiting on.
       this.logger.error(`Failed to send invite email to ${to}`, err instanceof Error ? err.stack : err);
     }
+  }
+
+  /** Unlike sendInviteEmail, this throws on failure — the org-message
+   * composer needs to report per-recipient delivery status back to the
+   * sender, not silently swallow it (see OrganizationService.sendMessage). */
+  async sendOrgMessage(to: string, params: OrgMessageEmailParams): Promise<void> {
+    const conn = await this.getTransporter();
+    if (!conn) {
+      throw new Error('Email delivery is not configured for this organization yet.');
+    }
+    await conn.transporter.sendMail({
+      from: conn.from,
+      to,
+      subject: formatOrgMessageSubject(params),
+      html: renderOrgMessageEmailHtml(params),
+      text: formatOrgMessageText(params),
+    });
   }
 }

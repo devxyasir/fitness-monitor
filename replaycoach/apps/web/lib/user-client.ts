@@ -11,4 +11,10 @@ async function changePassword(currentPassword: string, newPassword: string): Pro
   return apiClient.patch('/users/me/password', { currentPassword, newPassword });
 }
 
-export const userClient = { updateProfile, changePassword };
+async function uploadAvatar(file: File): Promise<UserDto> {
+  const formData = new FormData();
+  formData.append('file', file);
+  return apiClient.postForm('/users/me/avatar', formData);
+}
+
+export const userClient = { updateProfile, changePassword, uploadAvatar };

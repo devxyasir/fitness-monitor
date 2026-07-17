@@ -8,9 +8,13 @@ import {
   HttpStatus,
   Param,
   Patch,
+  Post,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 import type { JwtPayload, UserDto, UserListResponse } from '@replaycoach/types';
 
@@ -20,11 +24,17 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ChangePasswordDto, ListUsersQueryDto, UpdateUserDto, UpdateUserStatusDto } from './user.dto';
 import { UserService } from './user.service';
+import { AvatarService } from './avatar.service';
+
+const MAX_AVATAR_UPLOAD_BYTES = 8 * 1024 * 1024;
 
 @Controller('users')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class UserController {
-  constructor(private readonly userService: UserService) {}
+  constructor(
+    private readonly userService: UserService,
+    private readonly avatarService: AvatarService,
+  ) {}
 
   @Get('me')
   async getMe(@CurrentUser() payload: JwtPayload): Promise<UserDto> {
@@ -38,6 +48,23 @@ export class UserController {
     @Body() dto: UpdateUserDto,
   ): Promise<UserDto> {
     const user = await this.userService.update(payload.sub, dto);
+    return this.userService.toDto(user);
+  }
+
+  /** Compresses/resizes the upload (see AvatarService) and sets it as the
+   * caller's avatar. Cleans up the previously-uploaded file, if any, so
+   * repeated re-uploads don't leak disk space. */
+  @Post('me/avatar')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_AVATAR_UPLOAD_BYTES } }))
+  async uploadAvatar(
+    @CurrentUser() payload: JwtPayload,
+    @UploadedFile() file: Express.Multer.File | undefined,
+  ): Promise<UserDto> {
+    if (!file) throw new ForbiddenException('No file uploaded');
+    const avatarUrl = await this.avatarService.processAndSave(payload.sub, file);
+    // UserService.update() cleans up the previous avatar file, if any, as
+    // part of the write — no separate cleanup call needed here.
+    const user = await this.userService.update(payload.sub, { avatarUrl });
     return this.userService.toDto(user);
   }
 

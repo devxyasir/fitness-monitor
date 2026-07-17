@@ -12,6 +12,7 @@ import type { JwtPayload, UserDto, UserListResponse, UserStatus } from '@replayc
 
 import { User } from './user.entity';
 import type { CreateUserDto, UpdateUserDto } from './user.dto';
+import { AvatarService } from './avatar.service';
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 100;
@@ -21,6 +22,7 @@ export class UserService {
   constructor(
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
+    private readonly avatarService: AvatarService,
   ) {}
 
   /** `orgId`/`role` overrides let AuthService assign both from a redeemed
@@ -57,7 +59,13 @@ export class UserService {
   async update(id: string, dto: UpdateUserDto): Promise<User> {
     const user = await this.findById(id);
     if (dto.displayName !== undefined) user.displayName = dto.displayName;
-    if (dto.avatarUrl !== undefined) user.avatarUrl = dto.avatarUrl;
+    if (dto.avatarUrl !== undefined && dto.avatarUrl !== user.avatarUrl) {
+      // Switching away from a previously-uploaded file (to an icon, emoji,
+      // pasted URL, or a fresh upload) — clean up the now-orphaned one.
+      // no-ops for anything that wasn't actually our own upload.
+      void this.avatarService.deleteIfOwned(user.avatarUrl);
+      user.avatarUrl = dto.avatarUrl;
+    }
     return this.userRepo.save(user);
   }
 

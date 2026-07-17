@@ -31,6 +31,23 @@ export interface OrganizationSummaryDto extends OrganizationDto {
   studentCount: number;
 }
 
+// ─── Org/coach → member email ───────────────────────────────────────────
+
+/** A studio_admin/platform_admin can message coaches or students in their
+ * org; a plain coach can only message students. Subject/body formatting
+ * (subject suffix, sign-off) is applied server-side — see EmailService — so
+ * every message looks consistent regardless of who sends it. */
+export interface SendOrgMessageDto {
+  recipientIds: string[];
+  subject: string;
+  message: string;
+}
+
+export interface SendOrgMessageResult {
+  sent: number;
+  failed: { userId: string; reason: string }[];
+}
+
 export interface UpdateOrganizationDto {
   name?: string;
   settings?: OrgSettings;

@@ -1,3 +1,4 @@
+import * as path from 'path';
 import { NestFactory, Reflector } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
@@ -46,6 +47,13 @@ async function bootstrap(): Promise<void> {
 
   // ── Global prefix ─────────────────────────────────────────────────────────
   app.setGlobalPrefix('api/v1');
+
+  // ── Avatar static files ───────────────────────────────────────────────────
+  // Unlike reference-video media (private, HMAC-signed URLs), avatars are
+  // meant to be publicly visible wherever the user's name appears — same
+  // threat model as any public avatar host (Gravatar, Discord, etc.), so a
+  // plain static route is appropriate; no auth/signing needed to view one.
+  app.useStaticAssets(path.join(process.cwd(), 'uploads', 'avatars'), { prefix: '/api/v1/avatars/' });
 
   // ── DTO validation (12_Backend_API_Design.md §6) ─────────────────────────
   app.useGlobalPipes(

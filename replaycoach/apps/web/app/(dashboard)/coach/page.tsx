@@ -1,8 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { CalendarDays, Film } from 'lucide-react';
+import type { CreateSessionDto, SessionDto } from '@replaycoach/types';
 import { apiClient } from '../../../lib/api-client';
+import { toast } from '../../../stores/toast-store';
 import { Sparkline } from '../../components/ui/Sparkline';
 import { Pill } from '../../components/ui/Pill';
 import { Card } from '../../components/ui/Card';
@@ -40,6 +43,8 @@ interface CoachOverviewResponse {
 }
 
 export default function CoachOverviewPage() {
+  const router = useRouter();
+  const [startingRoom, setStartingRoom] = useState(false);
   const [stats, setStats] = useState<CoachStats | null>(null);
   const [liveSessions, setLiveSessions] = useState<Session[]>([]);
   const [recentClips, setRecentClips] = useState<Clip[]>([]);
@@ -52,6 +57,18 @@ export default function CoachOverviewPage() {
   useEffect(() => {
     fetchOverview();
   }, [range]);
+
+  const startInstantRoom = async () => {
+    setStartingRoom(true);
+    try {
+      const dto: CreateSessionDto = { scheduledAt: new Date().toISOString(), isInstant: true, accessType: 'public' };
+      const session = await apiClient.post<CreateSessionDto, SessionDto>('/sessions', dto);
+      router.push(`/session/${session.id}`);
+    } catch (err: unknown) {
+      toast.error((err as Error).message ?? 'Could not start a room.');
+      setStartingRoom(false);
+    }
+  };
 
   const fetchOverview = async () => {
     try {
@@ -120,10 +137,10 @@ export default function CoachOverviewPage() {
             </div>
           </div>
 
-          {/* Form trends */}
+          {/* Movement trends */}
           <div className="bg-panel border border-hairline rounded-md p-5">
             <div className="flex justify-between items-center mb-3.5">
-              <h2 className="font-display text-display-s">Student form trends</h2>
+              <h2 className="font-display text-display-s">Student movement trends</h2>
               <span className="font-mono text-[0.6875rem] text-ink-faint">avg pose confidence %</span>
             </div>
             <div className="bg-panel-2 rounded-sm p-4 min-h-32 flex items-center">
@@ -157,7 +174,9 @@ export default function CoachOverviewPage() {
                 ))}
               </div>
             )}
-            <Button variant="ghost" className="mt-3.5 w-full">Start instant room</Button>
+            <Button variant="ghost" className="mt-3.5 w-full" onClick={startInstantRoom} loading={startingRoom} disabled={startingRoom}>
+              {startingRoom ? 'Starting…' : 'Start instant room'}
+            </Button>
           </div>
 
           {/* Recent clips */}

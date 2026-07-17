@@ -10,6 +10,7 @@ import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { ErrorBlock } from '../../components/ui/StateBlocks';
+import { AvatarPicker } from '../../components/AvatarPicker';
 
 const PASSWORD_RULES = [
   { label: 'At least 8 characters', test: (p: string) => p.length >= 8 },
@@ -27,6 +28,12 @@ export default function SettingsPage() {
       <p className="text-ink-muted text-sm mb-8">Manage your profile and account security.</p>
 
       <div className="flex flex-col gap-6">
+        {user && (
+          <Card>
+            <h3 className="font-display text-display-s text-ink mb-4">Avatar</h3>
+            <AvatarPicker user={user} onUpdated={updateUser} />
+          </Card>
+        )}
         <ProfileCard displayName={user?.displayName ?? ''} email={user?.email ?? ''} onUpdated={updateUser} />
         <PasswordCard />
         <AccountCard role={user?.role} />

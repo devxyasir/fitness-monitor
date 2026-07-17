@@ -17,6 +17,7 @@ import type {
   OrganizationDto,
   OrganizationSummaryDto,
   OrgInviteDto,
+  SendOrgMessageResult,
   UserDto,
 } from '@replaycoach/types';
 
@@ -24,7 +25,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { CreateOrganizationDto, InviteToOrgDto, UpdateOrganizationDto } from './organization.dto';
+import { CreateOrganizationDto, InviteToOrgDto, SendOrgMessageDto, UpdateOrganizationDto } from './organization.dto';
 import { OrganizationService } from './organization.service';
 import { OrganizationGuard } from './organization.guard';
 
@@ -126,5 +127,21 @@ export class OrganizationController {
     @CurrentUser() user: JwtPayload,
   ): Promise<CreateInviteResponse> {
     return this.orgService.resendInvite(orgId, inviteId, user);
+  }
+
+  /** Org admins message coaches or students; a plain coach messages only
+   * students — see OrganizationService.sendMessage for the fine-grained
+   * per-recipient authorization (why this doesn't just @Roles-gate coach
+   * out entirely: the role check alone can't tell "coach messaging a
+   * coach" apart from "coach messaging a student"). */
+  @Post(':id/messages')
+  @UseGuards(OrganizationGuard)
+  @Roles('platform_admin', 'studio_admin', 'coach')
+  async sendMessage(
+    @Param('id') orgId: string,
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: SendOrgMessageDto,
+  ): Promise<SendOrgMessageResult> {
+    return this.orgService.sendMessage(orgId, user, dto);
   }
 }

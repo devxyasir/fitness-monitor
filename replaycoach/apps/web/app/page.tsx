@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useAuthStore } from '../stores/auth-store';
 import DemoVideoModal from './components/DemoVideoModal';
 import { ThemeToggle } from './components/ThemeToggle';
@@ -18,19 +18,15 @@ import {
   BandPhoto,
   DancerSkeletonOverlay,
 } from './components/LandingVisuals';
+import { Plus } from 'lucide-react';
 import { BroadcastIcon, RewindIcon, AnnotateIcon, TrackingIcon, SquadIcon } from './components/icons';
 import { Button } from './components/ui/Button';
+import { UserMenu } from './components/UserMenu';
 
 export default function LandingPage() {
   const { user } = useAuthStore();
-  const [mounted, setMounted] = useState(false);
   const [demoOpen, setDemoOpen] = useState(false);
-
-  useEffect(() => { setMounted(true); }, []);
-
-  if (mounted && user) {
-    return null; // Will redirect via dashboard
-  }
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
 
   return (
     <div className="min-h-screen bg-canvas text-ink relative overflow-hidden">
@@ -42,17 +38,25 @@ export default function LandingPage() {
             <span className="font-display text-display-s">LetsMove</span>
           </div>
           <nav className="hidden md:flex items-center gap-7">
-            <a href="#features" className="text-ink-muted text-sm hover:text-ink transition-colors">Product</a>
+            <a href="#product" className="text-ink-muted text-sm hover:text-ink transition-colors">Product</a>
             <a href="#how" className="text-ink-muted text-sm hover:text-ink transition-colors">How It Works</a>
             <a href="#for-dancers" className="text-ink-muted text-sm hover:text-ink transition-colors">For Dancers</a>
             <a href="#for-coaches" className="text-ink-muted text-sm hover:text-ink transition-colors">For Coaches</a>
+            <a href="#features" className="text-ink-muted text-sm hover:text-ink transition-colors">Features</a>
+            <a href="#faq" className="text-ink-muted text-sm hover:text-ink transition-colors">FAQs</a>
           </nav>
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            <Link href="/login" className="text-sm font-semibold text-ink border border-hairline rounded-full px-5 py-2.5 hover:bg-panel-2 transition-colors">
-              Log in
-            </Link>
-            <Button href="/register" size="md">Join the Beta</Button>
+            {user ? (
+              <UserMenu showDashboardLink />
+            ) : (
+              <>
+                <Link href="/login" className="text-sm font-semibold text-ink border border-hairline rounded-full px-5 py-2.5 hover:bg-panel-2 transition-colors">
+                  Log in
+                </Link>
+                <Button href="/register" size="md">Join the Beta</Button>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -99,7 +103,99 @@ export default function LandingPage() {
         </Reveal>
       </section>
 
-      {/* Editorial — the page's single largest photographic moment */}
+      {/* How it works */}
+      <section id="how" className="relative max-w-content mx-auto px-6 lg:px-10 py-20 border-t border-hairline">
+        <Reveal>
+          <h2 className="font-display text-display-l text-ink mb-4">From movement to meaningful feedback.</h2>
+        </Reveal>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-10">
+          {howItWorks.map((s, i) => (
+            <Reveal key={s.step} delayMs={i * 80}>
+              <div>
+                <div className="aspect-video flex items-center">{s.visual}</div>
+                <div className="flex items-center gap-2.5 mt-5 mb-2.5">
+                  {s.icon}
+                  <span className="font-mono text-xl text-brand">{s.step}</span>
+                </div>
+                <h3 className="font-display text-display-s text-ink mb-1.5">{s.title}</h3>
+                <p className="text-ink-muted text-sm leading-relaxed">{s.body}</p>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+      </section>
+
+      {/* Feature bands — Movement tracking, Live Review, Rooms */}
+      <section id="product" className="relative max-w-content mx-auto px-6 lg:px-10 py-24 space-y-24">
+        {/* Movement Tracking (session, photo left) */}
+        <Reveal>
+          <div className="flex flex-col lg:flex-row items-center gap-10 lg:gap-16">
+            <div className="relative w-full lg:w-[45%] aspect-[4/5] rounded-lg overflow-hidden shadow-xl hover:-translate-y-1 hover:shadow-xl transition-all duration-200">
+              <BandPhoto
+                src="/images/landing/signature-athlete.jpg"
+                alt="A dancer mid-movement with body tracking overlay"
+                className="absolute inset-0 w-full h-full"
+              />
+              <DancerSkeletonOverlay className="absolute inset-0 w-full h-full" />
+            </div>
+            <div className="flex-1">
+              <TrackingIcon className="w-8 h-8 text-session mb-4" />
+              <span className="font-mono text-xs text-session uppercase tracking-widest">Movement Tracking</span>
+              <h3 className="font-display text-display-m text-ink mt-3 mb-3">Understand more than the final pose.</h3>
+              <p className="text-ink-muted text-body-m max-w-md">
+                Dance is built through transitions, timing, balance and control. Movement tracking helps you study what happened between positions—not only where the movement started and ended.
+              </p>
+              <JointReadout />
+            </div>
+          </div>
+        </Reveal>
+
+        {/* Frame-by-Frame Review (replay, photo right) */}
+        <Reveal>
+          <div className="flex flex-col lg:flex-row-reverse items-center gap-10 lg:gap-16">
+            <div className="relative w-full lg:w-[55%] aspect-video rounded-lg overflow-hidden shadow-xl hover:-translate-y-1 hover:shadow-xl transition-all duration-200">
+              <BandPhoto
+                src="/images/landing/replay-scrub.jpg"
+                alt="Frame-by-frame review of dance transitions"
+                className="absolute inset-0 w-full h-full"
+              />
+              <div className="absolute top-6 right-6 w-60 rounded-md overflow-hidden border border-hairline shadow-lg">
+                <ReplayScrubberMini />
+              </div>
+            </div>
+            <div className="flex-1">
+              <RewindIcon className="w-8 h-8 text-replay mb-4" />
+              <span className="font-mono text-xs text-replay uppercase tracking-widest">Frame-by-Frame</span>
+              <h3 className="font-display text-display-m text-ink mt-3 mb-3">Slow down fast combinations</h3>
+              <p className="text-ink-muted text-body-m max-w-md">Slow down important transitions and technical details. The last 30 seconds are always buffered — review the instant something needs attention.</p>
+            </div>
+          </div>
+        </Reveal>
+
+        {/* Live Dance Room (analytics, photo left) */}
+        <Reveal>
+          <div className="flex flex-col lg:flex-row items-center gap-10 lg:gap-16">
+            <div className="relative w-full lg:w-[50%] aspect-[4/3] rounded-lg overflow-hidden shadow-xl hover:-translate-y-1 hover:shadow-xl transition-all duration-200">
+              <BandPhoto
+                src="/images/landing/rooms-squad.jpg"
+                alt="Dancers and choreographer reviewing performance together"
+                className="absolute inset-0 w-full h-full"
+              />
+              <div className="absolute bottom-6 right-6 bg-panel/90 backdrop-blur-glass border border-hairline rounded-md shadow-lg p-3">
+                <RoomsGridMini className="w-32" />
+              </div>
+            </div>
+            <div className="flex-1">
+              <SquadIcon className="w-8 h-8 text-analytics mb-4" />
+              <span className="font-mono text-xs text-analytics uppercase tracking-widest">Live Dance Room</span>
+              <h3 className="font-display text-display-m text-ink mt-3 mb-3">Review movement as it happens</h3>
+              <p className="text-ink-muted text-body-m max-w-md">Review performances with dancers, coaches and choreographers in real time. One room, one cued take, everyone watching the same moment at once.</p>
+            </div>
+          </div>
+        </Reveal>
+      </section>
+
+      {/* Live review — the page's single largest photographic moment */}
       <section className="relative w-full py-16 lg:py-24">
         <Reveal>
           <div className="relative w-full aspect-[4/5] lg:aspect-[21/9] overflow-hidden rounded-lg lg:rounded-none">
@@ -169,100 +265,8 @@ export default function LandingPage() {
 
       <DemoVideoModal open={demoOpen} onClose={() => setDemoOpen(false)} />
 
-      {/* How it works */}
-      <section id="how" className="relative max-w-content mx-auto px-6 lg:px-10 py-20 border-t border-hairline">
-        <Reveal>
-          <h2 className="font-display text-display-l text-ink mb-4">From movement to meaningful feedback.</h2>
-        </Reveal>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-10">
-          {howItWorks.map((s, i) => (
-            <Reveal key={s.step} delayMs={i * 80}>
-              <div>
-                <div className="aspect-video flex items-center">{s.visual}</div>
-                <div className="flex items-center gap-2.5 mt-5 mb-2.5">
-                  {s.icon}
-                  <span className="font-mono text-xl text-brand">{s.step}</span>
-                </div>
-                <h3 className="font-display text-display-s text-ink mb-1.5">{s.title}</h3>
-                <p className="text-ink-muted text-sm leading-relaxed">{s.body}</p>
-              </div>
-            </Reveal>
-          ))}
-        </div>
-      </section>
-
-      {/* Feature bands — Movement tracking, Live Review, Rooms */}
-      <section id="features" className="relative max-w-content mx-auto px-6 lg:px-10 py-24 space-y-24">
-        {/* Movement Tracking (session, photo left) */}
-        <Reveal>
-          <div className="flex flex-col lg:flex-row items-center gap-10 lg:gap-16">
-            <div className="relative w-full lg:w-[45%] aspect-[4/5] rounded-lg overflow-hidden shadow-xl hover:-translate-y-1 hover:shadow-xl transition-all duration-200">
-              <BandPhoto
-                src="/images/landing/signature-athlete.jpg"
-                alt="A dancer mid-movement with body tracking overlay"
-                className="absolute inset-0 w-full h-full"
-              />
-              <DancerSkeletonOverlay className="absolute inset-0 w-full h-full" />
-            </div>
-            <div className="flex-1">
-              <TrackingIcon className="w-8 h-8 text-session mb-4" />
-              <span className="font-mono text-xs text-session uppercase tracking-widest">Movement Tracking</span>
-              <h3 className="font-display text-display-m text-ink mt-3 mb-3">Understand more than the final pose.</h3>
-              <p className="text-ink-muted text-body-m max-w-md">
-                Dance is built through transitions, timing, balance and control. Movement tracking helps you study what happened between positions—not only where the movement started and ended.
-              </p>
-              <JointReadout />
-            </div>
-          </div>
-        </Reveal>
-
-        {/* Frame-by-Frame Review (replay, photo right) */}
-        <Reveal>
-          <div className="flex flex-col lg:flex-row-reverse items-center gap-10 lg:gap-16">
-            <div className="relative w-full lg:w-[55%] aspect-video rounded-lg overflow-hidden shadow-xl hover:-translate-y-1 hover:shadow-xl transition-all duration-200">
-              <BandPhoto
-                src="/images/landing/replay-scrub.jpg"
-                alt="Frame-by-frame review of dance transitions"
-                className="absolute inset-0 w-full h-full"
-              />
-              <div className="absolute top-6 right-6 w-60 rounded-md overflow-hidden border border-hairline shadow-lg">
-                <ReplayScrubberMini />
-              </div>
-            </div>
-            <div className="flex-1">
-              <RewindIcon className="w-8 h-8 text-replay mb-4" />
-              <span className="font-mono text-xs text-replay uppercase tracking-widest">Frame-by-Frame</span>
-              <h3 className="font-display text-display-m text-ink mt-3 mb-3">Slow down fast combinations</h3>
-              <p className="text-ink-muted text-body-m max-w-md">Slow down important transitions and technical details. The last 30 seconds are always buffered — review the instant something needs attention.</p>
-            </div>
-          </div>
-        </Reveal>
-
-        {/* Live Dance Room (analytics, photo left) */}
-        <Reveal>
-          <div className="flex flex-col lg:flex-row items-center gap-10 lg:gap-16">
-            <div className="relative w-full lg:w-[50%] aspect-[4/3] rounded-lg overflow-hidden shadow-xl hover:-translate-y-1 hover:shadow-xl transition-all duration-200">
-              <BandPhoto
-                src="/images/landing/rooms-squad.jpg"
-                alt="Dancers and choreographer reviewing performance together"
-                className="absolute inset-0 w-full h-full"
-              />
-              <div className="absolute bottom-6 right-6 bg-panel/90 backdrop-blur-glass border border-hairline rounded-md shadow-lg p-3">
-                <RoomsGridMini className="w-32" />
-              </div>
-            </div>
-            <div className="flex-1">
-              <SquadIcon className="w-8 h-8 text-analytics mb-4" />
-              <span className="font-mono text-xs text-analytics uppercase tracking-widest">Live Dance Room</span>
-              <h3 className="font-display text-display-m text-ink mt-3 mb-3">Review movement as it happens</h3>
-              <p className="text-ink-muted text-body-m max-w-md">Review performances with dancers, coaches and choreographers in real time. One room, one cued take, everyone watching the same moment at once.</p>
-            </div>
-          </div>
-        </Reveal>
-      </section>
-
       {/* Everything needed to study movement clearly */}
-      <section className="relative max-w-content mx-auto px-6 lg:px-10 py-20 border-t border-hairline">
+      <section id="features" className="relative max-w-content mx-auto px-6 lg:px-10 py-20 border-t border-hairline">
         <Reveal>
           <h2 className="font-display text-display-l text-ink mb-10">Everything needed to study movement clearly.</h2>
         </Reveal>
@@ -326,6 +330,66 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Comparison — Compare Takes */}
+      <section className="relative max-w-content mx-auto px-6 lg:px-10 py-20 border-t border-hairline">
+        <Reveal>
+          <span className="font-mono text-xs tracking-[0.14em] text-brand uppercase mb-4 block">Compare Takes</span>
+          <h2 className="font-display text-display-l text-ink mb-5 max-w-2xl text-balance">
+            See what changed—not just what felt different.
+          </h2>
+          <p className="text-ink-muted text-body-m max-w-lg mb-8">
+            Place two takes side by side to compare timing, positioning, energy and movement pathways. Turn subtle differences into visible information.
+          </p>
+        </Reveal>
+        <Reveal delayMs={80}>
+          <div className="flex flex-wrap gap-2.5">
+            {['Take 01', 'Take 02', 'Reference Performance', 'Compare Movement', 'Sync Playback', 'Add Coach Note'].map((label) => (
+              <span key={label} className="font-mono text-xs text-ink-muted bg-panel-2 border border-hairline rounded-full px-3.5 py-1.5">
+                {label}
+              </span>
+            ))}
+          </div>
+        </Reveal>
+      </section>
+
+      {/* Collaboration — Review Together */}
+      <section className="relative max-w-content mx-auto px-6 lg:px-10 py-20 border-t border-hairline">
+        <Reveal>
+          <div className="max-w-2xl">
+            <span className="font-mono text-xs tracking-[0.14em] text-brand uppercase mb-4 block">Review Together</span>
+            <h2 className="font-display text-display-l text-ink mb-5 text-balance">
+              The rehearsal and the review belong in the same room.
+            </h2>
+            <p className="text-ink-muted text-body-m max-w-lg mb-8">
+              Invite a dancer, teacher or choreographer into a shared review session. Watch the footage, pause important moments and discuss improvements while everyone sees the same movement.
+            </p>
+            <Button href="/register" size="lg">Start a Live Review</Button>
+          </div>
+        </Reveal>
+      </section>
+
+      {/* Progress — Movement History */}
+      <section className="relative max-w-content mx-auto px-6 lg:px-10 py-20 border-t border-hairline">
+        <Reveal>
+          <span className="font-mono text-xs tracking-[0.14em] text-brand uppercase mb-4 block">Movement History</span>
+          <h2 className="font-display text-display-l text-ink mb-5 max-w-2xl text-balance">
+            Your development should be visible.
+          </h2>
+          <p className="text-ink-muted text-body-m max-w-lg mb-8">
+            Keep rehearsals, performances and feedback organised over time. Return to previous takes and see how your movement develops from one session to the next.
+          </p>
+        </Reveal>
+        <Reveal delayMs={80}>
+          <div className="flex flex-wrap gap-2.5">
+            {['Recent Sessions', 'Saved Takes', 'Coach Feedback', 'Movement Comparisons', 'Rehearsal History', 'Performance Milestones'].map((label) => (
+              <span key={label} className="font-mono text-xs text-ink-muted bg-panel-2 border border-hairline rounded-full px-3.5 py-1.5">
+                {label}
+              </span>
+            ))}
+          </div>
+        </Reveal>
+      </section>
+
       {/* Use Cases */}
       <section className="relative max-w-content mx-auto px-6 lg:px-10 py-20 border-t border-hairline">
         <Reveal>
@@ -357,18 +421,13 @@ export default function LandingPage() {
       </section>
 
       {/* FAQs */}
-      <section className="relative max-w-content mx-auto px-6 lg:px-10 py-20 border-t border-hairline">
+      <section id="faq" className="relative max-w-content mx-auto px-6 lg:px-10 py-20 border-t border-hairline">
         <Reveal>
           <h2 className="font-display text-display-l text-ink mb-10">Frequently asked questions</h2>
         </Reveal>
-        <div className="space-y-6 max-w-2xl">
+        <div className="max-w-2xl border-t border-hairline">
           {faqs.map((faq, i) => (
-            <Reveal key={i} delayMs={i * 40}>
-              <div className="border-b border-hairline pb-6">
-                <h3 className="font-display text-display-s text-ink mb-2">{faq.q}</h3>
-                <p className="text-ink-muted text-sm leading-relaxed">{faq.a}</p>
-              </div>
-            </Reveal>
+            <FaqAccordionItem key={i} q={faq.q} a={faq.a} isOpen={openFaq === i} onToggle={() => setOpenFaq(openFaq === i ? null : i)} />
           ))}
         </div>
       </section>
@@ -485,8 +544,34 @@ const faqs = [
   { q: 'Does it replace a dance instructor?', a: 'No. It gives instructors and dancers a clearer way to review, communicate and revisit feedback.' },
   { q: 'Can I compare multiple performances?', a: 'Where comparison is enabled, different takes can be reviewed together to identify changes in timing, positioning and execution.' },
   { q: 'Can an instructor review a session remotely?', a: 'Live or shared review tools can allow dancers and instructors to examine the same performance without being in the same studio.' },
-  { q: 'Is my footage private?', a: 'Yes. Your video content is stored securely with access controls. Only people you invite can view your sessions and performances.' },
+  { q: 'Is special equipment required?', a: 'No specialised hardware — a device with a camera, a microphone and a modern browser is enough to join a live session. Movement tracking runs on our servers, not on your device, so performance depends on your camera quality and internet connection rather than local processing power.' },
+  { q: 'Is my footage private?', a: 'Yes. Recordings and clips are stored privately and only reachable through time-limited, signed links — never a public URL. A clip is visible only to the coach who created it and whoever they explicitly share it with; nothing is visible to other students or outside your organization by default.' },
 ];
+
+/** Single-open accordion item — expanding one collapses whichever else was
+ * open (state lives in the parent; this is purely presentational). Height
+ * animates via a CSS grid-template-rows 0fr→1fr transition, which animates
+ * smoothly without ever needing a measured pixel height in JS. */
+function FaqAccordionItem({ q, a, isOpen, onToggle }: { q: string; a: string; isOpen: boolean; onToggle: () => void }) {
+  return (
+    <div className="border-b border-hairline">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={isOpen}
+        className="w-full flex items-center justify-between gap-4 py-5 text-left group"
+      >
+        <h3 className="font-display text-display-s text-ink group-hover:text-brand transition-colors">{q}</h3>
+        <Plus className={`w-5 h-5 text-ink-faint flex-shrink-0 transition-transform duration-300 ${isOpen ? 'rotate-45 text-brand' : ''}`} />
+      </button>
+      <div className="grid transition-[grid-template-rows] duration-300 ease-out" style={{ gridTemplateRows: isOpen ? '1fr' : '0fr' }}>
+        <div className="overflow-hidden">
+          <p className="text-ink-muted text-sm leading-relaxed pb-5 max-w-xl">{a}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /** Layered-stack hero visual — one dancer tile at real scale with the
  * signature joint motif, tilted with a second card peeking out behind it */

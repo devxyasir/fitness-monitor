@@ -13,6 +13,8 @@ import type {
   OrganizationDto,
   OrganizationSummaryDto,
   OrgInviteDto,
+  SendOrgMessageDto,
+  SendOrgMessageResult,
   UpdateOrganizationDto,
   UserDto,
 } from '@replaycoach/types';
@@ -59,6 +61,12 @@ async function resendInvite(orgId: string, inviteId: string): Promise<CreateInvi
   return apiClient.post(`/organizations/${orgId}/invites/${inviteId}/resend`, {});
 }
 
+/** Org admins message coaches or students; a plain coach messages only
+ * students (enforced server-side, not just in the UI). */
+async function sendMessage(orgId: string, dto: SendOrgMessageDto): Promise<SendOrgMessageResult> {
+  return apiClient.post(`/organizations/${orgId}/messages`, dto);
+}
+
 /** Public — no auth required, works for a logged-out visitor. */
 async function getInvitePreview(token: string): Promise<InvitePreviewDto> {
   return apiClient.get(`/invites/${token}`);
@@ -81,6 +89,7 @@ export const orgClient = {
   listInvites,
   revokeInvite,
   resendInvite,
+  sendMessage,
   getInvitePreview,
   acceptInvite,
 };
