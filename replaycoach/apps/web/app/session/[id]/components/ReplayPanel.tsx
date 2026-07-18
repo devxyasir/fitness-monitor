@@ -18,6 +18,11 @@ interface ReplayPanelProps {
 }
 
 function formatTime(sec: number): string {
+  // A blob built by concatenating raw MediaRecorder chunks has no Duration
+  // element in its WebM container, so the browser reports video.duration as
+  // Infinity until (if ever) a seek forces a fix-up — this showed up as a
+  // literal "Infinity:NaN" in the transport bar (Infinity % 60 is NaN).
+  if (!Number.isFinite(sec) || sec < 0) return '00:00';
   const m = Math.floor(sec / 60).toString().padStart(2, '0');
   const s = Math.floor(sec % 60).toString().padStart(2, '0');
   return `${m}:${s}`;
@@ -92,6 +97,11 @@ export function ReplayPanel({
     const blob = getReplayBlob(participantId, startOffset, 0);
     const wallStartMs = Date.now() + startOffset;
     setReplayStartMs(wallStartMs);
+    // Seed with the requested window length — a reliable upper bound —
+    // rather than waiting on video.duration, which is often Infinity for
+    // this kind of blob (see formatTime's comment). onDurationChange below
+    // still overrides this if the browser ever reports a real value.
+    setDuration(Math.abs(startOffset) / 1000);
 
     if (!blob) {
       console.warn('[ReplayPanel] No buffer data available for', participantId);
@@ -197,7 +207,10 @@ export function ReplayPanel({
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
         onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-        onDurationChange={(e) => setDuration(e.currentTarget.duration)}
+        onDurationChange={(e) => {
+          const d = e.currentTarget.duration;
+          if (Number.isFinite(d)) setDuration(d);
+        }}
       />
 
       {/* Loading / unavailable states — previously a blank black video with

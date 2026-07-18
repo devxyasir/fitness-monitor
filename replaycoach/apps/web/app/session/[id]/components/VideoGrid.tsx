@@ -215,6 +215,15 @@ export function ParticipantVideoTile({
       });
       const formData = new FormData();
       formData.append('file', file);
+      // Without this, ReferenceController defaulted every upload with no
+      // explicit mode to 'full_body' — silently routing every "Analyze 10s"
+      // clip into the lesser ReferenceAnalysisModal (freehand strokes, no
+      // joint-tracking, no export) instead of the full AnnotationTrackingModal
+      // experience this button's own tooltip promises ("permanent,
+      // joint-tracked clip"). The pose pipeline underneath is identical
+      // either way — this mode string is the only thing that decides which
+      // modal opens (see useAnnotationTrackingSocket.ts / useReferenceSocket.ts).
+      formData.append('mode', 'annotation_tracking');
 
       const uploaded = await apiClient.postForm<{ id: string }>(
         `/sessions/${sessionId}/reference/upload`,
@@ -305,7 +314,7 @@ export function ParticipantVideoTile({
             type="button"
             onClick={handleInstantReplay}
             disabled={isStartingInstantReplay}
-            className="bg-panel/80 backdrop-blur-glass hover:bg-panel-2 disabled:opacity-50 border border-hairline text-ink text-xs font-semibold px-2.5 py-1.5 rounded-full transition-colors"
+            className="bg-panel/95 backdrop-blur-glass hover:bg-panel-2 disabled:opacity-50 border border-hairline text-ink text-xs font-semibold px-2.5 py-1.5 rounded-full shadow-md transition-colors"
             title="Instant replay — opens for everyone right now, meeting keeps running"
           >
             {isStartingInstantReplay ? 'Opening…' : '⟳ Replay'}
@@ -315,7 +324,7 @@ export function ParticipantVideoTile({
             type="button"
             onClick={handleAnalyzeClip}
             disabled={isReplaying}
-            className="bg-replay/15 hover:bg-replay/25 disabled:opacity-50 border border-replay/35 text-replay text-xs font-semibold px-2.5 py-1.5 rounded-full transition-colors"
+            className="bg-replay hover:brightness-110 disabled:opacity-50 border border-replay/50 text-white dark:text-canvas text-xs font-semibold px-2.5 py-1.5 rounded-full shadow-md transition-all"
             title="Save as a permanent, joint-tracked clip"
           >
             {isReplaying ? 'Analyzing…' : 'Analyze 10s'}
@@ -324,7 +333,7 @@ export function ParticipantVideoTile({
           <button
             type="button"
             onClick={() => onPinTrack(isPinned ? null : trackSid)}
-            className="bg-session/15 hover:bg-session/25 border border-session/35 text-session text-xs font-semibold px-2.5 py-1.5 rounded-full transition-colors"
+            className="bg-session hover:brightness-110 border border-session/50 text-white dark:text-canvas text-xs font-semibold px-2.5 py-1.5 rounded-full shadow-md transition-all"
           >
             {isPinned ? 'Unpin' : 'Spotlight'}
           </button>
