@@ -2,15 +2,16 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
-import { LayoutGrid, CalendarDays, Film, Users, Settings, Menu, X, Building2, ShieldCheck } from 'lucide-react';
+import { LayoutGrid, CalendarDays, Film, Users, Settings, Menu, X, Building2 } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth-store';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { Logomark } from '../components/Logomark';
 import { UserMenu } from '../components/UserMenu';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/ui/Button';
+import { PageLoader } from '../components/ui/PageLoader';
 
 interface NavItem {
   href: string;
@@ -29,6 +30,7 @@ const navItems: NavItem[] = [
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { user } = useAuthStore();
   const [role, setRole] = useState<'coach' | 'student'>('coach');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -37,6 +39,23 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     if (user?.role === 'student') setRole('student');
     else setRole('coach');
   }, [user]);
+
+  // This shell has no concept of a platform_admin — the role-fallback above
+  // (anything that isn't 'student' becomes 'coach') used to let a
+  // platform_admin land here and render as a coach with no coaching data of
+  // their own: a real dashboard-shaped page showing nothing, easy to
+  // mistake for a bug rather than "wrong account type for this area."
+  // platform_admin has its own separate shell (app/admin/**) with its own
+  // auth guard — send them there instead of ever rendering this one.
+  useEffect(() => {
+    if (user?.role === 'platform_admin') {
+      router.replace('/admin');
+    }
+  }, [user, router]);
+
+  if (user?.role === 'platform_admin') {
+    return <PageLoader />;
+  }
 
   // Close the mobile drawer on route change — otherwise navigating leaves it
   // open, stacked behind/over the new page.
@@ -72,7 +91,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
       <div className="h-px bg-hairline my-3 mx-2" />
 
-      {(user?.role === 'studio_admin' || user?.role === 'platform_admin' || user?.role === 'coach') && (
+      {(user?.role === 'studio_admin' || user?.role === 'coach') && (
         <Link
           href="/coach/organization"
           onClick={onNavigate}
@@ -85,17 +104,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         >
           <Building2 className="w-4 h-4" />
           <span>Organization</span>
-        </Link>
-      )}
-
-      {user?.role === 'platform_admin' && (
-        <Link
-          href="/admin"
-          onClick={onNavigate}
-          className="flex items-center gap-2.5 px-2.5 py-2 rounded-sm text-sm text-ink-muted hover:bg-panel-2 hover:text-ink transition-colors border-l-[3px] border-transparent"
-        >
-          <ShieldCheck className="w-4 h-4" />
-          <span>Platform admin</span>
         </Link>
       )}
 

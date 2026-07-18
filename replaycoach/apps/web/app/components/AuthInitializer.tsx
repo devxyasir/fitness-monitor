@@ -61,7 +61,14 @@ export default function AuthInitializer({ children }: { children: React.ReactNod
       const loginPath = isAdminRoute ? '/admin/login' : '/login';
       router.push(`${loginPath}?redirectTo=${encodeURIComponent(pathname)}`);
     } else if (accessToken && isPublicRoute && !staysVisibleWhenAuthed) {
-      if (user?.role === 'student') {
+      // platform_admin has no coach/student dashboard of its own — the
+      // (dashboard) layout actively rejects that role now, but this
+      // redirect target needs to agree with that or it'd send an admin
+      // straight into the page whose own guard immediately bounces them
+      // back out again.
+      if (user?.role === 'platform_admin') {
+        router.push('/admin');
+      } else if (user?.role === 'student') {
         router.push('/student/sessions');
       } else {
         router.push('/coach/sessions');

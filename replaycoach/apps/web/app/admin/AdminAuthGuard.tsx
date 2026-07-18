@@ -26,6 +26,23 @@ export function AdminAuthGuard({ children }: { children: ReactNode }) {
     return () => clearTimeout(timer);
   }, []);
 
+  // Browsers can restore a whole previous page — including whatever admin
+  // content was on screen — straight from the back/forward cache on a Back
+  // navigation, without re-running any of this component's logic (bfcache
+  // restores a live snapshot, it doesn't remount). That's a real leak
+  // vector for an authenticated-content area: navigate away (or log out),
+  // hit Back, and briefly see the old page as it looked before, auth check
+  // included. `pageshow`'s `persisted` flag is exactly how to detect that
+  // case; forcing a hard reload makes the browser re-fetch and re-run every
+  // check fresh instead of trusting the cached DOM.
+  useEffect(() => {
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) window.location.reload();
+    };
+    window.addEventListener('pageshow', onPageShow);
+    return () => window.removeEventListener('pageshow', onPageShow);
+  }, []);
+
   useEffect(() => {
     if (!checked) return;
     if (!accessToken || !user) {

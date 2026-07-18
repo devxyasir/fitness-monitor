@@ -81,8 +81,24 @@ function AdminShell({ children }: { children: ReactNode }) {
   }, []);
 
   const handleLogout = async () => {
-    await authClient.logout();
-    router.push('/admin/login');
+    // A plain router.push here left a real bug: if the network call inside
+    // authClient.logout() throws (timeout, transient failure), the store
+    // never gets cleared and the push after it never runs — the admin
+    // stayed on the same page, now silently failing every API call with no
+    // token, looking like "the dashboard with no data." A full browser
+    // navigation sidesteps that class of problem entirely: it throws away
+    // the whole JS heap (Zustand store, router cache, component tree) and
+    // starts clean, so there's nothing stale left to show regardless of
+    // whether the logout call itself succeeded. try/catch guarantees the
+    // navigation fires either way — a failed server-side revoke shouldn't
+    // trap the admin in a logged-in-looking shell they can't leave.
+    try {
+      await authClient.logout();
+    } catch (err) {
+      console.error('[AdminShell] Logout request failed, navigating away anyway:', err);
+    } finally {
+      window.location.href = '/';
+    }
   };
 
   return (
