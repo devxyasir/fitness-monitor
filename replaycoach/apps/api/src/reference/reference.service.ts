@@ -8,6 +8,7 @@ import { Annotation, Clip, ClipShare, ReferenceVideo, TrackedAnnotation } from '
 import { SessionParticipant } from '../sessions/session-participant.entity';
 import { SessionsService } from '../sessions/sessions.service';
 import { ReferenceStorageService } from './reference-storage.service';
+import { ReferenceExportQueueClient } from './reference-export-queue.client';
 import type {
   CreateTrackedAnnotationDto,
   ExportReferenceVideoDto,
@@ -91,6 +92,7 @@ export class ReferenceService {
     private readonly sessionsService: SessionsService,
     private readonly storage: ReferenceStorageService,
     private readonly configService: ConfigService,
+    private readonly exportQueue: ReferenceExportQueueClient,
   ) {}
 
   private async assertCoach(sessionId: string, userId: string, role: string): Promise<void> {
@@ -561,14 +563,23 @@ export class ReferenceService {
     return { includeSkeleton, includeAnnotations };
   }
 
-  /** Kicks off a server-side export render on the pose-service (background). */
+  /**
+   * Queues a server-side export render (POST to the pose:export-jobs Redis
+   * stream — see ReferenceExportQueueClient), consumed by the dedicated
+   * export_worker.py process rather than run inline in the same process as
+   * live pose inference. Durable: a job that's on the stream survives a
+   * worker crash/restart (it just waits to be claimed), unlike the previous
+   * direct fetch() to pose-service's /reference/export, which ran as a
+   * FastAPI BackgroundTask with no persistence — a crash mid-render lost
+   * the job silently with no record and no retry.
+   */
   async startExport(
     sessionId: string,
     refId: string,
     coachId: string,
     role: string,
     dto: ExportReferenceVideoDto,
-  ): Promise<{ status: string }> {
+  ): Promise<{ status: string; jobId: string }> {
     await this.assertCoach(sessionId, coachId, role);
     const video = await this.getForSession(sessionId, refId);
     if (!video.keypointsKey) throw new BadRequestException('Video has no keypoints to export');
@@ -576,27 +587,34 @@ export class ReferenceService {
     const { includeSkeleton, includeAnnotations } = this.resolveExportFlags(dto);
 
     const annotations = await this.trackedRepo.find({ where: { referenceVideoId: refId } });
-    const baseUrl = this.configService.get<string>('POSE_SERVICE_URL', 'http://localhost:8100');
     const videoUrl = await this.storage.getPlaybackUrl(video.videoKey);
     const keypointsUrl = await this.storage.getPlaybackUrl(video.keypointsKey);
     const uploadUrl = `${this.storage.apiPublicBaseUrl}/api/v1/reference/${refId}/export-upload`;
     const callbackUrl = `${this.storage.apiPublicBaseUrl}/api/v1/reference/${refId}/export-failed`;
+    const progressUrl = `${this.storage.apiPublicBaseUrl}/api/v1/reference/${refId}/export-progress`;
     const callbackToken = this.storage.callbackToken(refId);
+    const jobId = uuidv4();
 
     await this.repo.update(
       { id: refId },
-      { exportStatus: 'processing', exportProgressPercent: 0, exportErrorMessage: null, exportRequestedAt: new Date() },
+      {
+        exportStatus: 'queued',
+        exportProgressPercent: 0,
+        exportJobId: jobId,
+        exportErrorMessage: null,
+        exportRequestedAt: new Date(),
+      },
     );
 
-    const res = await fetch(`${baseUrl}/reference/export`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    try {
+      await this.exportQueue.enqueueExport({
+        jobId,
         refId,
         videoUrl,
         keypointsUrl,
         uploadUrl,
         callbackUrl,
+        progressUrl,
         callbackToken,
         keypointFormat: video.keypointFormat,
         includeSkeleton,
@@ -612,12 +630,16 @@ export class ReferenceService {
           fromFrame: a.fromFrame,
           untilFrame: a.untilFrame,
         })),
-      }),
-    });
-    if (!res.ok) {
-      await this.repo.update({ id: refId }, { exportStatus: 'failed', exportErrorMessage: `pose-service returned ${res.status}` });
-      throw new BadRequestException(`pose-service export rejected (${res.status})`);
+      });
+    } catch (err) {
+      await this.repo.update(
+        { id: refId },
+        { exportStatus: 'failed', exportErrorMessage: 'Could not queue export job' },
+      );
+      this.logger.error(`Failed to enqueue export job for ${refId}: ${err instanceof Error ? err.message : err}`);
+      throw new BadRequestException('Could not queue export — please try again');
     }
-    return { status: 'accepted' };
+
+    return { status: 'queued', jobId };
   }
 }

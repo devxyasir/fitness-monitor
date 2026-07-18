@@ -118,6 +118,17 @@ jobs:
               pm2 start run_ml.sh --name fitness-ml --interpreter bash
             }
 
+            # Export worker: separate OS process from fitness-ml, consumes
+            # the pose:export-jobs Redis stream — must exist before a coach
+            # can trigger a video export (a queued job just waits if this
+            # isn't running yet, but nothing will ever pick it up until it
+            # is). Restarted before fitness-web below so there's no window
+            # after this deploy where the queue has consumers=0.
+            cd "$APP_DIR/replaycoach/apps/pose-service"
+            pm2 restart fitness-export-worker --update-env || {
+              pm2 start export_worker.py --name fitness-export-worker --interpreter "$APP_DIR/replaycoach/apps/pose-service/venv/bin/python"
+            }
+
             pm2 save
 
             echo "=== Deployment complete ==="

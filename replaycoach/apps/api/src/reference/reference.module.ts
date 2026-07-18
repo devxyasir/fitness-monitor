@@ -9,6 +9,7 @@ import { RealtimeModule } from '../realtime/realtime.module';
 import { ReferenceController, ReferenceMediaController } from './reference.controller';
 import { ReferenceService } from './reference.service';
 import { ReferenceStorageService } from './reference-storage.service';
+import { ReferenceExportQueueClient } from './reference-export-queue.client';
 
 @Module({
   imports: [
@@ -25,7 +26,7 @@ import { ReferenceStorageService } from './reference-storage.service';
     forwardRef(() => RealtimeModule),
   ],
   controllers: [ReferenceController, ReferenceMediaController],
-  providers: [ReferenceService, ReferenceStorageService],
+  providers: [ReferenceService, ReferenceStorageService, ReferenceExportQueueClient],
   exports: [ReferenceService, ReferenceStorageService],
 })
 export class ReferenceModule {}
