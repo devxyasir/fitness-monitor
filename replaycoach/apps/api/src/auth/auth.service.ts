@@ -157,6 +157,17 @@ export class AuthService {
       throw new ForbiddenException('This login is for platform administrators only.');
     }
 
+    // Mirror image of the above: a platform_admin's credentials must never
+    // authenticate through the regular /login page, even though they're
+    // otherwise valid — admin sessions only get minted through the admin
+    // entry point (which also stamps adminAuthAt). Thrown as the same
+    // UnauthorizedException/message as a wrong password so the regular
+    // login form can't be used to fingerprint which emails belong to an
+    // admin account.
+    if (dto.context !== 'admin' && user.role === 'platform_admin') {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
     await this.userService.touchLastLogin(user.id, ip);
 
     if (dto.context === 'admin') {
