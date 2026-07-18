@@ -2,12 +2,14 @@
 
 import type {
   EmailTemplateSettings,
+  GeoAccessSettings,
   PlatformSettings,
   SmtpSettings,
   SystemSettingsDto,
   SystemStatusDto,
   ThemeSettings,
   UpdateEmailTemplatesDto,
+  UpdateGeoAccessSettingsDto,
   UpdatePlatformSettingsDto,
   UpdateSmtpSettingsDto,
 } from '@replaycoach/types';
@@ -44,6 +46,10 @@ async function updatePlatform(dto: UpdatePlatformSettingsDto): Promise<PlatformS
   return apiClient.patch('/system-settings/platform', dto);
 }
 
+async function updateGeoAccess(dto: UpdateGeoAccessSettingsDto): Promise<GeoAccessSettings> {
+  return apiClient.patch('/system-settings/geo-access', dto);
+}
+
 export const systemSettingsClient = {
   getAll,
   getPublicTheme,
@@ -52,4 +58,5 @@ export const systemSettingsClient = {
   updateTheme,
   updateEmailTemplates,
   updatePlatform,
+  updateGeoAccess,
 };

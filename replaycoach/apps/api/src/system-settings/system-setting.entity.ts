@@ -1,6 +1,6 @@
 import { Column, Entity, PrimaryColumn, UpdateDateColumn } from 'typeorm';
 
-export type SystemSettingKey = 'smtp' | 'theme' | 'email_templates' | 'platform';
+export type SystemSettingKey = 'smtp' | 'theme' | 'email_templates' | 'platform' | 'geo_access';
 
 @Entity('system_settings')
 export class SystemSetting {

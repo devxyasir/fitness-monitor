@@ -2,6 +2,7 @@ import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
 
 import type {
   EmailTemplateSettings,
+  GeoAccessSettings,
   JwtPayload,
   PlatformSettings,
   SmtpSettings,
@@ -17,6 +18,7 @@ import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { SystemSettingsService } from './system-settings.service';
 import { UpdateEmailTemplatesDto, UpdatePlatformDto, UpdateSmtpDto, UpdateThemeDto } from './system-settings.dto';
+import { UpdateGeoAccessSettingsDto } from '../geo/geo.dto';
 
 /** Platform-wide config, editable only by platform_admin — the deployment
  * operator, not a per-org studio_admin (branding for an individual org's
@@ -42,13 +44,24 @@ export class SystemSettingsController {
   }
 
   /** Public — the root layout checks this before rendering anything, to
-   * show a maintenance page to non-admin visitors. Deliberately minimal
-   * (just the one boolean the frontend actually needs to branch on). */
+   * show a maintenance page to non-admin visitors and to decide whether
+   * GeoAccessGate needs to prompt for GPS permission. Deliberately minimal
+   * — never the allowed-countries list or anything else sensitive, just
+   * enough for a client-side gate to decide its next move. */
   @Public()
   @Get('status')
   async getPublicStatus(): Promise<SystemStatusDto> {
-    const platform = await this.settingsService.getPlatform();
-    return { maintenanceMode: platform.maintenanceMode };
+    const [platform, geoAccess] = await Promise.all([
+      this.settingsService.getPlatform(),
+      this.settingsService.getGeoAccess(),
+    ]);
+    return {
+      maintenanceMode: platform.maintenanceMode,
+      geoEnabled: geoAccess.enabled,
+      geoDetectionMethod: geoAccess.detectionMethod,
+      geoFallbackToIp: geoAccess.fallbackToIp,
+      geoStrictMode: geoAccess.strictMode,
+    };
   }
 
   @Get()
@@ -82,5 +95,14 @@ export class SystemSettingsController {
   @Roles('platform_admin')
   async updatePlatform(@Body() dto: UpdatePlatformDto, @CurrentUser() user: JwtPayload): Promise<PlatformSettings> {
     return this.settingsService.updatePlatform(dto, user.sub);
+  }
+
+  @Patch('geo-access')
+  @Roles('platform_admin')
+  async updateGeoAccess(
+    @Body() dto: UpdateGeoAccessSettingsDto,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<GeoAccessSettings> {
+    return this.settingsService.updateGeoAccess(dto, user.sub);
   }
 }

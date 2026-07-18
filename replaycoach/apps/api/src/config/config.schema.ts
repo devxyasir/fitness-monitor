@@ -49,6 +49,13 @@ export const configSchema = Joi.object({
   // Pose service
   POSE_SERVICE_URL: Joi.string().default('http://localhost:8100'),
 
+  // Geo Access Control — optional. Defaults to ip-api.com's free, keyless
+  // tier; the feature also ships disabled by default (see
+  // SystemSettingsService's DEFAULT_GEO_ACCESS), so the app boots and runs
+  // identically with zero geo env vars set.
+  GEO_PROVIDER: Joi.string().default('ip-api'),
+  GEO_PROVIDER_API_KEY: Joi.string().optional(),
+
   // SMTP — optional. Without it, EmailService logs a warning and skips
   // sending (invites still work via the manually-copied link in the UI).
   SMTP_HOST: Joi.string().optional(),

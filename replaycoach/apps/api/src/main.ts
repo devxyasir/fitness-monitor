@@ -14,6 +14,14 @@ import { RedisIoAdapter } from './realtime/redis-io.adapter';
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
 
+  // nginx fronts this deployment on the same box, proxying to this process
+  // over loopback (127.0.0.1). Without this, Express's req.ip resolves to
+  // that loopback hop, not the real visitor IP — silently breaking anything
+  // built on it (last_login_at IP capture, and now the Geo Access Control
+  // system's IP geolocation). 'loopback' trusts exactly that topology
+  // (127.0.0.1/8, ::1/128) rather than a looser blanket `true`.
+  app.set('trust proxy', 'loopback');
+
   // Express's default JSON body limit (~100kb) is fine for normal API calls,
   // but the pose-service's reference-video completion callback posts the
   // full per-frame keypoints array — multiple MB for longer videos — and was

@@ -10,6 +10,7 @@ export * from './pose';
 export * from './annotation-tracking';
 export * from './system-settings';
 export * from './admin';
+export * from './geo';
 
 // ── Legacy / scalar type aliases ─────────────────────────────────────────────
 export type { HealthResponse } from './health';

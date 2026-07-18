@@ -7,6 +7,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 
 import { UserModule } from '../users/user.module';
 import { OrganizationModule } from '../organizations/organization.module';
+import { GeoModule } from '../geo/geo.module';
 import { AuditModule } from '../audit/audit.module';
 import { SystemSettingsModule } from '../system-settings/system-settings.module';
 import { RefreshToken } from './refresh-token.entity';
@@ -35,6 +36,7 @@ import { RefreshTokenCleanupService } from './refresh-token-cleanup.service';
     OrganizationModule,
     AuditModule,
     SystemSettingsModule,
+    GeoModule,
   ],
   providers: [AuthService, RefreshTokenService, RefreshTokenCleanupService, JwtStrategy],
   controllers: [AuthController],

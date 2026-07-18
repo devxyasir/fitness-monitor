@@ -4,6 +4,7 @@ import AuthInitializer from './components/AuthInitializer';
 import { ToastContainer } from './components/ToastContainer';
 import { ThemeColorOverride } from './components/ThemeColorOverride';
 import { MaintenanceGate } from './components/MaintenanceGate';
+import { GeoAccessGate } from './components/GeoAccessGate';
 
 import './globals.css';
 
@@ -78,7 +79,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
         <ThemeColorOverride />
         <AuthInitializer>
-          <MaintenanceGate>{children}</MaintenanceGate>
+          <MaintenanceGate>
+            <GeoAccessGate>{children}</GeoAccessGate>
+          </MaintenanceGate>
         </AuthInitializer>
         <ToastContainer />
       </body>

@@ -45,6 +45,14 @@ export default () => ({
     keyPairId: process.env['CLOUDFRONT_KEY_PAIR_ID'],
     privateKey: process.env['CLOUDFRONT_PRIVATE_KEY'],
   },
+  geo: {
+    // Which IpGeoProvider implementation geo-lookup.service.ts's registry
+    // resolves — 'ip-api' (the free, keyless default) needs no other env
+    // vars at all. Swapping providers later is a new registry entry, not a
+    // rewrite — see apps/api/src/geo/geo-lookup.service.ts.
+    provider: process.env['GEO_PROVIDER'] ?? 'ip-api',
+    apiKey: process.env['GEO_PROVIDER_API_KEY'],
+  },
   smtp: {
     host: process.env['SMTP_HOST'],
     port: parseInt(process.env['SMTP_PORT'] ?? '587', 10),

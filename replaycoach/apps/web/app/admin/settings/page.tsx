@@ -1,8 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import type { SystemSettingsDto } from '@replaycoach/types';
+import { useEffect, useMemo, useState } from 'react';
+import { Search } from 'lucide-react';
+import type { GeoAllowedRegion, SystemSettingsDto } from '@replaycoach/types';
 import { systemSettingsClient } from '../../../lib/system-settings-client';
+import { ISO_COUNTRIES } from '../../../lib/iso-countries';
 import { toast } from '../../../stores/toast-store';
 import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
@@ -10,7 +12,7 @@ import { Button } from '../../components/ui/Button';
 import { Tabs } from '../../components/ui/Tabs';
 import { SkeletonRows, ErrorBlock } from '../../components/ui/StateBlocks';
 
-type TabKey = 'smtp' | 'theme' | 'templates' | 'platform';
+type TabKey = 'smtp' | 'theme' | 'templates' | 'platform' | 'geo';
 
 export default function AdminSettingsPage() {
   const [tab, setTab] = useState<TabKey>('smtp');
@@ -47,6 +49,7 @@ export default function AdminSettingsPage() {
           { key: 'theme', label: 'Brand colors' },
           { key: 'templates', label: 'Invite email' },
           { key: 'platform', label: 'Platform' },
+          { key: 'geo', label: 'Geo access' },
         ]}
         active={tab}
         onChange={(k) => setTab(k as TabKey)}
@@ -63,8 +66,10 @@ export default function AdminSettingsPage() {
           <ThemeTab settings={settings.theme} onSaved={load} />
         ) : tab === 'templates' ? (
           <TemplatesTab settings={settings.emailTemplates} onSaved={load} />
-        ) : (
+        ) : tab === 'platform' ? (
           <PlatformTab settings={settings.platform} onSaved={load} />
+        ) : (
+          <GeoAccessTab settings={settings.geoAccess} onSaved={load} />
         )}
       </div>
     </div>
@@ -247,6 +252,194 @@ function TemplatesTab({ settings, onSaved }: { settings: SystemSettingsDto['emai
         </div>
         <Button type="submit" loading={loading} className="self-start">
           {loading ? 'Saving…' : 'Save email copy'}
+        </Button>
+      </form>
+    </Card>
+  );
+}
+
+function GeoAccessTab({ settings, onSaved }: { settings: SystemSettingsDto['geoAccess']; onSaved: () => void }) {
+  const [enabled, setEnabled] = useState(settings.enabled);
+  const [mode, setMode] = useState(settings.mode);
+  const [allowedCountries, setAllowedCountries] = useState<string[]>(settings.allowedCountries);
+  const [allowedRegions, setAllowedRegions] = useState<GeoAllowedRegion[]>(settings.allowedRegions);
+  const [detectionMethod, setDetectionMethod] = useState(settings.detectionMethod);
+  const [requireGpsPermission, setRequireGpsPermission] = useState(settings.requireGpsPermission);
+  const [fallbackToIp, setFallbackToIp] = useState(settings.fallbackToIp);
+  const [strictMode, setStrictMode] = useState(settings.strictMode);
+  const [blockUnknownLocations, setBlockUnknownLocations] = useState(settings.blockUnknownLocations);
+  const [countrySearch, setCountrySearch] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const filteredCountries = useMemo(() => {
+    const q = countrySearch.trim().toLowerCase();
+    if (!q) return ISO_COUNTRIES;
+    return ISO_COUNTRIES.filter((c) => c.name.toLowerCase().includes(q) || c.code.toLowerCase() === q);
+  }, [countrySearch]);
+
+  const toggleCountry = (code: string) => {
+    setAllowedCountries((prev) => (prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]));
+  };
+
+  const regionsForCountry = (code: string) => allowedRegions.find((r) => r.countryCode === code)?.regionNames.join(', ') ?? '';
+
+  const setRegionsForCountry = (code: string, raw: string) => {
+    const names = raw.split(',').map((s) => s.trim()).filter(Boolean);
+    setAllowedRegions((prev) => {
+      const without = prev.filter((r) => r.countryCode !== code);
+      return names.length > 0 ? [...without, { countryCode: code, regionNames: names }] : without;
+    });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await systemSettingsClient.updateGeoAccess({
+        enabled,
+        mode,
+        allowedCountries,
+        allowedRegions,
+        detectionMethod,
+        requireGpsPermission,
+        fallbackToIp,
+        strictMode,
+        blockUnknownLocations,
+      });
+      toast.success('Geo access settings saved.');
+      onSaved();
+    } catch (err: unknown) {
+      toast.error((err as Error).message ?? 'Could not save geo access settings.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Card>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+        <ToggleRow
+          label="Geo access control"
+          description="Master switch. Off = everyone, everywhere, can use the platform — nothing else on this tab has any effect."
+          checked={enabled}
+          onChange={setEnabled}
+        />
+
+        {enabled && (
+          <>
+            <div>
+              <label className="block text-label text-ink-muted mb-1.5">Access mode</label>
+              <div className="flex gap-2">
+                {(['global', 'restricted'] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setMode(m)}
+                    className={`flex-1 px-3.5 py-2.5 rounded-sm text-sm border transition-colors ${
+                      mode === m ? 'bg-brand/10 border-brand text-brand font-medium' : 'bg-panel-2 border-hairline text-ink-muted hover:text-ink'
+                    }`}
+                  >
+                    {m === 'global' ? 'Global access' : 'Restricted access'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {mode === 'restricted' && (
+              <div>
+                <label className="block text-label text-ink-muted mb-1.5">
+                  Allowed countries {allowedCountries.length > 0 && `(${allowedCountries.length} selected)`}
+                </label>
+                <div className="relative mb-2">
+                  <Search className="w-3.5 h-3.5 text-ink-faint absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={countrySearch}
+                    onChange={(e) => setCountrySearch(e.target.value)}
+                    placeholder="Search countries…"
+                    className="w-full bg-panel-2 border border-hairline rounded-sm pl-8 pr-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:outline-none focus-visible:border-brand"
+                  />
+                </div>
+                <div className="max-h-56 overflow-y-auto border border-hairline rounded-sm divide-y divide-hairline">
+                  {filteredCountries.map((c) => {
+                    const checked = allowedCountries.includes(c.code);
+                    return (
+                      <div key={c.code}>
+                        <label className="flex items-center gap-2.5 px-3 py-2 hover:bg-panel-2 cursor-pointer">
+                          <input type="checkbox" checked={checked} onChange={() => toggleCountry(c.code)} className="accent-brand" />
+                          <span className="text-sm text-ink flex-1">{c.name}</span>
+                          <span className="font-mono text-xs text-ink-faint">{c.code}</span>
+                        </label>
+                        {checked && (
+                          <div className="px-3 pb-2.5 pl-9">
+                            <input
+                              type="text"
+                              value={regionsForCountry(c.code)}
+                              onChange={(e) => setRegionsForCountry(c.code, e.target.value)}
+                              placeholder="Limit to specific states/regions (comma-separated) — leave blank for the whole country"
+                              className="w-full bg-panel border border-hairline rounded-sm px-2.5 py-1.5 text-xs text-ink placeholder:text-ink-faint focus:outline-none focus-visible:border-brand"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-label text-ink-muted mb-1.5">Location detection method</label>
+              <div className="flex gap-2">
+                {(['ip', 'gps'] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setDetectionMethod(m)}
+                    className={`flex-1 px-3.5 py-2.5 rounded-sm text-sm border transition-colors ${
+                      detectionMethod === m ? 'bg-brand/10 border-brand text-brand font-medium' : 'bg-panel-2 border-hairline text-ink-muted hover:text-ink'
+                    }`}
+                  >
+                    {m === 'ip' ? 'Passive (IP address)' : 'Aggressive (GPS permission)'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {detectionMethod === 'gps' && (
+              <>
+                <ToggleRow
+                  label="Require GPS permission"
+                  description="Visitors must grant location access before they can use the app."
+                  checked={requireGpsPermission}
+                  onChange={setRequireGpsPermission}
+                />
+                <ToggleRow
+                  label="Fall back to IP"
+                  description="If GPS is denied or unavailable, check location by IP address instead of blocking outright."
+                  checked={fallbackToIp}
+                  onChange={setFallbackToIp}
+                />
+                <ToggleRow
+                  label="Strict mode"
+                  description="If GPS is denied, block access immediately — overrides the IP fallback above."
+                  checked={strictMode}
+                  onChange={setStrictMode}
+                />
+              </>
+            )}
+
+            <ToggleRow
+              label="Block unknown locations"
+              description="If a visitor's location can't be determined at all (provider outage, unroutable IP), block them instead of letting them through."
+              checked={blockUnknownLocations}
+              onChange={setBlockUnknownLocations}
+            />
+          </>
+        )}
+
+        <Button type="submit" loading={loading} className="self-start">
+          {loading ? 'Saving…' : 'Save geo access settings'}
         </Button>
       </form>
     </Card>

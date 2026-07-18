@@ -27,6 +27,7 @@ import {
   TrackedAnnotation,
 } from './database/entities/others.entities';
 import { SystemSetting } from './system-settings/system-setting.entity';
+import { GeoAccessLog } from './geo/geo-access-log.entity';
 
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
@@ -49,6 +50,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { SystemSettingsModule } from './system-settings/system-settings.module';
 import { AuditModule } from './audit/audit.module';
 import { AdminModule } from './admin/admin.module';
+import { GeoModule } from './geo/geo.module';
 
 @Module({
   imports: [
@@ -92,6 +94,7 @@ import { AdminModule } from './admin/admin.module';
           ReferenceVideo,
           TrackedAnnotation,
           SystemSetting,
+          GeoAccessLog,
         ],
         migrations: [],
       }),
@@ -116,6 +119,7 @@ import { AdminModule } from './admin/admin.module';
     SystemSettingsModule,
     AuditModule,
     AdminModule,
+    GeoModule,
   ],
   providers: [
     // Global by default: every route requires a valid access token and

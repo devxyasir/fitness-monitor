@@ -16,6 +16,7 @@ import type { JwtPayload, TokenResponse } from '@replaycoach/types';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
+import { GeoAccessGuard } from '../geo/geo-access.guard';
 import { AuthService } from './auth.service';
 import {
   AdminElevateDto,
@@ -38,8 +39,10 @@ export class AuthController {
     private readonly configService: ConfigService,
   ) {}
 
-  /** POST /auth/register */
+  /** POST /auth/register — GeoAccessGuard is real backend enforcement, not
+   * bypassable by skipping a frontend check (see the guard's own comment). */
   @Public()
+  @UseGuards(GeoAccessGuard)
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   @Throttle({ default: { limit: 5, ttl: 60000 } })
@@ -57,6 +60,7 @@ export class AuthController {
    * Rate limited: 5/min per IP (12_Backend_API_Design.md §7).
    */
   @Public()
+  @UseGuards(GeoAccessGuard)
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 5, ttl: 60000 } })

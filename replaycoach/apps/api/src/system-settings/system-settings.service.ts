@@ -5,12 +5,14 @@ import { Repository } from 'typeorm';
 
 import type {
   EmailTemplateSettings,
+  GeoAccessSettings,
   InviteEmailTemplate,
   PlatformSettings,
   SmtpSettings,
   SystemSettingsDto,
   ThemeColorSet,
   ThemeSettings,
+  UpdateGeoAccessSettingsDto,
   UpdatePlatformSettingsDto,
   UpdateSmtpSettingsDto,
 } from '@replaycoach/types';
@@ -32,6 +34,20 @@ const DEFAULT_INVITE_TEMPLATE: InviteEmailTemplate = {
 const DEFAULT_PLATFORM: PlatformSettings = {
   maintenanceMode: false,
   allowPublicRegistration: true,
+};
+
+// Ships fully off — enabling restriction, and picking countries, is always
+// an explicit admin action, never a side effect of deploying this code.
+const DEFAULT_GEO_ACCESS: GeoAccessSettings = {
+  enabled: false,
+  mode: 'global',
+  allowedCountries: [],
+  allowedRegions: [],
+  detectionMethod: 'ip',
+  requireGpsPermission: false,
+  fallbackToIp: true,
+  strictMode: false,
+  blockUnknownLocations: false,
 };
 
 /** Deep-partial theme/template update shapes — a plain `Partial<T>` only
@@ -172,15 +188,31 @@ export class SystemSettingsService {
     return merged;
   }
 
+  // ─── Geo access control ──────────────────────────────────────────────
+
+  async getGeoAccess(): Promise<GeoAccessSettings> {
+    const stored = await this.getRaw<Partial<GeoAccessSettings>>('geo_access');
+    return { ...DEFAULT_GEO_ACCESS, ...stored };
+  }
+
+  async updateGeoAccess(dto: UpdateGeoAccessSettingsDto, actingUserId: string): Promise<GeoAccessSettings> {
+    const existing = await this.getGeoAccess();
+    const merged: GeoAccessSettings = { ...existing, ...dto };
+    await this.upsert('geo_access', merged, actingUserId);
+    void this.auditService.record(actingUserId, 'settings.geo_access_updated', 'system_setting', null, { ...dto });
+    return merged;
+  }
+
   // ─── Aggregate (for the admin settings page's single load) ───────────
 
   async getAll(): Promise<SystemSettingsDto> {
-    const [smtp, theme, emailTemplates, platform] = await Promise.all([
+    const [smtp, theme, emailTemplates, platform, geoAccess] = await Promise.all([
       this.getSmtp(),
       this.getTheme(),
       this.getEmailTemplates(),
       this.getPlatform(),
+      this.getGeoAccess(),
     ]);
-    return { smtp, theme, emailTemplates, platform };
+    return { smtp, theme, emailTemplates, platform, geoAccess };
   }
 }
