@@ -53,7 +53,13 @@ export default function AuthInitializer({ children }: { children: React.ReactNod
     // unauthenticated visitor (see below), not gate it here too.
     const isAdminLoginRoute = pathname === '/admin/login';
     const isAdminRoute = pathname?.startsWith('/admin') ?? false;
-    const staysVisibleWhenAuthed = pathname === '/' || isInviteRoute || isAdminLoginRoute;
+    // /service-unavailable must be reachable regardless of auth state, same
+    // as '/' — otherwise a blocked, unauthenticated visitor gets bounced
+    // straight back to /login the instant GeoAccessGate lands them here,
+    // which re-runs the geo check, gets blocked again, and redirects back:
+    // an infinite ping-pong between /login and /service-unavailable.
+    const staysVisibleWhenAuthed =
+      pathname === '/' || pathname === '/service-unavailable' || isInviteRoute || isAdminLoginRoute;
     const isPublicRoute = pathname === '/login' || pathname === '/register' || staysVisibleWhenAuthed;
     const isOrgOnboardingRoute = pathname === '/onboarding/organization';
 
