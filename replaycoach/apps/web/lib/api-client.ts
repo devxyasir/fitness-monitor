@@ -68,6 +68,17 @@ async function throwApiError(res: Response, formattedPath: string): Promise<neve
   throw new ApiError(detail || `API error ${res.status}: ${formattedPath}`, res.status, code);
 }
 
+/** A 204 No Content (or any other genuinely empty body) response has
+ * nothing for res.json() to parse — calling it anyway throws "Unexpected
+ * end of JSON input" even though the request succeeded (e.g. the TOTP
+ * confirm/disable endpoints return 204 by design). Mirrors the tolerant
+ * pattern del() already used, applied everywhere a body is optionally
+ * present. */
+async function parseJsonBody<T>(res: Response): Promise<T> {
+  const text = await res.text();
+  return (text ? JSON.parse(text) : undefined) as T;
+}
+
 async function fetchWithAuth(path: string, options: RequestInit): Promise<Response> {
   const formattedPath = formatPath(path);
   const url = `${API_BASE_URL}${formattedPath}`;
@@ -106,7 +117,7 @@ async function get<T>(path: string): Promise<T> {
     method: 'GET',
   });
   if (!res.ok) return throwApiError(res, formattedPath);
-  return res.json() as Promise<T>;
+  return parseJsonBody<T>(res);
 }
 
 async function post<TBody, TResponse>(path: string, body: TBody): Promise<TResponse> {
@@ -116,7 +127,7 @@ async function post<TBody, TResponse>(path: string, body: TBody): Promise<TRespo
     body: JSON.stringify(body),
   });
   if (!res.ok) return throwApiError(res, formattedPath);
-  return res.json() as Promise<TResponse>;
+  return parseJsonBody<TResponse>(res);
 }
 
 async function patch<TBody, TResponse>(path: string, body: TBody): Promise<TResponse> {
@@ -126,16 +137,14 @@ async function patch<TBody, TResponse>(path: string, body: TBody): Promise<TResp
     body: JSON.stringify(body),
   });
   if (!res.ok) return throwApiError(res, formattedPath);
-  return res.json() as Promise<TResponse>;
+  return parseJsonBody<TResponse>(res);
 }
 
 async function del<TResponse = unknown>(path: string): Promise<TResponse> {
   const formattedPath = formatPath(path);
   const res = await fetchWithAuth(formattedPath, { method: 'DELETE' });
   if (!res.ok) return throwApiError(res, formattedPath);
-  // DELETE responses may be empty; tolerate no-body.
-  const text = await res.text();
-  return (text ? JSON.parse(text) : undefined) as TResponse;
+  return parseJsonBody<TResponse>(res);
 }
 
 /**
@@ -165,7 +174,7 @@ async function postForm<TResponse>(path: string, formData: FormData): Promise<TR
   }
 
   if (!res.ok) throw new Error(`API error ${res.status}: ${formattedPath}`);
-  return res.json() as Promise<TResponse>;
+  return parseJsonBody<TResponse>(res);
 }
 
 /**
@@ -221,7 +230,7 @@ function postFormWithProgress<TResponse>(
     if (res.status < 200 || res.status >= 300) {
       throw new Error(`API error ${res.status}: ${formattedPath}`);
     }
-    return JSON.parse(res.body) as TResponse;
+    return (res.body ? JSON.parse(res.body) : undefined) as TResponse;
   })();
 }
 

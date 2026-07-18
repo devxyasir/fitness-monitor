@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { ShieldCheck, ShieldOff, Monitor, X as XIcon } from 'lucide-react';
+import QRCode from 'qrcode';
 import type { TotpEnrollResponse, UserSessionDto } from '@replaycoach/types';
 import { userClient } from '../../../lib/user-client';
 import { useAuthStore } from '../../../stores/auth-store';
@@ -102,11 +103,26 @@ export default function AdminSecurityPage() {
 
 function TotpSection({ totpEnabled, onChange }: { totpEnabled: boolean; onChange: (enabled: boolean) => void }) {
   const [enrollment, setEnrollment] = useState<TotpEnrollResponse | null>(null);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [disabling, setDisabling] = useState(false);
+
+  // Rendered client-side straight from the otpauthUrl the server already
+  // returns — no extra round trip, no image ever touches the network.
+  useEffect(() => {
+    if (!enrollment) {
+      setQrDataUrl(null);
+      return;
+    }
+    let cancelled = false;
+    QRCode.toDataURL(enrollment.otpauthUrl, { width: 220, margin: 1 })
+      .then((url) => { if (!cancelled) setQrDataUrl(url); })
+      .catch((err) => console.error('[TotpSection] Failed to render QR code', err));
+    return () => { cancelled = true; };
+  }, [enrollment]);
 
   const startEnroll = async () => {
     setLoading(true);
@@ -188,7 +204,21 @@ function TotpSection({ totpEnabled, onChange }: { totpEnabled: boolean; onChange
     return (
       <div className="space-y-4">
         <div>
-          <p className="text-xs text-ink-muted mb-1.5">Enter this key manually in your authenticator app:</p>
+          <p className="text-xs text-ink-muted mb-2">Scan with your authenticator app (Google Authenticator, Authy, 1Password, etc.):</p>
+          {qrDataUrl ? (
+            <img
+              src={qrDataUrl}
+              alt="Scan this QR code with your authenticator app"
+              width={180}
+              height={180}
+              className="rounded-md border border-hairline bg-white p-2"
+            />
+          ) : (
+            <div className="w-[180px] h-[180px] rounded-md border border-hairline bg-panel-2 animate-pulse" />
+          )}
+        </div>
+        <div>
+          <p className="text-xs text-ink-muted mb-1.5">Or enter this key manually:</p>
           <code className="block bg-panel-2 border border-hairline rounded-sm px-3 py-2.5 text-sm font-mono text-ink break-all">
             {enrollment.secret}
           </code>
