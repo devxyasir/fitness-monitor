@@ -1,34 +1,59 @@
 import { create } from 'zustand';
 import type { PoseFrameDto } from '@replaycoach/types';
 
+/**
+ * Two independent slots, not one. Previously a single `frames[participantId]`
+ * slot was written by BOTH the live real-time socket feed (usePoseOverlay,
+ * always running even while a replay is open — the live camera keeps going
+ * in the background) AND the replay's own historical pose lookup
+ * (ReplayPanel's syncPose). Whichever wrote last won, so a joint-attached
+ * annotation's resolved position jumped unpredictably between "where the
+ * body is right now" and "where it was at the replayed timestamp" on every
+ * socket tick — this is what read as annotation lines "flexing"/drifting
+ * during replay playback. Live and replay data can now never collide.
+ */
 interface PoseState {
-  /** Latest keypoint frame per participant, keyed by participantId. */
-  frames: Record<string, PoseFrameDto>;
+  live: Record<string, PoseFrameDto>;
+  replay: Record<string, PoseFrameDto>;
 
-  /** Update or insert a participant's latest pose frame. */
-  updateFrame: (participantId: string, frame: PoseFrameDto) => void;
+  updateLiveFrame: (participantId: string, frame: PoseFrameDto) => void;
+  clearLiveParticipant: (participantId: string) => void;
+  clearAllLive: () => void;
 
-  /** Clear pose data for a participant (e.g., on service timeout). */
-  clearParticipant: (participantId: string) => void;
-
-  /** Clear all pose data (e.g., on session end). */
-  clearAll: () => void;
+  updateReplayFrame: (participantId: string, frame: PoseFrameDto) => void;
+  clearReplayParticipant: (participantId: string) => void;
+  clearAllReplay: () => void;
 }
 
 export const usePoseStore = create<PoseState>((set) => ({
-  frames: {},
+  live: {},
+  replay: {},
 
-  updateFrame: (participantId, frame) =>
+  updateLiveFrame: (participantId, frame) =>
     set((state) => ({
-      frames: { ...state.frames, [participantId]: frame },
+      live: { ...state.live, [participantId]: frame },
     })),
 
-  clearParticipant: (participantId) =>
+  clearLiveParticipant: (participantId) =>
     set((state) => {
-      const next = { ...state.frames };
+      const next = { ...state.live };
       delete next[participantId];
-      return { frames: next };
+      return { live: next };
     }),
 
-  clearAll: () => set({ frames: {} }),
+  clearAllLive: () => set({ live: {} }),
+
+  updateReplayFrame: (participantId, frame) =>
+    set((state) => ({
+      replay: { ...state.replay, [participantId]: frame },
+    })),
+
+  clearReplayParticipant: (participantId) =>
+    set((state) => {
+      const next = { ...state.replay };
+      delete next[participantId];
+      return { replay: next };
+    }),
+
+  clearAllReplay: () => set({ replay: {} }),
 }));

@@ -8,6 +8,8 @@ import { X, Play, Pause, Palette, Download, Bone, PenLine, Loader2 } from 'lucid
 import { apiClient } from '../../../lib/api-client';
 import { downloadClipVideo } from './downloadClip';
 import { toast } from '../../../stores/toast-store';
+import { useVideoOverlayRect } from '../../../lib/hooks/useVideoOverlayRect';
+import { drawLine, drawArrow, drawCircle, drawPointMarker, drawAngle, drawTextLabel } from '../../../lib/annotation-drawing';
 
 interface ClipPlaybackModalProps {
   clip: {
@@ -94,6 +96,7 @@ export function ClipPlaybackModal({ clip, playUrl, annotations, onClose, isCoach
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const hlsRef = useRef<Hls | null>(null);
+  const overlayRect = useVideoOverlayRect(containerRef, videoRef);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
@@ -174,106 +177,80 @@ export function ClipPlaybackModal({ clip, playUrl, annotations, onClose, isCoach
     };
   }, []);
 
-  // Draw overlay annotations
+  // Draw overlay annotations — shares its actual painting with the live
+  // replay popup (AnnotationCanvas.tsx) via annotation-drawing.ts, so a
+  // shape looks pixel-identical wherever it's viewed. This component never
+  // attempts jointRef resolution (no continuing pose data exists for a
+  // saved clip — see the plan's "confirmed dead end" note) — it always
+  // paints the fixed geometry baked in at annotation-save time.
   const drawOverlay = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const width = canvas.width;
-    const height = canvas.height;
-    ctx.clearRect(0, 0, width, height);
+    const W = canvas.width;
+    const H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
 
     if (!showAnnotations) return;
 
     for (const ann of activeAnnotations) {
       const color = ann.color || '#FF3B30';
-      ctx.strokeStyle = color;
-      ctx.fillStyle = color;
+      const width = ann.thickness || 3;
 
       if (ann.type === 'pen') {
         const pts = ann.geometry.points;
         if (pts && pts.length >= 2) {
-          ctx.lineWidth = 3;
+          ctx.strokeStyle = color;
+          ctx.lineWidth = width;
           ctx.lineCap = 'round';
           ctx.lineJoin = 'round';
           ctx.beginPath();
-          ctx.moveTo(pts[0] * width, pts[1] * height);
-          for (let i = 2; i < pts.length; i += 2) {
-            ctx.lineTo(pts[i] * width, pts[i + 1] * height);
-          }
+          ctx.moveTo(pts[0] * W, pts[1] * H);
+          for (let i = 2; i < pts.length; i += 2) ctx.lineTo(pts[i] * W, pts[i + 1] * H);
           ctx.stroke();
         }
-      } else if (ann.type === 'arrow') {
+      } else if (ann.type === 'arrow' || ann.type === 'line') {
         const from = ann.geometry.from;
         const to = ann.geometry.to;
         if (from && to) {
-          // Draw arrow segment
-          ctx.lineWidth = 3;
-          ctx.lineCap = 'round';
-          ctx.lineJoin = 'round';
-          ctx.beginPath();
-          ctx.moveTo(from[0] * width, from[1] * height);
-          ctx.lineTo(to[0] * width, to[1] * height);
-          ctx.stroke();
-
-          // Draw head
-          const angle = Math.atan2(to[1] * height - from[1] * height, to[0] * width - from[0] * width);
-          ctx.beginPath();
-          ctx.moveTo(to[0] * width, to[1] * height);
-          ctx.lineTo(
-            to[0] * width - 15 * Math.cos(angle - Math.PI / 6),
-            to[1] * height - 15 * Math.sin(angle - Math.PI / 6)
-          );
-          ctx.lineTo(
-            to[0] * width - 15 * Math.cos(angle + Math.PI / 6),
-            to[1] * height - 15 * Math.sin(angle + Math.PI / 6)
-          );
-          ctx.closePath();
-          ctx.fill();
+          const fromPt = { x: from[0] * W, y: from[1] * H };
+          const toPt = { x: to[0] * W, y: to[1] * H };
+          if (ann.type === 'arrow') drawArrow(ctx, fromPt, toPt, color, width);
+          else drawLine(ctx, fromPt, toPt, color, width);
         }
       } else if (ann.type === 'circle') {
-        const cx = ann.geometry.cx * width;
-        const cy = ann.geometry.cy * height;
-        const r = ann.geometry.r * Math.min(width, height);
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(cx, cy, r, 0, 2 * Math.PI);
-        ctx.stroke();
+        const c = { x: ann.geometry.cx * W, y: ann.geometry.cy * H };
+        const r = (ann.geometry.r ?? 0.05) * Math.min(W, H);
+        drawCircle(ctx, c, r, color, width);
+      } else if (ann.type === 'angle') {
+        const [ax, ay] = ann.geometry.a;
+        const [vx, vy] = ann.geometry.vertex;
+        const [bx, by] = ann.geometry.b;
+        drawAngle(ctx, { x: ax * W, y: ay * H }, { x: vx * W, y: vy * H }, { x: bx * W, y: by * H }, color, width);
+      } else if (ann.type === 'point') {
+        drawPointMarker(ctx, { x: ann.geometry.x * W, y: ann.geometry.y * H }, color, width);
       } else if (ann.type === 'text') {
-        const x = ann.geometry.x * width;
-        const y = ann.geometry.y * height;
         if (ann.textContent) {
-          ctx.font = 'bold 16px Inter, system-ui, sans-serif';
-          ctx.fillText(ann.textContent, x, y);
+          drawTextLabel(ctx, { x: ann.geometry.x * W, y: ann.geometry.y * H }, ann.textContent, color);
         }
       }
     }
   };
 
-  // Canvas size sync
+  // Canvas is sized/positioned to the actual letterboxed video rect (see
+  // useVideoOverlayRect) — not the full container, which the hardcoded
+  // aspect-video wrapper below won't generally match — so normalized [0,1]
+  // annotation coordinates map correctly for any clip resolution.
   useEffect(() => {
-    const handleResize = () => {
-      const canvas = canvasRef.current;
-      const container = containerRef.current;
-      if (!canvas || !container) return;
-
-      const rect = container.getBoundingClientRect();
-      canvas.width = rect.width;
-      canvas.height = rect.height;
-
-      drawOverlay();
-    };
-
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [activeAnnotations, showAnnotations]);
-
-  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.width = overlayRect.width;
+    canvas.height = overlayRect.height;
     drawOverlay();
-  }, [activeAnnotations, showAnnotations]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [overlayRect.width, overlayRect.height, activeAnnotations, showAnnotations]);
 
   const togglePlay = () => {
     const video = videoRef.current;
@@ -380,8 +357,13 @@ export function ClipPlaybackModal({ clip, playUrl, annotations, onClose, isCoach
               playsInline
               className="w-full h-full object-contain"
             />
-            {/* Annotation canvas overlay */}
-            <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
+            {/* Annotation canvas overlay — sized/positioned to the actual
+                letterboxed video rect, not the full container. */}
+            <canvas
+              ref={canvasRef}
+              className="absolute pointer-events-none"
+              style={{ left: overlayRect.left, top: overlayRect.top, width: overlayRect.width, height: overlayRect.height }}
+            />
 
             {/* Play/Pause overlay toggle button */}
             {!isPlaying && (

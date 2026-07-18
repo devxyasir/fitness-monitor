@@ -42,8 +42,9 @@ export function SkeletonOverlay({
 }: SkeletonOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Subscribe to the pose store for this participant's frame
-  const frame = usePoseStore((state) => state.frames[participantId]);
+  // Subscribe to the pose store for this participant's frame. This tile is
+  // always a live camera view, never a replay — read the `live` slot only.
+  const frame = usePoseStore((state) => state.live[participantId]);
 
   useEffect(() => {
     const canvas = canvasRef.current;

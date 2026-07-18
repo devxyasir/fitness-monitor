@@ -14,14 +14,14 @@ import type { PoseFrameDto } from '@replaycoach/types';
  */
 export function usePoseOverlay(sessionId: string) {
   const timeoutRefs = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const { updateFrame, clearParticipant } = usePoseStore();
+  const { updateLiveFrame, clearLiveParticipant } = usePoseStore();
 
   useEffect(() => {
     const handlePoseUpdate = (data: PoseFrameDto) => {
       if (data.sessionId !== sessionId) return;
 
       const { participantId } = data;
-      updateFrame(participantId, data);
+      updateLiveFrame(participantId, data);
 
       // Reset the staleness timeout for this participant
       const existing = timeoutRefs.current[participantId];
@@ -30,7 +30,7 @@ export function usePoseOverlay(sessionId: string) {
       }
 
       timeoutRefs.current[participantId] = setTimeout(() => {
-        clearParticipant(participantId);
+        clearLiveParticipant(participantId);
         delete timeoutRefs.current[participantId];
       }, 2000);
     };
@@ -47,5 +47,5 @@ export function usePoseOverlay(sessionId: string) {
       }
       timeoutRefs.current = {};
     };
-  }, [sessionId, updateFrame, clearParticipant]);
+  }, [sessionId, updateLiveFrame, clearLiveParticipant]);
 }

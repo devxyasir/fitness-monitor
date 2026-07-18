@@ -89,6 +89,7 @@ export function ReplayPanel({
   }, [playbackRate]);
 
   // Load the requested participant's buffer on mount or when participantId updates
+  const { clearReplayParticipant } = usePoseStore();
   useEffect(() => {
     if (!getReplayBlob || !participantId) return;
     setLoadState('loading');
@@ -106,11 +107,18 @@ export function ReplayPanel({
     if (!blob) {
       console.warn('[ReplayPanel] No buffer data available for', participantId);
       setLoadState('unavailable');
-      return;
+    } else {
+      setLoadState('ready');
+      loadBlob(blob);
     }
-    setLoadState('ready');
-    loadBlob(blob);
-  }, [getReplayBlob, participantId, fromOffsetMs, loadBlob]);
+
+    // Runs before the next effect (participantId changed) and on unmount —
+    // clears this participant's replay pose slot so a stale frame can't
+    // leak into a newly opened replay for a different participant.
+    return () => {
+      clearReplayParticipant(participantId);
+    };
+  }, [getReplayBlob, participantId, fromOffsetMs, loadBlob, clearReplayParticipant]);
 
   // Revoke blob URL on unmount
   useEffect(() => {
@@ -140,8 +148,9 @@ export function ReplayPanel({
     };
   }, [isCoach]);
 
-  // Sync pose overlay to video currentTime during replay
-  const { updateFrame } = usePoseStore();
+  // Sync pose overlay to video currentTime during replay — writes into the
+  // `replay` slot only, never `live` (see pose-store.ts's doc comment).
+  const { updateReplayFrame } = usePoseStore();
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !replayStartMs) return;
@@ -154,13 +163,13 @@ export function ReplayPanel({
           if (!best) return f;
           return Math.abs(f.frameTimestampMs - wallMs) < Math.abs(best.frameTimestampMs - wallMs) ? f : best;
         }, null);
-        if (closest) updateFrame(pid, closest);
+        if (closest) updateReplayFrame(pid, closest);
       }
     };
 
     video.addEventListener('timeupdate', syncPose);
     return () => video.removeEventListener('timeupdate', syncPose);
-  }, [replayStartMs, updateFrame]);
+  }, [replayStartMs, updateReplayFrame]);
 
   const handleEndReplay = async () => {
     if (onEndReplay) await onEndReplay();
@@ -237,6 +246,7 @@ export function ReplayPanel({
           sessionId={sessionId}
           frameTimestampMs={Math.round(currentTime * 1000)}
           isCoach={isCoach}
+          videoRef={videoRef}
           {...(participantId ? { participantId } : {})}
         />
       </div>

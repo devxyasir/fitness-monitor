@@ -5,6 +5,8 @@ import { useAnnotationStore, ClientAnnotation, JointRef, getVisibleAnnotations, 
 import { useAnnotationSocket } from '../hooks/useAnnotationSocket';
 import { usePoseStore } from '../../../../stores/pose-store';
 import { findNearestJoint, MIN_SCORE } from './skeletonGeometry';
+import { useVideoOverlayRect } from '../../../../lib/hooks/useVideoOverlayRect';
+import { drawLine, drawArrow, drawCircle, drawPointMarker, drawAngle, drawJointDot, drawTextLabel, type Pt } from '../../../../lib/annotation-drawing';
 import type { PoseFrameDto } from '@replaycoach/types';
 import {
   Pencil, ArrowRight, Minus, Circle, ChevronRight, MapPin, Type,
@@ -19,6 +21,10 @@ interface AnnotationCanvasProps {
   /** Whose skeleton to snap shapes onto — the participant currently being
    * replayed. Omit to disable joint-snapping (pure pixel annotation). */
   participantId?: string;
+  /** The replay `<video>` element this canvas overlays — needed to compute
+   * the actual letterboxed video rect (see useVideoOverlayRect) rather than
+   * sizing the canvas to the full container. */
+  videoRef: React.RefObject<HTMLVideoElement | null>;
 }
 
 const JOINT_SNAP_PX = 26;
@@ -94,120 +100,6 @@ function simplifyFlatPoints(points: number[], tolerance = 0.003): number[] {
   return result;
 }
 
-// ----------------------------------------------------
-// UI Canvas Drawing Helpers
-// ----------------------------------------------------
-type Pt = { x: number; y: number };
-
-function drawLine(ctx: CanvasRenderingContext2D, a: Pt, b: Pt, color: string, width: number) {
-  ctx.strokeStyle = color;
-  ctx.lineWidth = width;
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.moveTo(a.x, a.y);
-  ctx.lineTo(b.x, b.y);
-  ctx.stroke();
-}
-
-function drawArrow(ctx: CanvasRenderingContext2D, from: Pt, to: Pt, color: string, width: number) {
-  ctx.strokeStyle = color;
-  ctx.fillStyle = color;
-  ctx.lineWidth = width;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-
-  ctx.beginPath();
-  ctx.moveTo(from.x, from.y);
-  ctx.lineTo(to.x, to.y);
-  ctx.stroke();
-
-  const angle = Math.atan2(to.y - from.y, to.x - from.x);
-  const head = 10 + width * 2;
-  ctx.beginPath();
-  ctx.moveTo(to.x, to.y);
-  ctx.lineTo(to.x - head * Math.cos(angle - Math.PI / 6), to.y - head * Math.sin(angle - Math.PI / 6));
-  ctx.lineTo(to.x - head * Math.cos(angle + Math.PI / 6), to.y - head * Math.sin(angle + Math.PI / 6));
-  ctx.closePath();
-  ctx.fill();
-}
-
-function drawCircle(ctx: CanvasRenderingContext2D, c: Pt, r: number, color: string, width: number) {
-  ctx.strokeStyle = color;
-  ctx.lineWidth = width;
-  ctx.beginPath();
-  ctx.arc(c.x, c.y, r, 0, 2 * Math.PI);
-  ctx.stroke();
-}
-
-function drawPointMarker(ctx: CanvasRenderingContext2D, p: Pt, color: string, width: number) {
-  ctx.strokeStyle = color;
-  ctx.lineWidth = Math.max(2, width);
-  ctx.beginPath();
-  ctx.arc(p.x, p.y, 8, 0, 2 * Math.PI);
-  ctx.stroke();
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.arc(p.x, p.y, 2.5, 0, 2 * Math.PI);
-  ctx.fill();
-}
-
-function drawAngle(ctx: CanvasRenderingContext2D, a: Pt, vertex: Pt, b: Pt, color: string, width: number) {
-  ctx.strokeStyle = color;
-  ctx.lineWidth = width;
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.moveTo(vertex.x, vertex.y);
-  ctx.lineTo(a.x, a.y);
-  ctx.moveTo(vertex.x, vertex.y);
-  ctx.lineTo(b.x, b.y);
-  ctx.stroke();
-
-  const v1 = { x: a.x - vertex.x, y: a.y - vertex.y };
-  const v2 = { x: b.x - vertex.x, y: b.y - vertex.y };
-  const a1 = Math.atan2(v1.y, v1.x);
-  const a2 = Math.atan2(v2.y, v2.x);
-  let diff = a2 - a1;
-  diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-  const deg = Math.round(Math.abs(diff) * 180 / Math.PI);
-
-  ctx.save();
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.arc(vertex.x, vertex.y, 22, a1, a2, diff < 0);
-  ctx.stroke();
-  ctx.restore();
-
-  const bisector = a1 + diff / 2;
-  const tx = vertex.x + 36 * Math.cos(bisector);
-  const ty = vertex.y + 36 * Math.sin(bisector);
-  ctx.save();
-  ctx.font = 'bold 12px Inter, system-ui, sans-serif';
-  ctx.fillStyle = color;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.strokeStyle = 'rgba(15, 23, 42, 0.85)';
-  ctx.lineWidth = 3;
-  ctx.strokeText(`${deg}°`, tx, ty);
-  ctx.fillText(`${deg}°`, tx, ty);
-  ctx.restore();
-}
-
-/** Small ring marking a shape's joint-attached endpoint — same visual
- * language as the reference-tracking system's joint markers. */
-function drawJointDot(ctx: CanvasRenderingContext2D, p: Pt) {
-  ctx.save();
-  ctx.lineWidth = 1.25;
-  ctx.strokeStyle = 'rgba(15, 23, 42, 0.85)';
-  ctx.beginPath();
-  ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.strokeStyle = '#FFFFFF';
-  ctx.beginPath();
-  ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.restore();
-}
-
 function jointsNeeded(tool: AnnotationTool): number {
   if (tool === 'point') return 1;
   if (tool === 'angle') return 3;
@@ -224,13 +116,20 @@ export function AnnotationCanvas({
   isCoach,
   selectedStudentIds,
   participantId,
+  videoRef,
 }: AnnotationCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const overlayRect = useVideoOverlayRect(containerRef, videoRef);
 
   const { activeTool, activeColor, activeThickness, annotations, selectedId, setActiveTool, setActiveColor, setActiveThickness, select } = useAnnotationStore();
   const { drawAnnotation, clearAnnotationLayer, deleteAnnotation, syncAnnotations } = useAnnotationSocket(sessionId);
-  const poseFrame = usePoseStore((s) => (participantId ? s.frames[participantId] : undefined));
+  // This component is only ever rendered inside ReplayPanel (a replay
+  // context) — read the `replay` slot, never `live`, so a joint-attached
+  // shape's resolved position can't jump toward the live feed while a
+  // historical replay is playing. If AnnotationCanvas is ever reused for a
+  // genuinely live (non-replay) surface, this assumption needs revisiting.
+  const poseFrame = usePoseStore((s) => (participantId ? s.replay[participantId] : undefined));
 
   // Drawing tracking (imperative refs — avoid React re-renders mid-gesture)
   const isDrawingRef = useRef(false);
@@ -332,9 +231,7 @@ export function AnnotationCanvas({
         const x = ann.geometry.x * W;
         const y = ann.geometry.y * H;
         if (ann.textContent) {
-          ctx.font = 'bold 16px Inter, system-ui, sans-serif';
-          ctx.fillStyle = color;
-          ctx.fillText(ann.textContent, x, y);
+          drawTextLabel(ctx, { x, y }, ann.textContent, color);
         }
       }
 
@@ -349,26 +246,20 @@ export function AnnotationCanvas({
     }
   };
 
+  // Canvas is sized/positioned to the actual letterboxed video rect (see
+  // useVideoOverlayRect) — not the full container — so normalized [0,1]
+  // annotation coordinates map correctly even when the video's aspect
+  // ratio doesn't match the container's. Reacts to overlayRect changes
+  // (container resize, fullscreen toggle, video metadata load) via the
+  // hook's own ResizeObserver, so no window-resize listener is needed here.
   useEffect(() => {
-    const resizeCanvas = () => {
-      const canvas = canvasRef.current;
-      const container = containerRef.current;
-      if (!canvas || !container) return;
-      const rect = container.getBoundingClientRect();
-      canvas.width = rect.width;
-      canvas.height = rect.height;
-      drawAll();
-    };
-    resizeCanvas();
-    window.addEventListener('resize', resizeCanvas);
-    return () => window.removeEventListener('resize', resizeCanvas);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [annotations, frameTimestampMs, poseFrame, selectedId]);
-
-  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.width = overlayRect.width;
+    canvas.height = overlayRect.height;
     drawAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [annotations, frameTimestampMs, poseFrame, selectedId]);
+  }, [overlayRect.width, overlayRect.height, annotations, frameTimestampMs, poseFrame, selectedId]);
 
   const snapPoint = (px: Pt): { px: Pt; joint?: string } => {
     const canvas = canvasRef.current;
@@ -662,9 +553,10 @@ export function AnnotationCanvas({
         onPointerMove={handlePointerMove}
         onPointerLeave={() => setHoveredJoint(null)}
         onPointerUp={handlePointerUp}
-        className={`absolute inset-0 w-full h-full block ${
+        className={`absolute block ${
           isCoach ? (activeTool === 'select' ? 'cursor-pointer' : 'cursor-crosshair') + ' touch-none' : 'pointer-events-none'
         }`}
+        style={{ left: overlayRect.left, top: overlayRect.top, width: overlayRect.width, height: overlayRect.height }}
         aria-label="Annotation Drawing Panel"
       />
 
@@ -680,7 +572,10 @@ export function AnnotationCanvas({
             if (e.key === 'Escape') { setTextInputPos(null); setTextInputValue(''); }
           }}
           style={{
-            position: 'absolute', left: textInputPos.x, top: textInputPos.y - 12,
+            // textInputPos is canvas-local (relative to the letterboxed
+            // video rect); this input is positioned relative to the
+            // container, so overlayRect's offset must be added back in.
+            position: 'absolute', left: overlayRect.left + textInputPos.x, top: overlayRect.top + textInputPos.y - 12,
             color: activeColor, font: 'bold 16px Inter, sans-serif',
             background: 'rgba(15, 21, 34, 0.92)', border: `1.5px solid ${activeColor}`,
             borderRadius: '8px', padding: '2px 6px', outline: 'none', zIndex: 30, width: '180px',
@@ -689,9 +584,15 @@ export function AnnotationCanvas({
         />
       )}
 
-      {/* Pending multi-click points (angle tool) */}
+      {/* Pending multi-click points (angle tool) — positioned to match the
+          canvas's own rect exactly, since pendingPoints are stored in
+          canvas-local pixel space (relative to the letterboxed video rect,
+          not the container). */}
       {pendingPoints.length > 0 && (
-        <svg className="absolute inset-0 pointer-events-none z-20" width="100%" height="100%">
+        <svg
+          className="absolute pointer-events-none z-20"
+          style={{ left: overlayRect.left, top: overlayRect.top, width: overlayRect.width, height: overlayRect.height }}
+        >
           {pendingPoints.map((p, i) => (
             <circle key={i} cx={p.px.x} cy={p.px.y} r={5} fill={activeColor} stroke="#0F1522" strokeWidth={1.5} />
           ))}
