@@ -500,6 +500,14 @@ export class RealtimeGateway implements OnGatewayConnection {
     this.server.emit('reference:export-failed', { refId, reason });
   }
 
+  /** Periodic render progress — see ReferenceMediaController.exportProgress
+   * / export_renderer.py's per-frame loop. Same broadcast-to-all shape as
+   * the ready/failed events above (the callback only carries refId, not a
+   * session context), filtered client-side by refId. */
+  emitReferenceExportProgress(refId: string, percent: number) {
+    this.server.emit('reference:export-progress', { refId, percent });
+  }
+
   private async assertCoach(sessionId: string, user: JwtPayload): Promise<Session> {
     const session = await this.sessionRepository.findOne({ where: { id: sessionId } });
     if (!session) throw new Error('Session not found');

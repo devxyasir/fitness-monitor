@@ -293,6 +293,31 @@ export class ReferenceMediaController {
     return { success: true };
   }
 
+  /** Pose-service posts periodic {"percent": N} updates here during the
+   * export frame loop — same callback-token auth as the other pose-service
+   * callbacks. Throttled generously (well above what even several
+   * concurrent exports reporting every few seconds would produce) since
+   * this is called automatically by the render loop, not by a user action. */
+  @Post(':refId/export-progress')
+  @Throttle({ default: { limit: 120, ttl: 60000 } })
+  async exportProgress(
+    @Param('refId') refId: string,
+    @Headers('x-callback-token') token: string | undefined,
+    @Body() body: { percent?: number },
+  ) {
+    if (!token || !this.referenceService.verifyCallbackToken(refId, token)) {
+      throw new UnauthorizedException('Invalid callback token');
+    }
+    if (typeof body.percent !== 'number') {
+      throw new BadRequestException('percent is required');
+    }
+    const recorded = await this.referenceService.updateExportProgress(refId, body.percent);
+    if (recorded !== null) {
+      this.realtimeGateway.emitReferenceExportProgress(refId, recorded);
+    }
+    return { success: true };
+  }
+
   @Get('media/*')
   async streamMedia(
     @Req() req: Request,

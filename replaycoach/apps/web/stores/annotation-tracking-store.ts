@@ -23,6 +23,9 @@ interface AnnotationTrackingState {
    * previously nothing did this, so a failed export left the UI showing
    * "Exporting…" forever with no feedback. Consumed once by the modal. */
   exportError: string | null;
+  /** 0-100, updated by periodic reference:export-progress socket events
+   * during a render; null when no export is in flight. */
+  exportProgressPercent: number | null;
   keypointFormat: KeypointFormat;
   status: 'processing' | 'ready' | 'failed';
 
@@ -64,6 +67,7 @@ interface AnnotationTrackingState {
   setReady: (p: { keypointsUrl: string | null; keypointFormat: KeypointFormat; fps: number; frameCount: number }) => void;
   setExportVideoUrl: (url: string | null) => void;
   setExportError: (reason: string | null) => void;
+  setExportProgress: (pct: number | null) => void;
 
   setAnnotations: (list: TrackedAnnotation[]) => void;
   applyRemoteCreate: (a: TrackedAnnotation) => void;
@@ -91,6 +95,7 @@ const initial = {
   keypointsUrl: null as string | null,
   exportVideoUrl: null as string | null,
   exportError: null as string | null,
+  exportProgressPercent: null as number | null,
   keypointFormat: 'halpe26' as KeypointFormat,
   status: 'processing' as 'processing' | 'ready' | 'failed',
   fps: 30,
@@ -129,8 +134,9 @@ export const useAnnotationTrackingStore = create<AnnotationTrackingState>((set) 
       fps: p.fps || s.fps,
       frameCount: p.frameCount || s.frameCount,
     })),
-  setExportVideoUrl: (url) => set({ exportVideoUrl: url }),
-  setExportError: (reason) => set({ exportError: reason }),
+  setExportVideoUrl: (url) => set({ exportVideoUrl: url, exportProgressPercent: null }),
+  setExportError: (reason) => set({ exportError: reason, exportProgressPercent: null }),
+  setExportProgress: (pct) => set({ exportProgressPercent: pct }),
 
   setAnnotations: (list) => set({ annotations: list }),
   applyRemoteCreate: (a) =>

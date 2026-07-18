@@ -208,6 +208,22 @@ export class ReferenceService {
     await this.repo.update({ id }, { exportStatus: 'failed', exportErrorMessage: reason });
   }
 
+  /**
+   * Clamps to [0,100] and only writes on increase — guards against an
+   * out-of-order or duplicate progress callback delivery regressing the
+   * displayed percentage backward. Returns the value actually recorded (or
+   * null if this call was a no-op) so the controller only re-emits over
+   * the socket when something genuinely changed.
+   */
+  async updateExportProgress(id: string, percent: number): Promise<number | null> {
+    const clamped = Math.max(0, Math.min(100, Math.round(percent)));
+    const video = await this.repo.findOne({ where: { id } });
+    if (!video) throw new NotFoundException(`Reference video ${id} not found`);
+    if (video.exportProgressPercent !== null && clamped <= video.exportProgressPercent) return null;
+    await this.repo.update({ id }, { exportStatus: 'processing', exportProgressPercent: clamped });
+    return clamped;
+  }
+
   verifyCallbackToken(refId: string, token: string): boolean {
     return this.storage.verifyCallbackToken(refId, token);
   }

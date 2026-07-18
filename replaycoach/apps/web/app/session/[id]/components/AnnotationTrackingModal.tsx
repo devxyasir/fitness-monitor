@@ -39,7 +39,7 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
 
   const s = useAnnotationTrackingStore();
   const {
-    refId, videoUrl, keypointsUrl, exportVideoUrl, exportError, keypointFormat, status, fps, frameCount,
+    refId, videoUrl, keypointsUrl, exportVideoUrl, exportError, exportProgressPercent, keypointFormat, status, fps, frameCount,
     keypointsByFrame, annotations, selectedId, shapeType, color, thickness, showSkeleton,
     pendingJoints, playing, frameIndex,
   } = s;
@@ -685,26 +685,35 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
   };
 
   // Server-side export: sends annotation data to the backend pose-service
-  // which composites the video + annotations via FFmpeg (preserves audio).
-  // Two modes: burn in the full skeleton overlay, or just the joint-attached
-  // annotations over the raw footage — the coach picks per-export.
-  const [lastExportMode, setLastExportMode] = useState<'skeleton' | 'annotations' | null>(null);
+  // which composites the video + skeleton/annotations via FFmpeg (preserves
+  // audio). Skeleton and annotations are independent toggles — either, both,
+  // or (export disabled) neither.
+  const [wantSkeleton, setWantSkeleton] = useState(false);
+  const [wantAnnotations, setWantAnnotations] = useState(true);
+  const [lastExportMode, setLastExportMode] = useState<{ skeleton: boolean; annotations: boolean } | null>(null);
   const [showModeChooser, setShowModeChooser] = useState(false);
 
-  const startExport = async (drawSkeleton: boolean) => {
-    if (!refId || exporting) return;
+  const startExport = async () => {
+    if (!refId || exporting || (!wantSkeleton && !wantAnnotations)) return;
     setExporting(true);
     setError(null);
     setShowModeChooser(false);
+    s.setExportProgress(0);
     try {
-      await apiClient.post(`/sessions/${sessionId}/reference/${refId}/export`, { drawSkeleton });
-      setLastExportMode(drawSkeleton ? 'skeleton' : 'annotations');
+      await apiClient.post(`/sessions/${sessionId}/reference/${refId}/export`, {
+        includeSkeleton: wantSkeleton,
+        includeAnnotations: wantAnnotations,
+      });
+      setLastExportMode({ skeleton: wantSkeleton, annotations: wantAnnotations });
     } catch (e) {
       console.error('[AnnotationTracking] export failed', e);
       setError(e instanceof Error ? e.message : 'Export failed to start.');
       setExporting(false);
     }
   };
+  const lastExportLabel = lastExportMode
+    ? [lastExportMode.skeleton && 'skeleton', lastExportMode.annotations && 'annotations'].filter(Boolean).join(' + ')
+    : '';
 
   // When the export URL arrives (socket refresh), stop the spinner.
   useEffect(() => { if (exportVideoUrl) setExporting(false); }, [exportVideoUrl]);
@@ -752,13 +761,22 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
           </div>
           <div className="flex items-center gap-2">
             {exporting ? (
-              <button disabled className="px-3 py-1.5 rounded-full bg-panel-2 border border-hairline text-ink-muted text-xs font-semibold opacity-70 cursor-not-allowed inline-flex items-center gap-1.5">
-                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Exporting…
-              </button>
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-panel-2 border border-hairline text-ink-muted text-xs font-semibold">
+                <Loader2 className="w-3.5 h-3.5 animate-spin flex-shrink-0" />
+                <span>Exporting{exportProgressPercent !== null ? ` ${exportProgressPercent}%` : '…'}</span>
+                {exportProgressPercent !== null && (
+                  <span className="w-16 h-1.5 rounded-full bg-panel overflow-hidden flex-shrink-0">
+                    <span
+                      className="block h-full bg-session transition-all"
+                      style={{ width: `${exportProgressPercent}%` }}
+                    />
+                  </span>
+                )}
+              </div>
             ) : exportVideoUrl && !showModeChooser ? (
               <>
                 <button onClick={downloadExport} className="px-3 py-1.5 rounded-full bg-success/90 hover:bg-success text-white dark:text-canvas text-xs font-semibold transition-colors inline-flex items-center gap-1.5">
-                  <Download className="w-3.5 h-3.5" /> Download {lastExportMode === 'skeleton' ? '(skeleton)' : '(annotations)'}
+                  <Download className="w-3.5 h-3.5" /> Download {lastExportLabel && `(${lastExportLabel})`}
                 </button>
                 {isCoach && status === 'ready' && (
                   <button
@@ -773,20 +791,41 @@ export function AnnotationTrackingModal({ sessionId, isCoach }: Props) {
               </>
             ) : isCoach && status === 'ready' && (
               <div className="flex items-center gap-1.5">
-                <span className="text-[10px] font-mono text-ink-faint uppercase tracking-wide mr-0.5 hidden sm:inline">Download:</span>
+                <span className="text-[10px] font-mono text-ink-faint uppercase tracking-wide mr-0.5 hidden sm:inline">Export:</span>
                 <button
-                  onClick={() => startExport(true)}
-                  title="Burn in the full skeleton overlay"
-                  className="px-3 py-1.5 rounded-full bg-session/15 hover:bg-session/25 border border-session/40 text-session text-xs font-semibold transition-colors inline-flex items-center gap-1.5"
+                  type="button"
+                  onClick={() => setWantSkeleton((v) => !v)}
+                  title="Include the full skeleton overlay"
+                  aria-pressed={wantSkeleton}
+                  className={`px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors inline-flex items-center gap-1.5 ${
+                    wantSkeleton
+                      ? 'bg-session/15 border-session/40 text-session'
+                      : 'bg-panel-2 border-hairline text-ink-muted hover:bg-panel-2/60'
+                  }`}
                 >
-                  <Bone className="w-3.5 h-3.5" /> Full skeleton
+                  <Bone className="w-3.5 h-3.5" /> Skeleton
                 </button>
                 <button
-                  onClick={() => startExport(false)}
-                  title="Just the joint-attached annotations over the raw video"
-                  className="px-3 py-1.5 rounded-full bg-panel-2 hover:bg-panel-2/60 border border-hairline text-ink-muted text-xs font-semibold transition-colors inline-flex items-center gap-1.5"
+                  type="button"
+                  onClick={() => setWantAnnotations((v) => !v)}
+                  title="Include the joint-attached annotations"
+                  aria-pressed={wantAnnotations}
+                  className={`px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors inline-flex items-center gap-1.5 ${
+                    wantAnnotations
+                      ? 'bg-session/15 border-session/40 text-session'
+                      : 'bg-panel-2 border-hairline text-ink-muted hover:bg-panel-2/60'
+                  }`}
                 >
-                  <PenLine className="w-3.5 h-3.5" /> Annotations only
+                  <PenLine className="w-3.5 h-3.5" /> Annotations
+                </button>
+                <button
+                  type="button"
+                  onClick={startExport}
+                  disabled={!wantSkeleton && !wantAnnotations}
+                  title={!wantSkeleton && !wantAnnotations ? 'Select skeleton, annotations, or both' : 'Start export'}
+                  className="px-3 py-1.5 rounded-full bg-brand hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed text-white dark:text-canvas text-xs font-semibold transition-colors inline-flex items-center gap-1.5"
+                >
+                  <Download className="w-3.5 h-3.5" /> Export
                 </button>
               </div>
             )}

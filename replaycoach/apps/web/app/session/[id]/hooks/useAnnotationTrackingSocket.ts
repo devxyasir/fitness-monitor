@@ -88,6 +88,12 @@ export function useAnnotationTrackingSocket(sessionId: string) {
       st.setExportError(p.reason || 'Export failed. Please try again.');
     };
 
+    const onExportProgress = (p: { refId: string; percent: number }) => {
+      const st = store.getState();
+      if (st.refId !== p.refId) return;
+      st.setExportProgress(p.percent);
+    };
+
     socket.on('reference:open', open);
     socket.on('reference:ready', ready);
     socket.on('reference:annotation-create', onCreate);
@@ -95,6 +101,7 @@ export function useAnnotationTrackingSocket(sessionId: string) {
     socket.on('reference:annotation-delete', onDelete);
     socket.on('reference:export-ready', onExportReady);
     socket.on('reference:export-failed', onExportFailed);
+    socket.on('reference:export-progress', onExportProgress);
 
     return () => {
       socket.off('reference:open', open);
@@ -104,6 +111,7 @@ export function useAnnotationTrackingSocket(sessionId: string) {
       socket.off('reference:annotation-delete', onDelete);
       socket.off('reference:export-ready', onExportReady);
       socket.off('reference:export-failed', onExportFailed);
+      socket.off('reference:export-progress', onExportProgress);
     };
   }, [sessionId, store]);
 }

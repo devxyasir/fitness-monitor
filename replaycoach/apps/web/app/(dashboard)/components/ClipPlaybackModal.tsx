@@ -10,6 +10,8 @@ import { downloadClipVideo } from './downloadClip';
 import { toast } from '../../../stores/toast-store';
 import { useVideoOverlayRect } from '../../../lib/hooks/useVideoOverlayRect';
 import { drawLine, drawArrow, drawCircle, drawPointMarker, drawAngle, drawTextLabel } from '../../../lib/annotation-drawing';
+import { socket, connectSocket } from '../../../lib/socket-client';
+import { useAuthStore } from '../../../stores/auth-store';
 
 interface ClipPlaybackModalProps {
   clip: {
@@ -31,16 +33,28 @@ interface ClipPlaybackModalProps {
   isCoach?: boolean;
 }
 
-const EXPORT_POLL_INTERVAL_MS = 2500;
-const EXPORT_POLL_TIMEOUT_MS = 90_000;
-
 export function ClipPlaybackModal({ clip, playUrl, annotations, onClose, isCoach = false }: ClipPlaybackModalProps) {
   const [downloading, setDownloading] = useState(false);
-  // Re-export flow (only for reference clips with a referenceVideoId): the
-  // coach/student picks a mode, we kick off a fresh server-side render, poll
-  // until the clip's underlying file changes, then download that result.
-  const [exportingMode, setExportingMode] = useState<'skeleton' | 'annotations' | null>(null);
+  // Re-export flow (only for reference clips with a referenceVideoId):
+  // skeleton/annotations are independent toggles. Completion/progress
+  // arrive over the socket (reference:export-progress/-ready/-failed) —
+  // this used to poll GET /clips/:id every 2.5s with a 90s giveup, which
+  // was both wasteful and produced a misleading "taking too long" error on
+  // any export that took longer than 90s even though the server-side
+  // budget is far larger (up to ~45min for a long recording).
+  const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState<number | null>(null);
+  const [wantSkeleton, setWantSkeleton] = useState(false);
+  const [wantAnnotations, setWantAnnotations] = useState(true);
   const [showModeChooser, setShowModeChooser] = useState(false);
+
+  // The dashboard clips pages never connect the socket today (only session
+  // pages do) — needed now to receive export progress/ready/failed events.
+  // connectSocket is idempotent for a matching token; no disconnect on
+  // unmount, matching the singleton-connection pattern used elsewhere.
+  useEffect(() => {
+    connectSocket(useAuthStore.getState().accessToken);
+  }, []);
 
   const handleDownload = async () => {
     if (downloading) return;
@@ -56,39 +70,59 @@ export function ClipPlaybackModal({ clip, playUrl, annotations, onClose, isCoach
     }
   };
 
-  const exportKeyOf = (url: string) => {
-    try {
-      return new URL(url).pathname;
-    } catch {
-      return url;
-    }
-  };
+  useEffect(() => {
+    const refId = clip.referenceVideoId;
+    if (!refId) return;
 
-  const handleExportAndDownload = async (drawSkeleton: boolean) => {
-    if (exportingMode || !clip.referenceVideoId) return;
-    setShowModeChooser(false);
-    setExportingMode(drawSkeleton ? 'skeleton' : 'annotations');
-    const priorKey = exportKeyOf(playUrl);
-    try {
-      await apiClient.post(`/sessions/${clip.sessionId}/reference/${clip.referenceVideoId}/export`, { drawSkeleton });
-
-      const deadline = Date.now() + EXPORT_POLL_TIMEOUT_MS;
-      let freshUrl: string | null = null;
-      while (Date.now() < deadline) {
-        await new Promise((r) => setTimeout(r, EXPORT_POLL_INTERVAL_MS));
+    const onProgress = (p: { refId: string; percent: number }) => {
+      if (p.refId !== refId) return;
+      setExportProgress(p.percent);
+    };
+    const onReady = async (p: { refId: string }) => {
+      if (p.refId !== refId) return;
+      try {
         const res = await apiClient.get<{ playUrl: string }>(`/clips/${clip.id}`);
-        if (exportKeyOf(res.playUrl) !== priorKey) {
-          freshUrl = res.playUrl;
-          break;
-        }
+        await downloadClipVideo({ clipId: clip.id, startedAt: clip.meeting?.startedAt, playUrl: res.playUrl });
+      } catch (err) {
+        console.error('[ClipPlaybackModal] Export ready but download failed:', err);
+        toast.error('Export finished but the download failed. Try downloading again.');
+      } finally {
+        setExporting(false);
+        setExportProgress(null);
       }
-      if (!freshUrl) throw new Error('Export is taking longer than expected. Try downloading again shortly.');
-      await downloadClipVideo({ clipId: clip.id, startedAt: clip.meeting?.startedAt, playUrl: freshUrl });
+    };
+    const onFailed = (p: { refId: string; reason?: string }) => {
+      if (p.refId !== refId) return;
+      toast.error(p.reason || 'Export failed. Please try again.');
+      setExporting(false);
+      setExportProgress(null);
+    };
+
+    socket.on('reference:export-progress', onProgress);
+    socket.on('reference:export-ready', onReady);
+    socket.on('reference:export-failed', onFailed);
+    return () => {
+      socket.off('reference:export-progress', onProgress);
+      socket.off('reference:export-ready', onReady);
+      socket.off('reference:export-failed', onFailed);
+    };
+  }, [clip.referenceVideoId, clip.id, clip.meeting?.startedAt]);
+
+  const startExport = async () => {
+    if (exporting || !clip.referenceVideoId || (!wantSkeleton && !wantAnnotations)) return;
+    setShowModeChooser(false);
+    setExporting(true);
+    setExportProgress(0);
+    try {
+      await apiClient.post(`/sessions/${clip.sessionId}/reference/${clip.referenceVideoId}/export`, {
+        includeSkeleton: wantSkeleton,
+        includeAnnotations: wantAnnotations,
+      });
     } catch (err) {
-      console.error('[ClipPlaybackModal] Export/download failed:', err);
+      console.error('[ClipPlaybackModal] Export failed to start:', err);
       toast.error(err instanceof Error ? err.message : 'Export failed. Please try again.');
-    } finally {
-      setExportingMode(null);
+      setExporting(false);
+      setExportProgress(null);
     }
   };
 
@@ -292,26 +326,56 @@ export function ClipPlaybackModal({ clip, playUrl, annotations, onClose, isCoach
                 burned in). Only for reference/overlay clips — recording clips
                 are HLS-segmented and have no single downloadable file. */}
             {clip.downloadable && (
-              exportingMode ? (
-                <button disabled className="px-3 py-2 rounded-full bg-panel-2 border border-hairline text-ink-muted text-xs font-semibold opacity-70 cursor-not-allowed inline-flex items-center gap-1.5">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Rendering {exportingMode === 'skeleton' ? 'skeleton' : 'annotations'}…
-                </button>
+              exporting ? (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-full bg-panel-2 border border-hairline text-ink-muted text-xs font-semibold">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin flex-shrink-0" />
+                  <span>Rendering{exportProgress !== null ? ` ${exportProgress}%` : '…'}</span>
+                  {exportProgress !== null && (
+                    <span className="w-16 h-1.5 rounded-full bg-panel overflow-hidden flex-shrink-0">
+                      <span
+                        className="block h-full bg-brand transition-all"
+                        style={{ width: `${exportProgress}%` }}
+                      />
+                    </span>
+                  )}
+                </div>
               ) : canReExport && showModeChooser ? (
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] font-mono text-ink-faint uppercase tracking-wide mr-0.5 hidden sm:inline">Download:</span>
+                  <span className="text-[10px] font-mono text-ink-faint uppercase tracking-wide mr-0.5 hidden sm:inline">Export:</span>
                   <button
-                    onClick={() => handleExportAndDownload(true)}
-                    title="Burn in the full skeleton overlay"
-                    className="px-3 py-2 rounded-full bg-session/15 hover:bg-session/25 border border-session/40 text-session text-xs font-semibold transition-colors inline-flex items-center gap-1.5"
+                    type="button"
+                    onClick={() => setWantSkeleton((v) => !v)}
+                    title="Include the full skeleton overlay"
+                    aria-pressed={wantSkeleton}
+                    className={`px-3 py-2 rounded-full border text-xs font-semibold transition-colors inline-flex items-center gap-1.5 ${
+                      wantSkeleton
+                        ? 'bg-session/15 border-session/40 text-session'
+                        : 'bg-panel-2 border-hairline text-ink-muted hover:bg-panel-2/60'
+                    }`}
                   >
-                    <Bone className="w-3.5 h-3.5" /> Full skeleton
+                    <Bone className="w-3.5 h-3.5" /> Skeleton
                   </button>
                   <button
-                    onClick={() => handleExportAndDownload(false)}
-                    title="Just the joint-attached annotations over the raw video"
-                    className="px-3 py-2 rounded-full bg-panel-2 hover:bg-panel-2/60 border border-hairline text-ink-muted text-xs font-semibold transition-colors inline-flex items-center gap-1.5"
+                    type="button"
+                    onClick={() => setWantAnnotations((v) => !v)}
+                    title="Include the joint-attached annotations"
+                    aria-pressed={wantAnnotations}
+                    className={`px-3 py-2 rounded-full border text-xs font-semibold transition-colors inline-flex items-center gap-1.5 ${
+                      wantAnnotations
+                        ? 'bg-session/15 border-session/40 text-session'
+                        : 'bg-panel-2 border-hairline text-ink-muted hover:bg-panel-2/60'
+                    }`}
                   >
-                    <PenLine className="w-3.5 h-3.5" /> Annotations only
+                    <PenLine className="w-3.5 h-3.5" /> Annotations
+                  </button>
+                  <button
+                    type="button"
+                    onClick={startExport}
+                    disabled={!wantSkeleton && !wantAnnotations}
+                    title={!wantSkeleton && !wantAnnotations ? 'Select skeleton, annotations, or both' : 'Start export'}
+                    className="px-3 py-2 rounded-full bg-brand hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed text-white dark:text-canvas text-xs font-semibold transition-colors inline-flex items-center gap-1.5"
+                  >
+                    <Download className="w-3.5 h-3.5" /> Export
                   </button>
                 </div>
               ) : (
