@@ -169,7 +169,7 @@ export class ReferenceController {
     @CurrentUser() user: JwtPayload,
     @Body() body: ExportReferenceVideoDto,
   ) {
-    return this.referenceService.startExport(sessionId, refId, user.sub, user.role, body.drawSkeleton ?? false);
+    return this.referenceService.startExport(sessionId, refId, user.sub, user.role, body);
   }
 }
 
@@ -287,7 +287,9 @@ export class ReferenceMediaController {
     if (!token || !this.referenceService.verifyCallbackToken(refId, token)) {
       throw new UnauthorizedException('Invalid callback token');
     }
-    this.realtimeGateway.emitReferenceExportFailed(refId, body.reason || 'Export failed');
+    const reason = body.reason || 'Export failed';
+    await this.referenceService.markExportFailed(refId, reason);
+    this.realtimeGateway.emitReferenceExportFailed(refId, reason);
     return { success: true };
   }
 

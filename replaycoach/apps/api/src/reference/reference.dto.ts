@@ -104,9 +104,24 @@ export class SyncReferenceAnnotationsDto {
   strokesByFrame!: Record<string, ReferenceStroke[]>;
 }
 
-/** Two download modes for the coach: full skeleton overlay burned in, or just
- * the joint-attached annotations/markers with the raw video underneath. */
+/** Independent skeleton/annotation export toggles — either, both, or (once
+ * validated in the service layer) neither is rejected. `drawSkeleton` is
+ * kept as a deprecated fallback for one deploy cycle so a stale cached
+ * frontend bundle mid-deploy doesn't break: `true` maps to
+ * {includeSkeleton:true, includeAnnotations:true} (old "full skeleton"
+ * preset), `false` maps to {includeSkeleton:false, includeAnnotations:true}
+ * (old "annotations only" preset, today's default). See
+ * ReferenceService.startExport for the resolution order. */
 export class ExportReferenceVideoDto {
+  @IsOptional()
+  @IsBoolean()
+  includeSkeleton?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  includeAnnotations?: boolean;
+
+  /** @deprecated use includeSkeleton/includeAnnotations. */
   @IsOptional()
   @IsBoolean()
   drawSkeleton?: boolean;
@@ -123,6 +138,11 @@ export interface ReferenceVideoResponse {
   overlayVideoUrl: string | null;
   /** Rendered export (raw + skeleton + tracked annotations); null until exported. */
   exportVideoUrl: string | null;
+  /** Lets a client that reloads mid-export (missed the socket events)
+   * hydrate current state instead of assuming nothing is happening. */
+  exportStatus: 'idle' | 'queued' | 'processing' | 'completed' | 'failed';
+  exportProgressPercent: number | null;
+  exportErrorMessage: string | null;
   analysisMode: 'full_body' | 'annotation_tracking';
   keypointFormat: 'coco17' | 'halpe26';
   fps: number | null;

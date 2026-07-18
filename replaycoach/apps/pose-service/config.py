@@ -103,6 +103,23 @@ class Settings(BaseSettings):
     # Maximum number of concurrent workers
     max_workers: int = 8
 
+    # Redis Streams job queue for export rendering (export_worker.py — a
+    # dedicated, separate OS process from this one, never imported here) —
+    # so a video export's CPU-bound OpenCV/ffmpeg work never competes with
+    # this process's live per-participant pose inference for the same
+    # event loop/GIL. Concurrency is controlled by how many
+    # export_worker.py PM2 instances are running (Redis Streams consumer
+    # groups load-balance naturally across consumers in the same group),
+    # not by a knob here — 1 instance by default, conservative for a
+    # shared 2-vCPU host.
+    export_stream_key: str = "pose:export-jobs"
+    export_consumer_group: str = "pose-export-workers"
+    # How often export_annotated_video's frame loop may POST a progress
+    # update — throttled together with a percent-bucket jump (see
+    # export_renderer.py's PROGRESS_PERCENT_STEP) so neither a very short
+    # nor a very long export hammers the callback endpoint.
+    export_progress_report_interval_s: float = 3.0
+
     # Every ONNX Runtime session already auto-prefers CUDAExecutionProvider
     # when available (see inference.py's _select_providers) — GPU support
     # is otherwise entirely a matter of which onnxruntime package is

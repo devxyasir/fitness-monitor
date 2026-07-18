@@ -330,11 +330,15 @@ class ReferenceExportRequest(BaseModel):
     callbackToken: str
     annotations: list[dict]
     keypointFormat: str = "halpe26"
-    drawSkeleton: bool = False
+    includeSkeleton: bool = False
+    includeAnnotations: bool = True
     # Optional — if the API didn't send one (older client), export_annotated_video
     # just logs on failure instead of posting anywhere, same as before this field
     # existed. When present, a failure gets reported instead of silently vanishing.
     callbackUrl: str | None = None
+    # Optional — periodic {"percent": N} progress callbacks are skipped
+    # entirely if not provided (older client / local direct-HTTP testing).
+    progressUrl: str | None = None
 
 
 @app.post("/reference/export")
@@ -343,9 +347,16 @@ async def export_reference(
     background_tasks: BackgroundTasks,
 ) -> dict[str, str]:
     """
-    Render raw video + skeleton + tracked joint-attached annotations into an
-    MP4 and upload it (req.uploadUrl). Background task; the API polls/serves
-    the exported file for download once uploaded.
+    Render raw video + skeleton and/or tracked joint-attached annotations
+    into an MP4 and upload it (req.uploadUrl). Background task; the API
+    polls/serves the exported file for download once uploaded.
+
+    This direct-HTTP path is the local/dev debugging entrypoint (mirrors
+    the /workers/* vs pose:commands stream split already used for live
+    tracking) — production export requests go through the durable
+    pose:export-jobs Redis Streams queue instead (see export_worker.py),
+    which is what actually gives export rendering process-level isolation
+    from this process's live pose inference.
     """
     background_tasks.add_task(
         export_annotated_video,
@@ -356,8 +367,10 @@ async def export_reference(
         req.callbackToken,
         req.annotations,
         req.keypointFormat,
-        req.drawSkeleton,
+        req.includeSkeleton,
+        req.includeAnnotations,
         req.callbackUrl,
+        req.progressUrl,
     )
     return {"status": "accepted"}
 

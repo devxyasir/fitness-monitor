@@ -10,6 +10,7 @@ import { SessionsService } from '../sessions/sessions.service';
 import { ReferenceStorageService } from './reference-storage.service';
 import type {
   CreateTrackedAnnotationDto,
+  ExportReferenceVideoDto,
   ReferenceStroke,
   ReferenceVideoResponse,
   UpdateTrackedAnnotationDto,
@@ -196,6 +197,13 @@ export class ReferenceService {
 
   async markFailed(id: string, reason: string): Promise<void> {
     await this.repo.update({ id }, { status: 'failed', failureReason: reason });
+  }
+
+  /** Companion to markFailed, for the separate export-job status/lifecycle
+   * (exportStatus) rather than the upload/keypoints-processing one
+   * (status) — see the ReferenceVideo entity's doc comments. */
+  async markExportFailed(id: string, reason: string): Promise<void> {
+    await this.repo.update({ id }, { exportStatus: 'failed', exportErrorMessage: reason });
   }
 
   verifyCallbackToken(refId: string, token: string): boolean {
@@ -410,6 +418,9 @@ export class ReferenceService {
       keypointsUrl,
       overlayVideoUrl,
       exportVideoUrl,
+      exportStatus: video.exportStatus,
+      exportProgressPercent: video.exportProgressPercent,
+      exportErrorMessage: video.exportErrorMessage,
       analysisMode: video.analysisMode,
       keypointFormat: video.keypointFormat,
       fps: video.fps,
@@ -510,7 +521,7 @@ export class ReferenceService {
     if (!video) throw new NotFoundException(`Reference video ${id} not found`);
     const exportVideoKey = `sessions/${video.sessionId}/reference/${id}/export.mp4`;
     await this.storage.saveBuffer(exportVideoKey, buffer);
-    await this.repo.update({ id }, { exportVideoKey });
+    await this.repo.update({ id }, { exportVideoKey, exportStatus: 'completed', exportProgressPercent: 100 });
 
     // Make the annotated export available to the session's students, reusing
     // the same auto-clip mechanism (updates the clip's video to the export).
@@ -528,17 +539,41 @@ export class ReferenceService {
     }
   }
 
+  /**
+   * Resolves the two independent export toggles, with a one-deploy-cycle
+   * backward-compat fallback for the old `drawSkeleton` preset field (a
+   * stale cached frontend bundle mid-deploy must not break): `true` maps to
+   * the old "full skeleton" preset (both on), `false` maps to the old
+   * "annotations only" preset (today's default). Rejects a combination that
+   * would export nothing.
+   */
+  private resolveExportFlags(dto: ExportReferenceVideoDto): { includeSkeleton: boolean; includeAnnotations: boolean } {
+    let { includeSkeleton, includeAnnotations } = dto;
+    if (includeSkeleton === undefined && includeAnnotations === undefined && dto.drawSkeleton !== undefined) {
+      includeSkeleton = dto.drawSkeleton;
+      includeAnnotations = true;
+    }
+    includeSkeleton ??= false;
+    includeAnnotations ??= true;
+    if (!includeSkeleton && !includeAnnotations) {
+      throw new BadRequestException('Select skeleton, annotations, or both');
+    }
+    return { includeSkeleton, includeAnnotations };
+  }
+
   /** Kicks off a server-side export render on the pose-service (background). */
   async startExport(
     sessionId: string,
     refId: string,
     coachId: string,
     role: string,
-    drawSkeleton = false,
+    dto: ExportReferenceVideoDto,
   ): Promise<{ status: string }> {
     await this.assertCoach(sessionId, coachId, role);
     const video = await this.getForSession(sessionId, refId);
     if (!video.keypointsKey) throw new BadRequestException('Video has no keypoints to export');
+
+    const { includeSkeleton, includeAnnotations } = this.resolveExportFlags(dto);
 
     const annotations = await this.trackedRepo.find({ where: { referenceVideoId: refId } });
     const baseUrl = this.configService.get<string>('POSE_SERVICE_URL', 'http://localhost:8100');
@@ -547,6 +582,11 @@ export class ReferenceService {
     const uploadUrl = `${this.storage.apiPublicBaseUrl}/api/v1/reference/${refId}/export-upload`;
     const callbackUrl = `${this.storage.apiPublicBaseUrl}/api/v1/reference/${refId}/export-failed`;
     const callbackToken = this.storage.callbackToken(refId);
+
+    await this.repo.update(
+      { id: refId },
+      { exportStatus: 'processing', exportProgressPercent: 0, exportErrorMessage: null, exportRequestedAt: new Date() },
+    );
 
     const res = await fetch(`${baseUrl}/reference/export`, {
       method: 'POST',
@@ -559,7 +599,8 @@ export class ReferenceService {
         callbackUrl,
         callbackToken,
         keypointFormat: video.keypointFormat,
-        drawSkeleton,
+        includeSkeleton,
+        includeAnnotations,
         annotations: annotations.map((a) => ({
           shapeType: a.shapeType,
           startJoint: a.startJoint,
@@ -573,7 +614,10 @@ export class ReferenceService {
         })),
       }),
     });
-    if (!res.ok) throw new BadRequestException(`pose-service export rejected (${res.status})`);
+    if (!res.ok) {
+      await this.repo.update({ id: refId }, { exportStatus: 'failed', exportErrorMessage: `pose-service returned ${res.status}` });
+      throw new BadRequestException(`pose-service export rejected (${res.status})`);
+    }
     return { status: 'accepted' };
   }
 }

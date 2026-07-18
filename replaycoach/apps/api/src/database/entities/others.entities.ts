@@ -330,6 +330,28 @@ export class ReferenceVideo {
   @Column({ name: 'failure_reason', type: 'text', nullable: true })
   failureReason!: string | null;
 
+  /** Export-job status — a separate lifecycle from `status` above (which
+   * tracks upload/keypoints-processing). 'idle' until the first export is
+   * requested; re-exporting overwrites these fields rather than keeping
+   * history, matching this entity's existing single-current-job shape. */
+  @Column({ name: 'export_status', type: 'varchar', length: 20, default: 'idle' })
+  exportStatus!: 'idle' | 'queued' | 'processing' | 'completed' | 'failed';
+
+  @Column({ name: 'export_progress_percent', type: 'int', nullable: true })
+  exportProgressPercent!: number | null;
+
+  /** Correlates a queued Redis Streams job (pose:export-jobs) back to this
+   * row — set when a job is enqueued, read by the progress/completion
+   * callbacks to confirm they're updating the right in-flight job. */
+  @Column({ name: 'export_job_id', type: 'varchar', length: 64, nullable: true })
+  exportJobId!: string | null;
+
+  @Column({ name: 'export_error_message', type: 'text', nullable: true })
+  exportErrorMessage!: string | null;
+
+  @Column({ name: 'export_requested_at', type: 'timestamptz', nullable: true })
+  exportRequestedAt!: Date | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;
 
