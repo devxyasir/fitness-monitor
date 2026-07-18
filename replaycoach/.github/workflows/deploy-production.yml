@@ -124,9 +124,17 @@ jobs:
             # isn't running yet, but nothing will ever pick it up until it
             # is). Restarted before fitness-web below so there's no window
             # after this deploy where the queue has consumers=0.
+            #
+            # Uses the same bash-wrapper + --interpreter bash pattern as
+            # fitness-ml's run_ml.sh — PM2 6.x's direct
+            # --interpreter <path/to/python> against a .py file does not
+            # invoke it correctly on this host (routes through a Node/Bun
+            # fork container instead of actually running the interpreter),
+            # confirmed by trial; the bash-wrapper form is what's proven to
+            # work here.
             cd "$APP_DIR/replaycoach/apps/pose-service"
             pm2 restart fitness-export-worker --update-env || {
-              pm2 start export_worker.py --name fitness-export-worker --interpreter "$APP_DIR/replaycoach/apps/pose-service/venv/bin/python"
+              pm2 start run_export_worker.sh --name fitness-export-worker --interpreter bash
             }
 
             pm2 save
