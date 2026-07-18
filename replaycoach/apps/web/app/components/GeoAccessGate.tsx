@@ -8,40 +8,19 @@ import { useAuthStore } from '../../stores/auth-store';
 import { PageLoader } from './ui/PageLoader';
 import { GeoPermissionExplainer, GeoPermissionDeniedModal } from './GeoPermissionModal';
 
-const CACHE_KEY = 'geo_access_status';
-const CACHE_TTL_MS = 30 * 60 * 1000; // 30 min
-
-interface CachedDecision {
-  allowed: boolean;
-  expiresAt: number;
-}
-
-function readCache(): CachedDecision | null {
-  try {
-    const raw = sessionStorage.getItem(CACHE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as CachedDecision;
-    return parsed.expiresAt > Date.now() ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeCache(allowed: boolean): void {
-  try {
-    sessionStorage.setItem(CACHE_KEY, JSON.stringify({ allowed, expiresAt: Date.now() + CACHE_TTL_MS }));
-  } catch {
-    // Storage unavailable (private browsing, quota) — just re-checks next time.
-  }
-}
-
 type Phase = 'checking' | 'allowed' | 'blocked' | 'gps-explain' | 'gps-denied';
 
 /**
- * Client-side geo gate, checked once per session (sessionStorage-cached) on
- * every route except the public landing page — confirmed gate scope: app
- * usage (login, register, dashboard, all role sections) is gated, `/`
- * stays open for SEO/marketing regardless of location.
+ * Client-side geo gate, checked fresh on every route change — including the
+ * public landing page. (An earlier version exempted `/` for SEO and cached
+ * the decision in sessionStorage for 30 minutes; both were rolled back —
+ * exempting `/` meant a blocked visitor could still see and use the
+ * marketing site, and the cache meant an admin turning restriction ON
+ * didn't actually take effect for anyone already holding a cached "allowed"
+ * verdict, for up to 30 minutes. Neither is acceptable for an access-control
+ * feature — every navigation now gets a real check against current
+ * settings. The backend's own per-IP lookup cache (~1h, see
+ * GeoLookupService) is what keeps this cheap, not a frontend cache.)
  *
  * Deliberately NOT implemented in apps/web/middleware.ts (Edge runtime):
  * middleware calling the API via fetch() would be a server-to-server
@@ -58,6 +37,12 @@ type Phase = 'checking' | 'allowed' | 'blocked' | 'gps-explain' | 'gps-denied';
  * boundary" — the real, unbypassable enforcement for this feature is
  * GeoAccessGuard on POST /auth/login and /auth/register (see
  * apps/api/src/geo/geo-access.guard.ts), which nothing here replaces.
+ *
+ * A blocked visitor is redirected to the full-page /service-unavailable
+ * experience rather than shown a dismissable overlay on top of still-loaded
+ * page content — a modal a visitor can close (or that a technically savvy
+ * one could bypass via devtools) doesn't actually satisfy "don't let them
+ * access the page"; replacing the page outright does.
  */
 export function GeoAccessGate({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -66,14 +51,16 @@ export function GeoAccessGate({ children }: { children: ReactNode }) {
   const [phase, setPhase] = useState<Phase>('checking');
 
   const isAdminRoute = pathname?.startsWith('/admin') ?? false;
+  // /admin/* and an already-authenticated platform_admin stay exempt so an
+  // admin can always reach the settings needed to turn restriction back off,
+  // even from a location that would otherwise be blocked — same reasoning
+  // MaintenanceGate already uses for its own admin bypass.
   const isExempt =
-    pathname === '/' ||
     pathname === '/service-unavailable' ||
     isAdminRoute ||
     user?.role === 'platform_admin';
 
   const finish = (allowed: boolean) => {
-    writeCache(allowed);
     if (allowed) {
       setPhase('allowed');
     } else {
@@ -129,16 +116,7 @@ export function GeoAccessGate({ children }: { children: ReactNode }) {
       return;
     }
 
-    const cached = readCache();
-    if (cached) {
-      if (cached.allowed) setPhase('allowed');
-      else {
-        setPhase('blocked');
-        router.replace('/service-unavailable');
-      }
-      return;
-    }
-
+    setPhase('checking');
     let cancelled = false;
     systemSettingsClient
       .getPublicStatus()
