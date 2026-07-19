@@ -14,6 +14,8 @@ import type {
   AdminSessionListResponse,
   AuditLogListQuery,
   AuditLogListResponse,
+  EmailLogListQuery,
+  EmailLogListResponse,
 } from '@replaycoach/types';
 import { apiClient } from './api-client';
 
@@ -39,6 +41,10 @@ async function listAuditLogs(query: AuditLogListQuery = {}): Promise<AuditLogLis
   return apiClient.get(`/admin/audit-logs${buildQuery(query)}`);
 }
 
+async function listEmailLogs(query: EmailLogListQuery = {}): Promise<EmailLogListResponse> {
+  return apiClient.get(`/admin/email-logs${buildQuery(query)}`);
+}
+
 async function hideSession(id: string, reason: string): Promise<AdminSessionDto> {
   return apiClient.post(`/admin/sessions/${id}/hide`, { reason });
 }
@@ -47,4 +53,4 @@ async function unhideSession(id: string): Promise<AdminSessionDto> {
   return apiClient.post(`/admin/sessions/${id}/unhide`, {});
 }
 
-export const adminClient = { getDashboard, listSessions, listAuditLogs, hideSession, unhideSession };
+export const adminClient = { getDashboard, listSessions, listAuditLogs, listEmailLogs, hideSession, unhideSession };

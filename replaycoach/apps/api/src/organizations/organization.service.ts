@@ -262,12 +262,16 @@ export class OrganizationService {
     await this.inviteRepo.save(invite);
 
     const inviter = await this.userService.findById(actingUser.sub);
-    void this.emailService.sendInviteEmail(invite.invitedEmail, {
-      orgName: org.name,
-      role: invite.role as 'coach' | 'student',
-      inviteUrl: this.buildInviteUrl(invite.inviteToken),
-      invitedByName: inviter?.displayName ?? 'Your coach',
-    });
+    void this.emailService.sendInviteEmail(
+      invite.invitedEmail,
+      {
+        orgName: org.name,
+        role: invite.role as 'coach' | 'student',
+        inviteUrl: this.buildInviteUrl(invite.inviteToken),
+        invitedByName: inviter?.displayName ?? 'Your coach',
+      },
+      { orgId, triggeredByUserId: actingUser.sub },
+    );
 
     return { inviteToken: invite.inviteToken, expiresAt: invite.expiresAt.toISOString() };
   }
@@ -315,12 +319,16 @@ export class OrganizationService {
 
     const org = await this.findById(orgId);
     const inviter = await this.userService.findById(actingUser.sub);
-    void this.emailService.sendInviteEmail(invite.invitedEmail, {
-      orgName: org.name,
-      role: invite.role as 'coach' | 'student',
-      inviteUrl: this.buildInviteUrl(invite.inviteToken),
-      invitedByName: inviter?.displayName ?? 'Your coach',
-    });
+    void this.emailService.sendInviteEmail(
+      invite.invitedEmail,
+      {
+        orgName: org.name,
+        role: invite.role as 'coach' | 'student',
+        inviteUrl: this.buildInviteUrl(invite.inviteToken),
+        invitedByName: inviter?.displayName ?? 'Your coach',
+      },
+      { orgId, triggeredByUserId: actingUser.sub },
+    );
 
     return { inviteToken: invite.inviteToken, expiresAt: invite.expiresAt.toISOString() };
   }
@@ -474,13 +482,17 @@ export class OrganizationService {
     let sent = 0;
     for (const recipient of eligible) {
       try {
-        await this.emailService.sendOrgMessage(recipient.email, {
-          orgName: org.name,
-          senderKind: isOrgSender ? 'organization' : 'coach',
-          senderName: sender.displayName,
-          subject: dto.subject,
-          message: dto.message,
-        });
+        await this.emailService.sendOrgMessage(
+          recipient.email,
+          {
+            orgName: org.name,
+            senderKind: isOrgSender ? 'organization' : 'coach',
+            senderName: sender.displayName,
+            subject: dto.subject,
+            message: dto.message,
+          },
+          { orgId, triggeredByUserId: actingUser.sub, userId: recipient.id },
+        );
         sent += 1;
       } catch (err) {
         failed.push({ userId: recipient.id, reason: err instanceof Error ? err.message : 'Delivery failed' });

@@ -172,3 +172,36 @@ export interface StorageOverviewDto {
   byOrg: StorageOrgStats[];
   byMonth: StorageMonthPoint[];
 }
+
+// ─── Email delivery log ──────────────────────────────────────────────────
+
+export interface EmailLogDto {
+  id: string;
+  recipientEmail: string;
+  kind: 'invite' | 'org_message';
+  status: 'success' | 'failure';
+  errorMessage: string | null;
+  orgId: string | null;
+  orgName: string | null;
+  userId: string | null;
+  triggeredByUserId: string | null;
+  triggeredByName: string | null;
+  createdAt: string;
+}
+
+export interface EmailLogListQuery {
+  kind?: 'invite' | 'org_message';
+  status?: 'success' | 'failure';
+  orgId?: string;
+  since?: string;
+  until?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface EmailLogListResponse {
+  items: EmailLogDto[];
+  total: number;
+  page: number;
+  pageSize: number;
+}

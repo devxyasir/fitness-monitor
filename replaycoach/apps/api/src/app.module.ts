@@ -28,6 +28,7 @@ import {
 } from './database/entities/others.entities';
 import { SystemSetting } from './system-settings/system-setting.entity';
 import { GeoAccessLog } from './geo/geo-access-log.entity';
+import { EmailLog } from './email/email-log.entity';
 
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
@@ -95,6 +96,7 @@ import { GeoModule } from './geo/geo.module';
           TrackedAnnotation,
           SystemSetting,
           GeoAccessLog,
+          EmailLog,
         ],
         migrations: [],
       }),
