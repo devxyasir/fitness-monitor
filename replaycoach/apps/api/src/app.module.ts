@@ -27,6 +27,7 @@ import {
   TrackedAnnotation,
 } from './database/entities/others.entities';
 import { SystemSetting } from './system-settings/system-setting.entity';
+import { GeoSettingsVersion } from './system-settings/geo-settings-version.entity';
 import { GeoAccessLog } from './geo/geo-access-log.entity';
 import { EmailLog } from './email/email-log.entity';
 
@@ -95,6 +96,7 @@ import { GeoModule } from './geo/geo.module';
           ReferenceVideo,
           TrackedAnnotation,
           SystemSetting,
+          GeoSettingsVersion,
           GeoAccessLog,
           EmailLog,
         ],

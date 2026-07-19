@@ -3,6 +3,7 @@
 import type {
   EmailTemplateSettings,
   GeoAccessSettings,
+  GeoSettingsVersionListResponse,
   PlatformSettings,
   SmtpSettings,
   SystemSettingsDto,
@@ -50,6 +51,14 @@ async function updateGeoAccess(dto: UpdateGeoAccessSettingsDto): Promise<GeoAcce
   return apiClient.patch('/system-settings/geo-access', dto);
 }
 
+async function listGeoSettingsVersions(): Promise<GeoSettingsVersionListResponse> {
+  return apiClient.get('/system-settings/geo-access/versions');
+}
+
+async function restoreGeoSettingsVersion(id: string): Promise<GeoAccessSettings> {
+  return apiClient.post(`/system-settings/geo-access/versions/${id}/restore`, {});
+}
+
 export const systemSettingsClient = {
   getAll,
   getPublicTheme,
@@ -59,4 +68,6 @@ export const systemSettingsClient = {
   updateEmailTemplates,
   updatePlatform,
   updateGeoAccess,
+  listGeoSettingsVersions,
+  restoreGeoSettingsVersion,
 };

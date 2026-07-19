@@ -119,6 +119,21 @@ export interface GeoAccessSettings {
 
 export type UpdateGeoAccessSettingsDto = Partial<GeoAccessSettings>;
 
+/** A saved snapshot of GeoAccessSettings, taken on every successful save —
+ * see apps/api/src/system-settings/geo-settings-version.entity.ts. */
+export interface GeoSettingsVersionDto {
+  id: string;
+  settings: GeoAccessSettings;
+  createdBy: string | null;
+  createdByName: string | null;
+  label: string | null;
+  createdAt: string;
+}
+
+export interface GeoSettingsVersionListResponse {
+  items: GeoSettingsVersionDto[];
+}
+
 // ─── Aggregate ───────────────────────────────────────────────────────────
 
 export interface SystemSettingsDto {

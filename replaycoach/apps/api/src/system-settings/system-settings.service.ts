@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -6,6 +6,8 @@ import { Repository } from 'typeorm';
 import type {
   EmailTemplateSettings,
   GeoAccessSettings,
+  GeoSettingsVersionDto,
+  GeoSettingsVersionListResponse,
   InviteEmailTemplate,
   PlatformSettings,
   SmtpSettings,
@@ -18,7 +20,10 @@ import type {
 } from '@replaycoach/types';
 
 import { SystemSetting } from './system-setting.entity';
+import { GeoSettingsVersion } from './geo-settings-version.entity';
 import { AuditService } from '../audit/audit.service';
+
+const GEO_VERSIONS_LIST_LIMIT = 50;
 
 const DEFAULT_THEME: ThemeSettings = {
   light: { brand: '#B14A28', session: '#1F6F6B', analytics: '#8A6222' },
@@ -78,6 +83,8 @@ export class SystemSettingsService {
   constructor(
     @InjectRepository(SystemSetting)
     private readonly repo: Repository<SystemSetting>,
+    @InjectRepository(GeoSettingsVersion)
+    private readonly geoVersionRepo: Repository<GeoSettingsVersion>,
     private readonly configService: ConfigService,
     private readonly auditService: AuditService,
   ) {}
@@ -199,8 +206,47 @@ export class SystemSettingsService {
     const existing = await this.getGeoAccess();
     const merged: GeoAccessSettings = { ...existing, ...dto };
     await this.upsert('geo_access', merged, actingUserId);
+    // Snapshot the POST-update merged state (not the dto, which may be a
+    // partial patch) — the version row is always a complete, restorable
+    // config, and the newest row always equals the live config.
+    await this.geoVersionRepo.save(
+      this.geoVersionRepo.create({ settings: merged, createdBy: actingUserId, label: null }),
+    );
     void this.auditService.record(actingUserId, 'settings.geo_access_updated', 'system_setting', null, { ...dto });
     return merged;
+  }
+
+  async listGeoSettingsVersions(): Promise<GeoSettingsVersionListResponse> {
+    const rows = await this.geoVersionRepo.find({
+      relations: ['creator'],
+      order: { createdAt: 'DESC' },
+      take: GEO_VERSIONS_LIST_LIMIT,
+    });
+    return { items: rows.map((row) => this.geoVersionToDto(row)) };
+  }
+
+  /** Reuses updateGeoAccess() itself — the historical settings are a
+   * complete snapshot, so passing them straight through as the "patch"
+   * correctly overwrites every field, and the restore itself creates a new
+   * version row (the timeline never loses the fact that a restore happened). */
+  async restoreGeoSettingsVersion(versionId: string, actingUserId: string): Promise<GeoAccessSettings> {
+    const version = await this.geoVersionRepo.findOne({ where: { id: versionId } });
+    if (!version) throw new NotFoundException('Settings version not found');
+
+    const restored = await this.updateGeoAccess(version.settings as GeoAccessSettings, actingUserId);
+    void this.auditService.record(actingUserId, 'settings.geo_access_restored', 'system_setting', versionId, {});
+    return restored;
+  }
+
+  private geoVersionToDto(row: GeoSettingsVersion): GeoSettingsVersionDto {
+    return {
+      id: row.id,
+      settings: row.settings as GeoAccessSettings,
+      createdBy: row.createdBy,
+      createdByName: row.creator?.displayName ?? null,
+      label: row.label,
+      createdAt: row.createdAt.toISOString(),
+    };
   }
 
   // ─── Aggregate (for the admin settings page's single load) ───────────

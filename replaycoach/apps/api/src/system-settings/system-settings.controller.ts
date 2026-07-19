@@ -1,8 +1,9 @@
-import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 
 import type {
   EmailTemplateSettings,
   GeoAccessSettings,
+  GeoSettingsVersionListResponse,
   JwtPayload,
   PlatformSettings,
   SmtpSettings,
@@ -115,5 +116,22 @@ export class SystemSettingsController {
     @CurrentUser() user: JwtPayload,
   ): Promise<GeoAccessSettings> {
     return this.settingsService.updateGeoAccess(dto, user.sub);
+  }
+
+  @Get('geo-access/versions')
+  @Roles('platform_admin')
+  @UseGuards(AdminElevatedGuard)
+  async listGeoSettingsVersions(): Promise<GeoSettingsVersionListResponse> {
+    return this.settingsService.listGeoSettingsVersions();
+  }
+
+  @Post('geo-access/versions/:id/restore')
+  @Roles('platform_admin')
+  @UseGuards(AdminElevatedGuard)
+  async restoreGeoSettingsVersion(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<GeoAccessSettings> {
+    return this.settingsService.restoreGeoSettingsVersion(id, user.sub);
   }
 }

@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Search } from 'lucide-react';
-import type { GeoAllowedRegion, SystemSettingsDto } from '@replaycoach/types';
+import { Search, History, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
+import type { GeoAllowedRegion, GeoSettingsVersionDto, SystemSettingsDto } from '@replaycoach/types';
 import { systemSettingsClient } from '../../../lib/system-settings-client';
 import { ISO_COUNTRIES } from '../../../lib/iso-countries';
 import { toast } from '../../../stores/toast-store';
@@ -442,7 +442,104 @@ function GeoAccessTab({ settings, onSaved }: { settings: SystemSettingsDto['geoA
           {loading ? 'Saving…' : 'Save geo access settings'}
         </Button>
       </form>
+
+      <GeoSettingsVersionHistory onRestored={onSaved} />
     </Card>
+  );
+}
+
+/** Collapsed by default, fetched only on expand — every geo-access save
+ * already snapshots a version (see updateGeoAccess), so this is pure
+ * history, never a second concept to keep in sync. */
+function GeoSettingsVersionHistory({ onRestored }: { onRestored: () => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const [versions, setVersions] = useState<GeoSettingsVersionDto[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await systemSettingsClient.listGeoSettingsVersions();
+      setVersions(res.items);
+    } catch (err: unknown) {
+      toast.error((err as Error).message ?? 'Could not load settings history.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggle = () => {
+    const next = !expanded;
+    setExpanded(next);
+    if (next && versions === null) void load();
+  };
+
+  const handleRestore = async (version: GeoSettingsVersionDto) => {
+    const when = new Date(version.createdAt).toLocaleString();
+    if (!window.confirm(`Restore geo access settings to the version from ${when}? This replaces the current live settings and creates a new version.`)) {
+      return;
+    }
+    setRestoringId(version.id);
+    try {
+      await systemSettingsClient.restoreGeoSettingsVersion(version.id);
+      toast.success('Geo access settings restored.');
+      onRestored();
+      await load();
+    } catch (err: unknown) {
+      toast.error((err as Error).message ?? 'Could not restore this version.');
+    } finally {
+      setRestoringId(null);
+    }
+  };
+
+  return (
+    <div className="border-t border-hairline pt-4 mt-1">
+      <button
+        type="button"
+        onClick={toggle}
+        className="flex items-center gap-2 text-sm text-ink-muted hover:text-ink transition-colors"
+      >
+        <History className="w-4 h-4" />
+        Previous versions
+        {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+      </button>
+
+      {expanded && (
+        <div className="mt-3">
+          {loading ? (
+            <SkeletonRows count={3} />
+          ) : !versions || versions.length === 0 ? (
+            <p className="text-xs text-ink-faint">No saved versions yet — every save creates one.</p>
+          ) : (
+            <div className="border border-hairline rounded-sm divide-y divide-hairline">
+              {versions.map((v, i) => (
+                <div key={v.id} className="flex items-center justify-between gap-4 px-3.5 py-2.5">
+                  <div className="min-w-0">
+                    <div className="text-xs text-ink font-mono">{new Date(v.createdAt).toLocaleString()}</div>
+                    <div className="text-xs text-ink-faint truncate">
+                      {i === 0 ? 'Current' : v.createdByName ?? 'Unknown admin'}
+                      {i !== 0 && ` · ${v.settings.enabled ? (v.settings.mode === 'restricted' ? `Restricted, ${v.settings.allowedCountries.length} countries` : 'Global') : 'Disabled'}`}
+                    </div>
+                  </div>
+                  {i !== 0 && (
+                    <button
+                      type="button"
+                      disabled={restoringId !== null}
+                      onClick={() => handleRestore(v)}
+                      className="flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink transition-colors flex-shrink-0 disabled:opacity-40"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      {restoringId === v.id ? 'Restoring…' : 'Restore'}
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
