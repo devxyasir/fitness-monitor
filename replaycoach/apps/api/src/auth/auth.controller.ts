@@ -57,13 +57,20 @@ export class AuthController {
 
   /**
    * POST /auth/login
-   * Rate limited: 5/min per IP (12_Backend_API_Design.md §7).
+   * Rate limited: 10/min per IP. Was 5/min — this single route handles both
+   * regular and admin logins (distinguished by body.context), sharing one
+   * IP-keyed bucket, so a coach/student login shortly followed by an admin
+   * login attempt (or one mistyped password) from the same network could
+   * exhaust the limit and surface a raw throttle error on a legitimate
+   * admin login. 10/min still meaningfully deters brute-forcing (each guess
+   * also costs a full argon2 hash + constant-time comparison server-side),
+   * just with realistic headroom for normal use.
    */
   @Public()
   @UseGuards(GeoAccessGuard)
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   async login(
     @Body() dto: LoginDto,
     @Req() req: Request,

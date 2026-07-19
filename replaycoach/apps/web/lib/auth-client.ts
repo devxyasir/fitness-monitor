@@ -137,6 +137,21 @@ async function login(payload: LoginRequest): Promise<UserDto> {
   const user = await fetchUserProfile(accessToken);
   useAuthStore.getState().setAuth(accessToken, user);
   scheduleSilentRefresh(accessToken);
+
+  // An admin login overwrites the shared httpOnly refresh cookie with the
+  // admin's own — any OTHER already-open tab still showing a coach/student
+  // session (its own in-memory accessToken, unaffected by this) is now
+  // sitting on stale state: its refresh cookie no longer belongs to it.
+  // Broadcasting here (the same signal explicit logout already uses) makes
+  // that tab clear its stale auth immediately instead of continuing to look
+  // signed-in until it happens to hit a 401 on its own. Scoped to admin
+  // logins only — a regular coach/student login doesn't need this, since
+  // nothing about a normal login orphans another tab's session the way
+  // overwriting the shared admin-scoped cookie does.
+  if (payload.context === 'admin') {
+    broadcastLogout();
+  }
+
   return user;
 }
 

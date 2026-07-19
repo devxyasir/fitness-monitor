@@ -25,6 +25,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { AdminElevatedGuard } from '../common/guards/admin-elevated.guard';
 import { CreateOrganizationDto, InviteToOrgDto, SendOrgMessageDto, UpdateOrganizationDto, UpdateOrgStatusDto } from './organization.dto';
 import { OrganizationService } from './organization.service';
 import { OrganizationGuard } from './organization.guard';
@@ -44,22 +45,27 @@ export class OrganizationController {
   }
 
   /** Platform-wide cross-org listing — platform_admin only (a studio_admin
-   * only ever sees their own org via GET /organizations/:id). */
+   * only ever sees their own org via GET /organizations/:id).
+   * AdminElevatedGuard here (and below) is a no-op for studio_admin/coach
+   * (see the guard's own comment) — only requires fresh admin re-auth for
+   * platform_admin, matching the same elevation the admin dashboard/
+   * sessions/settings pages already require (previously inconsistent). */
   @Get()
   @Roles('platform_admin')
+  @UseGuards(AdminElevatedGuard)
   async listAll(): Promise<OrganizationSummaryDto[]> {
     return this.orgService.listAll();
   }
 
   @Get(':id')
-  @UseGuards(OrganizationGuard)
+  @UseGuards(OrganizationGuard, AdminElevatedGuard)
   async get(@Param('id') id: string): Promise<OrganizationDto> {
     const org = await this.orgService.findById(id);
     return this.orgService.toDto(org);
   }
 
   @Patch(':id')
-  @UseGuards(OrganizationGuard)
+  @UseGuards(OrganizationGuard, AdminElevatedGuard)
   @Roles('platform_admin', 'studio_admin')
   async update(
     @Param('id') id: string,
@@ -71,7 +77,7 @@ export class OrganizationController {
   }
 
   @Patch(':id/status')
-  @UseGuards(OrganizationGuard)
+  @UseGuards(OrganizationGuard, AdminElevatedGuard)
   @Roles('platform_admin')
   async setStatus(
     @Param('id') id: string,
@@ -83,7 +89,7 @@ export class OrganizationController {
   }
 
   @Delete(':id')
-  @UseGuards(OrganizationGuard)
+  @UseGuards(OrganizationGuard, AdminElevatedGuard)
   @Roles('platform_admin')
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteOrg(@Param('id') id: string, @CurrentUser() user: JwtPayload): Promise<void> {
@@ -91,13 +97,13 @@ export class OrganizationController {
   }
 
   @Get(':id/members')
-  @UseGuards(OrganizationGuard)
+  @UseGuards(OrganizationGuard, AdminElevatedGuard)
   async listMembers(@Param('id') id: string): Promise<UserDto[]> {
     return this.orgService.listMembers(id);
   }
 
   @Delete(':id/members/:userId')
-  @UseGuards(OrganizationGuard)
+  @UseGuards(OrganizationGuard, AdminElevatedGuard)
   @Roles('platform_admin', 'studio_admin')
   @HttpCode(HttpStatus.NO_CONTENT)
   async removeMember(

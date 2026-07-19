@@ -7,9 +7,8 @@ import type { JwtPayload } from '@replaycoach/types';
 import { parseDurationMs } from '../../auth/duration.util';
 
 /**
- * Step-up guard for genuinely admin-exclusive surfaces (the new admin
- * dashboard/audit/security controllers) — layered on top of, not instead
- * of, `@Roles('platform_admin')`. Requires the caller's `adminAuthAt` claim
+ * Step-up guard for admin-exclusive data/actions — layered on top of, not
+ * instead of, `@Roles(...)`. Requires the caller's `adminAuthAt` claim
  * (stamped by /admin/login or /auth/admin/elevate) to be within
  * ADMIN_ELEVATION_TTL of "now". A normal platform_admin token minted via
  * the regular /login page never carries this claim, so it fails here even
@@ -17,9 +16,17 @@ import { parseDurationMs } from '../../auth/duration.util';
  * the admin area requires having actually authenticated *as* an admin
  * recently, not just holding a token that happens to have the right role.
  *
- * Deliberately NOT applied to user.controller.ts/organization.controller.ts
- * routes that platform_admin already shares with studio_admin — only to
- * new, purely admin-panel surface.
+ * Safe to apply to routes SHARED with non-admin roles (e.g.
+ * user.controller.ts/organization.controller.ts's studio_admin/coach
+ * endpoints): a non-platform_admin caller is passed through untouched —
+ * role authorization is RolesGuard's job, not this guard's. This guard
+ * only ever has an opinion about platform_admin callers specifically.
+ * Earlier versions of this guard threw for any non-platform_admin role,
+ * which is why it was previously applied only to purely admin-exclusive
+ * controllers — that made elevation enforcement inconsistent across the
+ * admin panel (dashboard/sessions/geo-logs/settings required a fresh
+ * re-login but Users/Organizations didn't, for a platform_admin whose
+ * elevation had lapsed), which is the actual bug this fixes.
  */
 @Injectable()
 export class AdminElevatedGuard implements CanActivate {
@@ -29,8 +36,11 @@ export class AdminElevatedGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<Request & { user?: JwtPayload }>();
     const user = request.user;
 
+    // Not a platform_admin (or not authenticated at all — JwtAuthGuard
+    // already handles that case) — nothing for this guard to enforce here;
+    // let RolesGuard's own decision stand.
     if (!user || user.role !== 'platform_admin') {
-      throw new ForbiddenException('Insufficient role');
+      return true;
     }
 
     const ttlMs = parseDurationMs(this.configService.get<string>('admin.elevationTtl', '30m'), 30 * 60_000);

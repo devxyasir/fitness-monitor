@@ -22,6 +22,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { AdminElevatedGuard } from '../common/guards/admin-elevated.guard';
 import {
   ChangePasswordDto,
   ListUsersQueryDto,
@@ -110,9 +111,15 @@ export class UserController {
 
   /** Admin user directory — platform_admin sees everyone (optionally
    * filtered by org); studio_admin is always scoped to their own org
-   * regardless of what orgId they pass (enforced in UserService). */
+   * regardless of what orgId they pass (enforced in UserService).
+   * AdminElevatedGuard is a no-op for studio_admin (see the guard's own
+   * comment) — this only requires fresh admin re-auth for platform_admin,
+   * matching the same elevation the admin dashboard/sessions/settings
+   * pages already require (previously inconsistent — Users/Organizations
+   * stayed accessible indefinitely after elevation lapsed). */
   @Get()
   @Roles('platform_admin', 'studio_admin')
+  @UseGuards(AdminElevatedGuard)
   async list(
     @CurrentUser() payload: JwtPayload,
     @Query() query: ListUsersQueryDto,
@@ -127,6 +134,7 @@ export class UserController {
 
   @Get(':id')
   @Roles('platform_admin', 'studio_admin')
+  @UseGuards(AdminElevatedGuard)
   async getById(@Param('id') id: string, @CurrentUser() payload: JwtPayload): Promise<UserDto> {
     const target = await this.userService.findById(id);
     // Same org-scoping as list(): a studio_admin can look up any user by ID
@@ -142,6 +150,7 @@ export class UserController {
 
   @Patch(':id/status')
   @Roles('platform_admin', 'studio_admin')
+  @UseGuards(AdminElevatedGuard)
   async setStatus(
     @Param('id') id: string,
     @Body() dto: UpdateUserStatusDto,
@@ -155,6 +164,7 @@ export class UserController {
    * status changes (see UserService.setRole). */
   @Patch(':id/role')
   @Roles('platform_admin')
+  @UseGuards(AdminElevatedGuard)
   async setRole(
     @Param('id') id: string,
     @Body() dto: UpdateUserRoleDto,

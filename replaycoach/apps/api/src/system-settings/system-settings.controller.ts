@@ -16,6 +16,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { AdminElevatedGuard } from '../common/guards/admin-elevated.guard';
 import { SystemSettingsService } from './system-settings.service';
 import { UpdateEmailTemplatesDto, UpdatePlatformDto, UpdateSmtpDto, UpdateThemeDto } from './system-settings.dto';
 import { UpdateGeoAccessSettingsDto } from '../geo/geo.dto';
@@ -64,26 +65,34 @@ export class SystemSettingsController {
     };
   }
 
+  /** AdminElevatedGuard added here (and on every mutation below) to match
+   * the same fresh-re-auth requirement the admin dashboard/sessions/
+   * geo-logs pages already enforce — previously inconsistent, Settings
+   * stayed accessible indefinitely after elevation lapsed. */
   @Get()
   @Roles('platform_admin')
+  @UseGuards(AdminElevatedGuard)
   async getAll(): Promise<SystemSettingsDto> {
     return this.settingsService.getAll();
   }
 
   @Patch('smtp')
   @Roles('platform_admin')
+  @UseGuards(AdminElevatedGuard)
   async updateSmtp(@Body() dto: UpdateSmtpDto, @CurrentUser() user: JwtPayload): Promise<SmtpSettings> {
     return this.settingsService.updateSmtp(dto, user.sub);
   }
 
   @Patch('theme')
   @Roles('platform_admin')
+  @UseGuards(AdminElevatedGuard)
   async updateTheme(@Body() dto: UpdateThemeDto, @CurrentUser() user: JwtPayload): Promise<ThemeSettings> {
     return this.settingsService.updateTheme(dto, user.sub);
   }
 
   @Patch('email-templates')
   @Roles('platform_admin')
+  @UseGuards(AdminElevatedGuard)
   async updateEmailTemplates(
     @Body() dto: UpdateEmailTemplatesDto,
     @CurrentUser() user: JwtPayload,
@@ -93,12 +102,14 @@ export class SystemSettingsController {
 
   @Patch('platform')
   @Roles('platform_admin')
+  @UseGuards(AdminElevatedGuard)
   async updatePlatform(@Body() dto: UpdatePlatformDto, @CurrentUser() user: JwtPayload): Promise<PlatformSettings> {
     return this.settingsService.updatePlatform(dto, user.sub);
   }
 
   @Patch('geo-access')
   @Roles('platform_admin')
+  @UseGuards(AdminElevatedGuard)
   async updateGeoAccess(
     @Body() dto: UpdateGeoAccessSettingsDto,
     @CurrentUser() user: JwtPayload,
