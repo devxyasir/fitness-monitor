@@ -33,9 +33,17 @@ export class SessionsGuard implements CanActivate {
       throw new NotFoundException(`Session with ID ${sessionId} not found`);
     }
 
-    // 1. Platform admin gets full access
+    // 1. Platform admin gets full access — including to hidden sessions,
+    // since reviewing hidden content is the whole point of the flag.
     if (user.role === 'platform_admin') {
       return true;
+    }
+
+    // A session hidden by an admin is blocked for everyone else, ahead of
+    // every other access check below (coach, participant, studio_admin) —
+    // this is what makes "hidden" an actual access block, not cosmetic.
+    if (session.hidden) {
+      throw new ForbiddenException('This session has been hidden by an administrator.');
     }
 
     // 2. Session's coach gets full access

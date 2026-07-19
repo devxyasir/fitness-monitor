@@ -129,14 +129,14 @@ export class SessionsService {
         return [];
       }
       return this.sessionRepository.find({
-        where: { orgId: user.orgId },
+        where: { orgId: user.orgId, hidden: false },
         order: { scheduledAt: 'DESC' },
       });
     }
 
     if (user.role === 'coach') {
       return this.sessionRepository.find({
-        where: { coachId: user.sub },
+        where: { coachId: user.sub, hidden: false },
         order: { scheduledAt: 'DESC' },
       });
     }
@@ -148,8 +148,42 @@ export class SessionsService {
       .where('participant.userId = :userId', { userId: user.sub })
       .andWhere('participant.status = :status', { status: 'approved' })
       .andWhere('participant.leftAt IS NULL')
+      .andWhere('session.hidden = false')
       .orderBy('session.scheduledAt', 'DESC')
       .getMany();
+  }
+
+  /**
+   * Admin content-oversight action: hide/unhide a session. Access is
+   * blocked at SessionsGuard (and findByInviteCode's inline check) rather
+   * than here — this method is pure data mutation, matching this file's
+   * existing convention (see updateStatus) of leaving audit-log recording
+   * to the controller, not the service.
+   */
+  async setHidden(id: string, hidden: boolean, reason: string | null, actingUserId: string): Promise<Session> {
+    const session = await this.findById(id);
+    if (!session) {
+      throw new NotFoundException(`Session with ID ${id} not found`);
+    }
+
+    session.hidden = hidden;
+    session.hiddenReason = hidden ? reason : null;
+    session.hiddenBy = hidden ? actingUserId : null;
+    session.hiddenAt = hidden ? new Date() : null;
+
+    const saved = await this.sessionRepository.save(session);
+
+    // Hiding a still-live session must actually end it for everyone
+    // currently connected — a flag alone wouldn't disconnect anyone already
+    // in the room. Reuses the exact same teardown updateStatus('ended')
+    // already performs.
+    if (hidden && session.status === 'live') {
+      await this.egressService.stopSessionEgress(id);
+      await this.stopPoseWorkersForActiveParticipants(id);
+      await this.liveKitService.deleteRoom(id);
+    }
+
+    return saved;
   }
 
   /**

@@ -51,7 +51,13 @@ export class SessionsController {
   @Get('by-invite/:inviteCode')
   async findByInviteCode(@Param('inviteCode') inviteCode: string) {
     const session = await this.sessionsService.findByInviteCode(inviteCode);
-    if (!session) {
+    // This route has no :id param, so SessionsGuard (which checks `hidden`)
+    // never runs on it — it isn't even attached via @UseGuards(SessionsGuard).
+    // A hidden session must not be previewable by invite code either, so
+    // the check is inlined here. 404 (not 403): there's no resource id in
+    // the URL to disambiguate "hidden" from "doesn't exist" for a caller
+    // that isn't authorized to know the difference.
+    if (!session || session.hidden) {
       throw new NotFoundException(`Session not found`);
     }
     return session;

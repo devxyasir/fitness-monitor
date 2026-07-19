@@ -10,6 +10,7 @@ import { UserModule } from '../users/user.module';
 import { AuthModule } from '../auth/auth.module';
 import { AuditModule } from '../audit/audit.module';
 import { SessionsModule } from '../sessions/sessions.module';
+import { ClipsModule } from '../clips/clips.module';
 import { AdminDashboardService } from './admin-dashboard.service';
 import { AdminDashboardController } from './admin-dashboard.controller';
 import { AdminSessionsController } from './admin-sessions.controller';
@@ -17,6 +18,7 @@ import { AdminAuditController } from './admin-audit.controller';
 import { AdminUserSecurityController } from './admin-user-security.controller';
 import { AdminNotificationsService } from './admin-notifications.service';
 import { AdminNotificationsController } from './admin-notifications.controller';
+import { AdminClipsController } from './admin-clips.controller';
 
 /**
  * The dedicated admin module the platform previously lacked entirely —
@@ -33,6 +35,7 @@ import { AdminNotificationsController } from './admin-notifications.controller';
     AuthModule,
     AuditModule,
     SessionsModule,
+    ClipsModule,
   ],
   providers: [AdminDashboardService, AdminNotificationsService],
   controllers: [
@@ -41,6 +44,7 @@ import { AdminNotificationsController } from './admin-notifications.controller';
     AdminAuditController,
     AdminUserSecurityController,
     AdminNotificationsController,
+    AdminClipsController,
   ],
 })
 export class AdminModule {}

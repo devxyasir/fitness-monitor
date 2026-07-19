@@ -183,7 +183,7 @@ describe('SessionsService', () => {
       const result = await service.findAll(user);
       expect(result).toHaveLength(1);
       expect(sessionRepo.find).toHaveBeenCalledWith({
-        where: { orgId: 'org-1' },
+        where: { orgId: 'org-1', hidden: false },
         order: { scheduledAt: 'DESC' },
       });
     });
@@ -201,7 +201,7 @@ describe('SessionsService', () => {
       const result = await service.findAll(user);
       expect(result).toHaveLength(1);
       expect(sessionRepo.find).toHaveBeenCalledWith({
-        where: { coachId: 'coach-1' },
+        where: { coachId: 'coach-1', hidden: false },
         order: { scheduledAt: 'DESC' },
       });
     });

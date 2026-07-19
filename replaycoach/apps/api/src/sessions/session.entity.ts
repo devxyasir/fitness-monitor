@@ -49,6 +49,21 @@ export class Session {
   @Column({ name: 'retention_days', type: 'int', default: 90 })
   retentionDays!: number;
 
+  /** Admin content-oversight flag — orthogonal to `status`, blocks normal
+   * (non-platform_admin) access at the guard level without disturbing the
+   * session lifecycle transition matrix. See SessionsGuard. */
+  @Column({ type: 'boolean', default: false })
+  hidden!: boolean;
+
+  @Column({ name: 'hidden_reason', type: 'varchar', length: 255, nullable: true })
+  hiddenReason!: string | null;
+
+  @Column({ name: 'hidden_by', type: 'uuid', nullable: true })
+  hiddenBy!: string | null;
+
+  @Column({ name: 'hidden_at', type: 'timestamptz', nullable: true })
+  hiddenAt!: Date | null;
+
   // Relations
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'coach_id' })

@@ -57,6 +57,9 @@ export interface AdminSessionDto extends SessionDto {
   coachName: string;
   orgName: string | null;
   participantCount: number;
+  hidden: boolean;
+  hiddenReason: string | null;
+  hiddenAt: string | null;
 }
 
 export interface AdminSessionListQuery {
@@ -71,6 +74,45 @@ export interface AdminSessionListQuery {
 
 export interface AdminSessionListResponse {
   items: AdminSessionDto[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+// ─── Cross-org clip oversight ────────────────────────────────────────────
+
+export interface AdminClipDto {
+  id: string;
+  title: string;
+  sessionId: string;
+  orgId: string | null;
+  orgName: string | null;
+  createdBy: string;
+  creatorName: string;
+  clipType: 'recording' | 'reference';
+  startMs: number;
+  endMs: number;
+  createdAt: string;
+  hidden: boolean;
+  hiddenReason: string | null;
+  hiddenAt: string | null;
+  /** True if the clip is inaccessible because its parent session is
+   * hidden, even if the clip itself isn't individually flagged. */
+  sessionHidden: boolean;
+}
+
+export interface AdminClipListQuery {
+  sessionId?: string;
+  orgId?: string;
+  hidden?: boolean;
+  since?: string;
+  until?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface AdminClipListResponse {
+  items: AdminClipDto[];
   total: number;
   page: number;
   pageSize: number;

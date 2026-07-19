@@ -9,6 +9,7 @@
 
 import type {
   AdminDashboardDto,
+  AdminSessionDto,
   AdminSessionListQuery,
   AdminSessionListResponse,
   AuditLogListQuery,
@@ -38,4 +39,12 @@ async function listAuditLogs(query: AuditLogListQuery = {}): Promise<AuditLogLis
   return apiClient.get(`/admin/audit-logs${buildQuery(query)}`);
 }
 
-export const adminClient = { getDashboard, listSessions, listAuditLogs };
+async function hideSession(id: string, reason: string): Promise<AdminSessionDto> {
+  return apiClient.post(`/admin/sessions/${id}/hide`, { reason });
+}
+
+async function unhideSession(id: string): Promise<AdminSessionDto> {
+  return apiClient.post(`/admin/sessions/${id}/unhide`, {});
+}
+
+export const adminClient = { getDashboard, listSessions, listAuditLogs, hideSession, unhideSession };

@@ -144,6 +144,22 @@ export class Clip {
   @Column({ name: 'reference_video_id', type: 'uuid', nullable: true })
   referenceVideoId!: string | null;
 
+  /** Admin content-oversight flag — see Session.hidden's doc comment; a
+   * hidden session cascades to its clips without a write-cascade (checked
+   * at read time in assertClipAccess), this flag is for hiding an
+   * individual clip independent of its session. */
+  @Column({ type: 'boolean', default: false })
+  hidden!: boolean;
+
+  @Column({ name: 'hidden_reason', type: 'varchar', length: 255, nullable: true })
+  hiddenReason!: string | null;
+
+  @Column({ name: 'hidden_by', type: 'uuid', nullable: true })
+  hiddenBy!: string | null;
+
+  @Column({ name: 'hidden_at', type: 'timestamptz', nullable: true })
+  hiddenAt!: Date | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;
 

@@ -154,17 +154,22 @@ export class ClipsService {
     if (role === 'coach' || role === 'studio_admin' || role === 'platform_admin') {
       const where: any = { createdBy: userId };
       if (sessionId) where.sessionId = sessionId;
+      // platform_admin's own listing (rare — admins don't typically create
+      // clips as a coach) stays unfiltered; non-admin creators never see
+      // their own hidden clips in the normal Clips page.
+      if (role !== 'platform_admin') where.hidden = false;
       clips = await this.clipRepository.find({
         where,
         order: { createdAt: 'DESC' },
         relations: ['session', 'session.participants', 'session.participants.user'],
       });
+      if (role !== 'platform_admin') clips = clips.filter((c) => !c.session?.hidden);
     } else {
       const shares = await this.clipShareRepository.find({
         where: { sharedWithUserId: userId },
         relations: ['clip', 'clip.session', 'clip.session.coach'],
       });
-      clips = shares.map((s) => s.clip).filter((c): c is Clip => !!c);
+      clips = shares.map((s) => s.clip).filter((c): c is Clip => !!c && !c.hidden && !c.session?.hidden);
       if (sessionId) clips = clips.filter((c) => c.sessionId === sessionId);
       clips.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
     }
@@ -247,6 +252,14 @@ export class ClipsService {
 
     if (!clip) {
       throw new NotFoundException(`Clip ${clipId} not found`);
+    }
+
+    // Admin content-oversight block — a session-level hide cascades to
+    // every clip under it without a write-cascade; a clip can also be
+    // hidden individually. platform_admin retains full access (reviewing
+    // hidden content is the point of the flag).
+    if (role !== 'platform_admin' && (clip.hidden || clip.session?.hidden)) {
+      throw new ForbiddenException('This clip is not available.');
     }
 
     // Server-side security check (IDOR protection)
@@ -350,5 +363,61 @@ export class ClipsService {
     }
 
     return { success: true };
+  }
+
+  /**
+   * Admin content-oversight action: hide/unhide an individual clip. Pure
+   * data mutation — audit-log recording happens in the controller, matching
+   * SessionsService.setHidden's convention.
+   */
+  async setHidden(id: string, hidden: boolean, reason: string | null, actingUserId: string): Promise<Clip> {
+    const clip = await this.clipRepository.findOne({ where: { id } });
+    if (!clip) {
+      throw new NotFoundException(`Clip ${id} not found`);
+    }
+    clip.hidden = hidden;
+    clip.hiddenReason = hidden ? reason : null;
+    clip.hiddenBy = hidden ? actingUserId : null;
+    clip.hiddenAt = hidden ? new Date() : null;
+    return this.clipRepository.save(clip);
+  }
+
+  /**
+   * Platform-admin cross-org clip listing — mirrors
+   * SessionsService.findAllForAdmin's exact query-builder shape/pagination.
+   */
+  async findAllForAdmin(
+    filters: {
+      sessionId?: string | undefined;
+      orgId?: string | undefined;
+      hidden?: boolean | undefined;
+      since?: string | undefined;
+      until?: string | undefined;
+    },
+    page: number,
+    pageSize: number,
+  ): Promise<{ items: Clip[]; total: number; page: number; pageSize: number }> {
+    const safePageSize = Math.min(Math.max(1, pageSize || 20), 100);
+    const safePage = Math.max(1, page || 1);
+
+    const qb = this.clipRepository
+      .createQueryBuilder('c')
+      .leftJoinAndSelect('c.session', 'session')
+      .leftJoinAndSelect('session.organization', 'org')
+      .leftJoinAndSelect('c.creator', 'creator')
+      .orderBy('c.createdAt', 'DESC');
+
+    if (filters.sessionId) qb.andWhere('c.sessionId = :sessionId', { sessionId: filters.sessionId });
+    if (filters.orgId) qb.andWhere('session.orgId = :orgId', { orgId: filters.orgId });
+    if (filters.hidden !== undefined) qb.andWhere('c.hidden = :hidden', { hidden: filters.hidden });
+    if (filters.since) qb.andWhere('c.createdAt >= :since', { since: new Date(filters.since) });
+    if (filters.until) qb.andWhere('c.createdAt <= :until', { until: new Date(filters.until) });
+
+    const [items, total] = await qb
+      .skip((safePage - 1) * safePageSize)
+      .take(safePageSize)
+      .getManyAndCount();
+
+    return { items, total, page: safePage, pageSize: safePageSize };
   }
 }
