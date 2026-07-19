@@ -5,6 +5,7 @@ import { Users, Building2, Activity, UserPlus, Video } from 'lucide-react';
 import type { AdminDashboardDto } from '@replaycoach/types';
 import { adminClient } from '../../lib/admin-client';
 import { Card } from '../components/ui/Card';
+import { StatCard } from '../components/ui/StatCard';
 import { Sparkline } from '../components/ui/Sparkline';
 import { SkeletonRows, ErrorBlock } from '../components/ui/StateBlocks';
 import Link from 'next/link';
@@ -81,20 +82,6 @@ export default function AdminDashboardPage() {
         </>
       )}
     </div>
-  );
-}
-
-function StatCard({ icon: Icon, label, value }: { icon: typeof Users; label: string; value: number }) {
-  return (
-    <Card accent="analytics" className="flex items-center gap-3">
-      <div className="w-10 h-10 rounded-md bg-analytics/10 flex items-center justify-center flex-shrink-0">
-        <Icon className="w-5 h-5 text-analytics" />
-      </div>
-      <div>
-        <div className="text-xl font-mono font-bold text-ink">{value}</div>
-        <div className="text-xs text-ink-muted">{label}</div>
-      </div>
-    </Card>
   );
 }
 

@@ -119,3 +119,16 @@ export class GeoAccessLogListQueryDto {
   @Max(100)
   pageSize?: number;
 }
+
+export class GeoStatsQueryDto {
+  @IsOptional()
+  @IsString()
+  since?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(90)
+  dailyDays?: number;
+}

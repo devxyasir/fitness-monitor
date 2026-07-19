@@ -18,6 +18,7 @@ import {
   Globe,
   Server,
   Mail,
+  BarChart3,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth-store';
 import { authClient } from '../../lib/auth-client';
@@ -34,6 +35,7 @@ const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; ex
   { href: '/admin/sessions', label: 'Sessions', icon: Video, exact: false },
   { href: '/admin/clips', label: 'Clips', icon: Film, exact: false },
   { href: '/admin/geo-logs', label: 'Geo logs', icon: Globe, exact: false },
+  { href: '/admin/geo-analytics', label: 'Geo analytics', icon: BarChart3, exact: false },
   { href: '/admin/status', label: 'Status', icon: Server, exact: false },
   { href: '/admin/email-logs', label: 'Email log', icon: Mail, exact: false },
   { href: '/admin/audit', label: 'Audit log', icon: ScrollText, exact: false },

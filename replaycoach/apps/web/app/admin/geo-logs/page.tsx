@@ -1,16 +1,24 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Globe, ChevronLeft, ChevronRight } from 'lucide-react';
-import type { GeoAccessLogDto } from '@replaycoach/types';
+import { Globe, ChevronLeft, ChevronRight, Download } from 'lucide-react';
+import type { GeoAccessLogDto, GeoAccessLogListQuery } from '@replaycoach/types';
 import { geoClient } from '../../../lib/geo-client';
 import { countryNameForCode } from '../../../lib/iso-countries';
+import { downloadCsv } from '../../../lib/csv-export';
+import { toast } from '../../../stores/toast-store';
 import { Card } from '../../components/ui/Card';
 import { Pill } from '../../components/ui/Pill';
 import { Tabs } from '../../components/ui/Tabs';
+import { Button } from '../../components/ui/Button';
 import { SkeletonRows, ErrorBlock, StateBlock } from '../../components/ui/StateBlocks';
 
 const PAGE_SIZE = 30;
+// A CSV export loops pages server-side at this cap (the API's own max
+// pageSize) instead of the UI's 30 — bounded to ~20 pages (2,000 rows) so a
+// runaway export can't hammer the endpoint indefinitely.
+const EXPORT_PAGE_SIZE = 100;
+const EXPORT_MAX_PAGES = 20;
 type AllowedFilter = 'all' | 'allowed' | 'blocked';
 
 function reasonLabel(reason: string | null): string | null {
@@ -25,6 +33,7 @@ export default function AdminGeoLogsPage() {
   const [filter, setFilter] = useState<AllowedFilter>('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -50,11 +59,53 @@ export default function AdminGeoLogsPage() {
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const baseQuery: GeoAccessLogListQuery = {
+        pageSize: EXPORT_PAGE_SIZE,
+        ...(filter !== 'all' ? { allowed: filter === 'allowed' } : {}),
+      };
+      const rows: Record<string, string | number | boolean>[] = [];
+      for (let p = 1; p <= EXPORT_MAX_PAGES; p++) {
+        const res = await geoClient.listLogs({ ...baseQuery, page: p });
+        for (const entry of res.items) {
+          rows.push({
+            createdAt: entry.createdAt,
+            countryCode: entry.countryCode ?? '',
+            country: entry.countryCode ? countryNameForCode(entry.countryCode) : 'Unknown',
+            region: entry.region ?? '',
+            city: entry.city ?? '',
+            ip: entry.ip,
+            detectionMethod: entry.detectionMethod,
+            allowed: entry.allowed,
+            reason: entry.reason ?? '',
+          });
+        }
+        if (res.items.length < EXPORT_PAGE_SIZE || p * EXPORT_PAGE_SIZE >= res.total) break;
+      }
+      if (rows.length === 0) {
+        toast.error('No rows to export for the current filter.');
+        return;
+      }
+      downloadCsv(`geo-access-log-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+    } catch (err: unknown) {
+      toast.error((err as Error).message ?? 'Export failed.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-display text-display-m text-ink">Geo access log</h1>
-        <p className="text-sm text-ink-muted mt-1">{total} recorded location checks.</p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="font-display text-display-m text-ink">Geo access log</h1>
+          <p className="text-sm text-ink-muted mt-1">{total} recorded location checks.</p>
+        </div>
+        <Button variant="ghost" size="sm" onClick={handleExport} loading={exporting} disabled={total === 0}>
+          <Download className="w-3.5 h-3.5" /> Export CSV
+        </Button>
       </div>
 
       <Tabs

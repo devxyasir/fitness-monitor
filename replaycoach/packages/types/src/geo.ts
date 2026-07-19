@@ -56,3 +56,40 @@ export interface GeoAccessLogListResponse {
   page: number;
   pageSize: number;
 }
+
+// ─── Geo analytics (admin/geo/stats) ─────────────────────────────────────
+
+export interface GeoTotalsDto {
+  totalChecks: number;
+  blockedChecks: number;
+  /** Percentage, 0-100, one decimal place. */
+  blockRate: number;
+  distinctCountries: number;
+}
+
+/** 'YYYY-MM-DD', oldest first, zero-filled — see GeoStatsService.getStats. */
+export interface GeoDailyPoint {
+  date: string;
+  allowed: number;
+  blocked: number;
+}
+
+export interface GeoCountryStat {
+  countryCode: string;
+  count: number;
+}
+
+export interface GeoStatsQuery {
+  /** ISO timestamp — omit for all-time totals/top-countries. Does not bound
+   * the daily series, which always caps at `dailyDays`. */
+  since?: string;
+  /** Days of zero-filled daily series to return, default 30, capped 90. */
+  dailyDays?: number;
+}
+
+export interface GeoStatsResponse {
+  totals: GeoTotalsDto;
+  daily: GeoDailyPoint[];
+  topCountriesByVolume: GeoCountryStat[];
+  topCountriesByBlocked: GeoCountryStat[];
+}

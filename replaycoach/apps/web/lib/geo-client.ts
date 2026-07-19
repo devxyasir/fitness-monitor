@@ -3,7 +3,14 @@
  * system-settings-client.ts (PATCH /system-settings/geo-access), reusing
  * the existing settings aggregate rather than a parallel fetch. */
 
-import type { GeoAccessLogListQuery, GeoAccessLogListResponse, GeoCheckRequest, GeoCheckResponse } from '@replaycoach/types';
+import type {
+  GeoAccessLogListQuery,
+  GeoAccessLogListResponse,
+  GeoCheckRequest,
+  GeoCheckResponse,
+  GeoStatsQuery,
+  GeoStatsResponse,
+} from '@replaycoach/types';
 import { apiClient } from './api-client';
 
 /** Public — no auth required, called for logged-out visitors on /login and
@@ -25,4 +32,12 @@ async function listLogs(query: GeoAccessLogListQuery): Promise<GeoAccessLogListR
   return apiClient.get(`/admin/geo/logs${qs ? `?${qs}` : ''}`);
 }
 
-export const geoClient = { check, listLogs };
+async function getStats(query: GeoStatsQuery = {}): Promise<GeoStatsResponse> {
+  const params = new URLSearchParams();
+  if (query.since) params.set('since', query.since);
+  if (query.dailyDays) params.set('dailyDays', String(query.dailyDays));
+  const qs = params.toString();
+  return apiClient.get(`/admin/geo/stats${qs ? `?${qs}` : ''}`);
+}
+
+export const geoClient = { check, listLogs, getStats };
