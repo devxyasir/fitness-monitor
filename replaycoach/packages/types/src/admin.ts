@@ -75,3 +75,27 @@ export interface AdminSessionListResponse {
   page: number;
   pageSize: number;
 }
+
+// ─── Notification bell ──────────────────────────────────────────────────
+
+/** A merged, time-sorted view over audit_logs and geo_access_logs — see
+ * apps/api/src/admin/admin-notifications.service.ts. Not a persisted
+ * "events" table of its own. */
+export interface AdminNotificationDto {
+  id: string;
+  kind: 'audit' | 'geo_blocked';
+  /** Audit action string (e.g. 'user.status_changed') — null for geo_blocked. */
+  action: string | null;
+  actorName: string | null;
+  resourceType: string | null;
+  resourceId: string | null;
+  /** Set for geo_blocked entries only. */
+  countryCode: string | null;
+  createdAt: string;
+}
+
+export interface AdminNotificationsResponse {
+  items: AdminNotificationDto[];
+  unreadCount: number;
+  lastSeenAt: string | null;
+}

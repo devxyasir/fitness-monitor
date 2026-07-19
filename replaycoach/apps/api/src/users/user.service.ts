@@ -104,6 +104,12 @@ export class UserService {
     await this.userRepo.update({ id }, { lastLoginAt: new Date(), lastLoginIp: ip ?? null });
   }
 
+  async touchAdminNotificationsSeenAt(id: string): Promise<Date> {
+    const now = new Date();
+    await this.userRepo.update({ id }, { adminNotificationsSeenAt: now });
+    return now;
+  }
+
   /**
    * Admin-facing status change (suspend/reactivate/disable). Authorization
    * is org-scoped here, not just role-gated at the controller: platform_admin

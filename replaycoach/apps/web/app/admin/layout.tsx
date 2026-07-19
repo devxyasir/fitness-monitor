@@ -22,6 +22,7 @@ import { Avatar } from '../components/Avatar';
 import { Logomark } from '../components/Logomark';
 import { AdminAuthGuard } from './AdminAuthGuard';
 import { AdminElevateModal } from './AdminElevateModal';
+import { NotificationBell } from './NotificationBell';
 
 const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; exact: boolean }[] = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
@@ -168,15 +169,18 @@ function AdminShell({ children }: { children: ReactNode }) {
               <span className="font-display text-display-s">Admin</span>
             </div>
             <div className="hidden lg:block" />
-            {remainingLabel && (
-              <div
-                className="flex items-center gap-1.5 font-mono text-xs text-ink-faint"
-                title="Time before the admin area asks you to re-enter your password"
-              >
-                <Clock className="w-3.5 h-3.5" />
-                {remainingLabel === 'expired' ? 'Re-verify on next action' : `Elevated · ${remainingLabel}`}
-              </div>
-            )}
+            <div className="flex items-center gap-4">
+              {remainingLabel && (
+                <div
+                  className="flex items-center gap-1.5 font-mono text-xs text-ink-faint"
+                  title="Time before the admin area asks you to re-enter your password"
+                >
+                  <Clock className="w-3.5 h-3.5" />
+                  {remainingLabel === 'expired' ? 'Re-verify on next action' : `Elevated · ${remainingLabel}`}
+                </div>
+              )}
+              <NotificationBell />
+            </div>
           </div>
         </header>
         <main className="p-4 sm:p-7 max-w-7xl">{children}</main>

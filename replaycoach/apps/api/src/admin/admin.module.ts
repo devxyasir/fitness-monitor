@@ -4,6 +4,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from '../users/user.entity';
 import { Organization } from '../organizations/organization.entity';
 import { Session } from '../sessions/session.entity';
+import { AuditLog } from '../database/entities/others.entities';
+import { GeoAccessLog } from '../geo/geo-access-log.entity';
 import { UserModule } from '../users/user.module';
 import { AuthModule } from '../auth/auth.module';
 import { AuditModule } from '../audit/audit.module';
@@ -13,6 +15,8 @@ import { AdminDashboardController } from './admin-dashboard.controller';
 import { AdminSessionsController } from './admin-sessions.controller';
 import { AdminAuditController } from './admin-audit.controller';
 import { AdminUserSecurityController } from './admin-user-security.controller';
+import { AdminNotificationsService } from './admin-notifications.service';
+import { AdminNotificationsController } from './admin-notifications.controller';
 
 /**
  * The dedicated admin module the platform previously lacked entirely —
@@ -24,18 +28,19 @@ import { AdminUserSecurityController } from './admin-user-security.controller';
  */
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, Organization, Session]),
+    TypeOrmModule.forFeature([User, Organization, Session, AuditLog, GeoAccessLog]),
     UserModule,
     AuthModule,
     AuditModule,
     SessionsModule,
   ],
-  providers: [AdminDashboardService],
+  providers: [AdminDashboardService, AdminNotificationsService],
   controllers: [
     AdminDashboardController,
     AdminSessionsController,
     AdminAuditController,
     AdminUserSecurityController,
+    AdminNotificationsController,
   ],
 })
 export class AdminModule {}

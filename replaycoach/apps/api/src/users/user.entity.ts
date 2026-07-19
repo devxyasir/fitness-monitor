@@ -64,6 +64,14 @@ export class User {
   @Column({ name: 'last_login_ip', type: 'inet', nullable: true })
   lastLoginIp!: string | null;
 
+  /** Notification bell "unread since" cursor — platform_admin only, but
+   * lives here rather than a separate table so it's trivially 1:1 with the
+   * user row. Kept server-side (not localStorage) so it's shared across
+   * every device/session an admin uses. Null until the bell is opened for
+   * the first time. */
+  @Column({ name: 'admin_notifications_seen_at', type: 'timestamptz', nullable: true })
+  adminNotificationsSeenAt!: Date | null;
+
   /** Optional, self-service TOTP 2FA — a platform_admin can enable it for
    * their own account. Never mandatory-on-login. Secret/backup codes are
    * never exposed past enrollment (UserDto only ever carries `totpEnabled`). */
