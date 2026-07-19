@@ -13,5 +13,5 @@ export * from './admin';
 export * from './geo';
 
 // ── Legacy / scalar type aliases ─────────────────────────────────────────────
-export type { HealthResponse } from './health';
+export type { HealthResponse, DependencyStatus, ReadinessResponse } from './health';
 export type { UserId, SessionId, OrganizationId } from './scalars';

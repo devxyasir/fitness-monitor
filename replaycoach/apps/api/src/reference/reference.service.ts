@@ -122,6 +122,9 @@ export class ReferenceService {
 
     const id = uuidv4();
     let videoKey: string;
+    // Storage-stats tracking — known synchronously for a direct upload
+    // (file.size), unknown (stays null) for a pasted URL.
+    let sizeBytes: number | null = null;
 
     if (url) {
       try {
@@ -147,6 +150,7 @@ export class ReferenceService {
       const ext = f.originalname.includes('.') ? f.originalname.split('.').pop() : 'mp4';
       videoKey = `sessions/${sessionId}/reference/${id}/original.${ext}`;
       await this.storage.saveBuffer(videoKey, f.buffer);
+      sizeBytes = f.size;
     }
 
     const row = this.repo.create({
@@ -154,6 +158,7 @@ export class ReferenceService {
       sessionId,
       uploadedByUserId: userId,
       videoKey,
+      sizeBytes,
       status: 'processing',
       analysisMode: mode,
     });

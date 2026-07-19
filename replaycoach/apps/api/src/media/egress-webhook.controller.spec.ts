@@ -211,6 +211,7 @@ describe('EgressWebhookController', () => {
         'egress_composite_123',
         'ready',
         35, // rounded from 34.5
+        undefined, // no segmentResults in this fixture — size stays unknown
       );
     });
   });

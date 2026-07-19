@@ -92,6 +92,7 @@ export class RecordingsService {
     egressId: string,
     status: RecordingStatus,
     durationSeconds?: number,
+    sizeBytes?: number,
   ): Promise<Recording | null> {
     const recording = await this.findByEgressId(egressId);
     if (!recording) {
@@ -101,6 +102,9 @@ export class RecordingsService {
     recording.status = status;
     if (durationSeconds !== undefined) {
       recording.durationSeconds = durationSeconds;
+    }
+    if (sizeBytes !== undefined) {
+      recording.sizeBytes = sizeBytes;
     }
 
     return this.recordingRepository.save(recording);

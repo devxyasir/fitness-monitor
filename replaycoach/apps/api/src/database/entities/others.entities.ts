@@ -40,6 +40,20 @@ export class Recording {
   @Column({ name: 'duration_seconds', type: 'int', default: 0 })
   durationSeconds!: number;
 
+  /** Storage-stats tracking, populated going forward only (from the LiveKit
+   * egress webhook's segmentResults) — see migration 025's doc comment.
+   * Null for recordings created before this column existed. `bigint`
+   * columns arrive as strings from pg by default; the transformer coerces
+   * to `number` (safe here — well under Number.MAX_SAFE_INTEGER for any
+   * realistic video file size). */
+  @Column({
+    name: 'size_bytes',
+    type: 'bigint',
+    nullable: true,
+    transformer: { to: (v: number | null) => v, from: (v: string | null) => (v === null ? null : Number(v)) },
+  })
+  sizeBytes!: number | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;
 
@@ -339,6 +353,17 @@ export class ReferenceVideo {
 
   @Column({ name: 'duration_ms', type: 'int', nullable: true })
   durationMs!: number | null;
+
+  /** Storage-stats tracking — set synchronously from the uploaded file's
+   * size for direct uploads; stays null for URL-based uploads (unknown
+   * size). See Recording.sizeBytes for the transformer rationale. */
+  @Column({
+    name: 'size_bytes',
+    type: 'bigint',
+    nullable: true,
+    transformer: { to: (v: number | null) => v, from: (v: string | null) => (v === null ? null : Number(v)) },
+  })
+  sizeBytes!: number | null;
 
   @Column({ type: 'varchar', length: 20, default: 'uploading' })
   status!: 'uploading' | 'processing' | 'ready' | 'failed';

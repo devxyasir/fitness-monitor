@@ -141,3 +141,34 @@ export interface AdminNotificationsResponse {
   unreadCount: number;
   lastSeenAt: string | null;
 }
+
+// ─── Storage stats ───────────────────────────────────────────────────────
+
+/** sizeBytes is populated going forward only (migration 025) — trackedRows
+ * counts rows with a known size, totalRows counts every row, so the
+ * frontend can show "X of Y tracked" instead of implying full coverage. */
+export interface StorageKindStats {
+  totalRows: number;
+  trackedRows: number;
+  totalBytes: number;
+}
+
+export interface StorageOrgStats {
+  orgId: string | null;
+  orgName: string | null;
+  totalBytes: number;
+}
+
+/** 'YYYY-MM', oldest first. */
+export interface StorageMonthPoint {
+  month: string;
+  totalBytes: number;
+}
+
+export interface StorageOverviewDto {
+  recordings: StorageKindStats;
+  referenceVideos: StorageKindStats;
+  totalBytes: number;
+  byOrg: StorageOrgStats[];
+  byMonth: StorageMonthPoint[];
+}

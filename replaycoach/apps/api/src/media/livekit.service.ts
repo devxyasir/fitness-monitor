@@ -29,6 +29,22 @@ export class LiveKitService {
     return this.url;
   }
 
+  /** Admin status panel dependency check — reuses the same RoomServiceClient
+   * already constructed for deleteRoom/removeParticipant rather than
+   * inventing new LiveKit-talking code. listRooms() is a cheap, read-only
+   * call that fails fast if LiveKit is unreachable or credentials are bad. */
+  async healthCheck(): Promise<{ ok: boolean; detail?: string }> {
+    if (!this.roomService) {
+      return { ok: false, detail: 'RoomServiceClient unavailable (no LiveKit credentials)' };
+    }
+    try {
+      await this.roomService.listRooms();
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, detail: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
   /** Force-disconnect all participants by deleting the room on the media server. */
   async deleteRoom(sessionId: string): Promise<void> {
     if (!this.roomService) {

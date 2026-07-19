@@ -20,10 +20,20 @@ interface LiveKitParticipant {
   tracks?: LiveKitTrack[];
 }
 
+interface LiveKitSegmentsInfo {
+  /** The real SDK type (protobuf int64) is `bigint` — kept widened here
+   * since this interface also backs hand-built test fixtures using plain
+   * numbers/strings. */
+  size?: string | number | bigint;
+}
+
 interface LiveKitEgressInfo {
   egressId?: string;
   status?: string | number;
   duration?: string | number;
+  /** JSON-webhook payloads serialize protobuf int64 fields as strings —
+   * see Recording.sizeBytes's doc comment for why this needs coercing. */
+  segmentResults?: LiveKitSegmentsInfo[];
 }
 
 interface LiveKitRoom {
@@ -213,6 +223,9 @@ export class EgressWebhookController {
       ? Math.round(Number(egressInfo.duration) / 1_000_000_000)
       : undefined;
 
+    const rawSize = egressInfo.segmentResults?.[0]?.size;
+    const sizeBytes = rawSize !== undefined ? Number(rawSize) : undefined;
+
     let recordingStatus: RecordingStatus = 'recording';
     if (eventName === 'egress_ended' || status === 3 || status === 'EGRESS_FINISHED') {
       recordingStatus = 'ready';
@@ -224,6 +237,7 @@ export class EgressWebhookController {
       egressId,
       recordingStatus,
       durationSeconds,
+      sizeBytes,
     );
 
     if (!recording) {

@@ -16,6 +16,7 @@ import {
   ArrowLeftToLine,
   Clock,
   Globe,
+  Server,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth-store';
 import { authClient } from '../../lib/auth-client';
@@ -32,6 +33,7 @@ const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; ex
   { href: '/admin/sessions', label: 'Sessions', icon: Video, exact: false },
   { href: '/admin/clips', label: 'Clips', icon: Film, exact: false },
   { href: '/admin/geo-logs', label: 'Geo logs', icon: Globe, exact: false },
+  { href: '/admin/status', label: 'Status', icon: Server, exact: false },
   { href: '/admin/audit', label: 'Audit log', icon: ScrollText, exact: false },
   { href: '/admin/security', label: 'Security', icon: ShieldCheck, exact: false },
   { href: '/admin/settings', label: 'Settings', icon: SlidersHorizontal, exact: false },
